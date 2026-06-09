@@ -73,7 +73,7 @@ DEBUGGING = False # saves debug images (option for bboxes drawn)
 SAVE_NEW_LABELS = False # saves new yolo labels to feed back into training data
 IS_SAVE_UNDETECTED = False # saves images with no detections
 TESTING_NO_DB_WRITE = False # if True, will not write to database
-DO_COCO = False
+DO_COCO = True
 DO_CUSTOM = True
 DO_OCR = False
 CLASSES_TO_COMBINE = [89,90]
@@ -91,8 +91,8 @@ EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = [1,58,15,7,25,113]
 new_excludes = [i for i in range(4000) if i not in [1,58,15,7,25,113]]
 EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = new_excludes
 # redo any detection below this threshold
-DET_ID_THRESHOLD_CUSTOM = 133468545
-DET_ID_THRESHOLD_COCO = 12455146
+DET_ID_THRESHOLD_CUSTOM = 139180213 # last reset after c45 on TheOffice
+DET_ID_THRESHOLD_COCO = 12455146 # last reset was with c45, should continue with this 
 WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE = "SegmentHelper_NewDetections_June2"  # set to None to disable
 
 # this was added by copilot, kind of overkill

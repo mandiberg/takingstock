@@ -25,6 +25,7 @@ from mp_db_io import DataIO  # noqa: E402
 # =========================
 COCO_TARGET_CLASS_IDS = [
     1,
+    24, 25,
     26,
     27,
     56,

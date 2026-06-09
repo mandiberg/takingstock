@@ -33,7 +33,7 @@ DIVISOR = 3
 
 # ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
 # ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/clustercc332_pNone_t553_h0_FOR_SQLinput"
-ROOT = "/Volumes/LaCie/output_folder/_obj_misc_priority2"
+ROOT = "/Volumes/LaCie/output_folder/_selects_basel_bound"
 # ROOT = "/Volumes/LaCie/dedupe/exclude"
 
 
