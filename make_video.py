@@ -66,7 +66,7 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
 # SSD_PATH = "/Volumes/OWC52/segment_images"
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
@@ -102,7 +102,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_selection/_mouthgap_test" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/selects55" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -320,6 +320,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
     SORT_TYPE_NONEOBJECT = "object_fusion" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
+    MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
 
     if HAND_POSE_GESTURE_FUSION:
         # SELECT ON HAND LOCATION + OBJECT SIGNATURE
@@ -333,7 +334,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         # when doing IS_HAND_POSE_FUSION code currently only supports one topic at a time
         IS_ONE_TOPIC = True
         TOPIC_NO = [63] # I'm not sure this matters
-        class_id = 1685 # this is where the class is set, though this also may not matter as it goes through the whole FUSION_PAIR_DICT_NAME
+
+        # to make HSV sort work with hand pose gesture, you need to have class_id = 0
+        # that will force it to look for pose/gesture pairs in this MANUALLY created matrix:
+        # /utilities/data/heft_clusters_ArmsPoses3D_768/ArmsPoses3D_all.csv
+        # this matrix is a WILD guess, picking the biggest pairs across each signature. it will likely produce some noise
+        class_id = 0 # I'm not sure that this has any role other than to trigger the HSV matrix
+        MULTIPOLICY = True # hopefully will split on HSV
 
 
     # CLUSTER_TYPE = "object_fusion"
@@ -389,7 +396,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
-            MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
@@ -1314,7 +1320,7 @@ if not io.IS_TENCH:
                     return None
             if isinstance(candidate, float):
                 candidate = int(math.floor(candidate))
-            if isinstance(candidate, int) and candidate < OBJ_KEYWORD_CUTOFF:
+            if isinstance(candidate, int) and candidate > 0 and candidate < OBJ_KEYWORD_CUTOFF:
                 return candidate
             return None
 
