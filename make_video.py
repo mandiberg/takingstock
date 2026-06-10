@@ -71,7 +71,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 6  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -104,7 +104,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multi_face" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
-MAX_ROWS_PER_OUTPUT_CSV = 1200
+MAX_ROWS_PER_OUTPUT_CSV = 1500 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
 MODE0_WRITE_TYPED_INTERMEDIATE = True
@@ -389,7 +389,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = False # take all files, based off the very first sort order.
+        ONE_SHOT = True # take all files, based off the very first sort order.
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         if "ObjectFusion" in CLUSTER_TYPE:
@@ -4657,27 +4657,35 @@ def main():
                 ),
             }
 
-        # Bucket 1: object-none columns with large cells -> HSV background.
-        if object_cluster_id in OBJECT_NONE_CLUSTERS and cell_count >= int(CLUSTER_MIN_HSV_BG):
+        # Object-none override: always route to non-HSV fusion policy.
+        # This keeps large OBJECT_NONE_CLUSTERS on the standard non-HSV
+        # path (including CHOP_FIRST + iterative sorting behavior).
+        if object_cluster_id in OBJECT_NONE_CLUSTERS:
+            if cell_count >= int(MIN_VIDEO_FUSION_COUNT):
+                print(
+                    f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
+                    f"to Bucket 3 default non-HSV (object-none override) with cell count {cell_count}"
+                )
+                return {
+                    "bucket": "default_nonhsv_fusion",
+                    "hsv_source": "background",
+                    "use_hsv": False,
+                    "allow_object_none": True,
+                    "use_meta_cluster": False,
+                    "meta_cluster_id": None,
+                    "cycle_stage": "default_nonhsv",
+                    "cell_count": cell_count,
+                    "column_total": column_total,
+                    "reason": (
+                        f"object cluster {object_cluster_id} in OBJECT_NONE_CLUSTERS "
+                        f"is forced to non-HSV route"
+                    ),
+                }
             print(
-                f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
-                f"to Bucket 1 HSV background due to large cell count {cell_count} in object-none column"
+                f"Skipping object-none pair arms_cluster={arms_cluster_id}, object_cluster={object_cluster_id}: "
+                f"cell_count {cell_count} < MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}"
             )
-            return {
-                "bucket": "none_column_large_cell_hsv_background",
-                "hsv_source": "background",
-                "use_hsv": True,
-                "allow_object_none": True,
-                "use_meta_cluster": False,
-                "meta_cluster_id": None,
-                "cycle_stage": "background",
-                "cell_count": cell_count,
-                "column_total": column_total,
-                "reason": (
-                    f"object cluster {object_cluster_id} in OBJECT_NONE_CLUSTERS and "
-                    f"cell_count {cell_count} >= CLUSTER_MIN_HSV_BG {CLUSTER_MIN_HSV_BG}"
-                ),
-            }
+            return None
 
         # Bucket 2: object columns with large cells -> HSV object.
         if object_cluster_id not in OBJECT_NONE_CLUSTERS and cell_count >= int(CLUSTER_MIN_HSV_OBJ):
@@ -4796,7 +4804,7 @@ def main():
     def compute_partition_cluster_count(row_count, max_rows_per_csv):
         if row_count <= 0:
             return 1
-        return max(1, int(math.ceil(float(row_count) / float(max_rows_per_csv))))
+        return max(1, int(math.ceil(float(row_count) / float(max_rows_per_csv)))-1)
 
     def partition_segment_with_kmeans(df_segment, max_rows_per_csv):
         row_count = len(df_segment.index)

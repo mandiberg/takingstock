@@ -3,7 +3,7 @@ import re
 
 # THIS IS A DESTRUCTIVE OPERATION. DUPLICATE YOUR FILES FIRST, to keep an intact copy.
 # ROOT_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion/"  # Change this to your folder
-ROOT_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/tsp_test"
+ROOT_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/testing/sb001"
 TRIM_ON_SPLIT = True
 SPLIT_PATTERN = r"^[0-9,A-Z,a-z]+,\d+,http"
 NTH_PATTERN = 40  # Change this to the number of entries you want to keep
