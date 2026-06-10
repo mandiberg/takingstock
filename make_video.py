@@ -68,7 +68,7 @@ SSD_PATH = "/Volumes/LaCie/segment_images"
 # SSD_PATH = "/Volumes/OWC52/segment_images"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
-MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
+MODE1_ENABLE_DB_DEDUPE = False # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
 PARALLEL_WORKERS = 6  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
@@ -102,7 +102,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multi_face" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multi_face_sm" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1500 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 ENABLE_MODE0_TIMING = True
@@ -111,6 +111,9 @@ MODE0_WRITE_TYPED_INTERMEDIATE = True
 MODE0_WRITE_CSV_FALLBACK = True
 MODE1_USE_TYPED_INTERMEDIATE = True
 MODE1_TYPED_STRICT = False
+# Hard cap for MODE 1 assembly rows per CSV.
+# Set to an int (e.g., 40) to force a max output size; keep as None to disable.
+CYCLE_LIMIT = 40
 MODE_TYPED_SCHEMA_VERSION = "typed_intermediate_v1"
 def resolve_arms_object_fusion_folder(
     root_data_path,
@@ -3866,6 +3869,48 @@ def _mode1_load_df(csv_path: str, timing: dict):
     return df
 
 
+def _mode1_apply_cycle_limit(df, csv_file: str, timing: dict):
+    """Apply optional hard cap to MODE 1 rows after load/dedupe and before assembly."""
+    if CYCLE_LIMIT is None:
+        return df
+
+    try:
+        limit = int(CYCLE_LIMIT)
+    except (TypeError, ValueError):
+        print(f"[MODE1 LIMIT] invalid CYCLE_LIMIT={CYCLE_LIMIT}; ignoring")
+        timing["cycle_limit_invalid"] = timing.get("cycle_limit_invalid", 0) + 1
+        return df
+
+    if limit <= 0:
+        print(f"[MODE1 LIMIT] non-positive CYCLE_LIMIT={limit}; skipping all rows for {csv_file}")
+        rows_before = int(len(df.index))
+        timing["cycle_limit_rows_before"] = timing.get("cycle_limit_rows_before", 0) + rows_before
+        timing["cycle_limit_rows_after"] = timing.get("cycle_limit_rows_after", 0)
+        timing["cycle_limit_rows_trimmed"] = timing.get("cycle_limit_rows_trimmed", 0) + rows_before
+        return df.head(0)
+
+    rows_before = int(len(df.index))
+    if rows_before <= limit:
+        return df
+
+    trim_start = time.perf_counter()
+    trimmed_df = df.head(limit).copy()
+    trim_elapsed = time.perf_counter() - trim_start
+    rows_after = int(len(trimmed_df.index))
+    rows_trimmed = rows_before - rows_after
+
+    timing["cycle_limit"] = timing.get("cycle_limit", 0.0) + trim_elapsed
+    timing["cycle_limit_rows_before"] = timing.get("cycle_limit_rows_before", 0) + rows_before
+    timing["cycle_limit_rows_after"] = timing.get("cycle_limit_rows_after", 0) + rows_after
+    timing["cycle_limit_rows_trimmed"] = timing.get("cycle_limit_rows_trimmed", 0) + rows_trimmed
+
+    print(
+        "[MODE1 LIMIT] "
+        f"applied CYCLE_LIMIT={limit} to {csv_file}: rows_before={rows_before} rows_after={rows_after}"
+    )
+    return trimmed_df
+
+
 def _mode1_recheck_is_dupe_of(db_session, df):
     """Query Encodings.is_dupe_of and drop rows flagged as duplicates."""
     if VERBOSE:
@@ -4064,6 +4109,8 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             dedupe_cluster_id=dedupe_cluster_id,
             dedupe_pose_id=dedupe_pose_id,
         )
+
+        df_sorted = _mode1_apply_cycle_limit(df_sorted, csv_file, timing)
 
         if PURGING_DUPES:
             timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
