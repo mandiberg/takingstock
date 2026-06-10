@@ -71,7 +71,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -102,7 +102,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/installation_baselbound" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multi_face" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200
 ENABLE_MODE0_TIMING = True
@@ -289,7 +289,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     '''
 
     # main switches
-    INSTALLATION_VIDEO = True 
+    INSTALLATION_VIDEO = True # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
@@ -381,7 +381,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
 
-    CLUSTER_MIN_HSV_BG = 1200
+    CLUSTER_MIN_HSV_FACEANGLE = CLUSTER_MIN_HSV_BG = 1200
     CLUSTER_MIN_HSV_OBJ = 1000
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
@@ -396,7 +396,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
-            OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
+            # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
@@ -423,7 +423,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         USE_POSE_CROP_DICT = True # override canonical multipliers for production
         EXPAND = False # if USE_POSE_CROP_DICT, then no expansion
         # turning all three off to do old style non-tsp itter-sort    
-        TSP_SORT = False
+        TSP_SORT = True
         CHOP_ITTER_TSP_SORT = False
         ONE_SHOT = False # take all files, based off the very first sort order.
         ONLY_SAVE_CACHE = True # when doing animations, save the images for manual review
