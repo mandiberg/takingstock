@@ -68,7 +68,7 @@ SSD_PATH = "/Volumes/LaCie/segment_images"
 # SSD_PATH = "/Volumes/OWC52/segment_images"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
-MODE1_ENABLE_DB_DEDUPE = False # False skips dedupe during crunch time drafts  
+MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
 PARALLEL_WORKERS = 6  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
@@ -102,9 +102,10 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/multi_face_sm" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/p1_redo_basel_final" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
-MAX_ROWS_PER_OUTPUT_CSV = 1500 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
+MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
+DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
 ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
 MODE0_WRITE_TYPED_INTERMEDIATE = True
@@ -113,7 +114,7 @@ MODE1_USE_TYPED_INTERMEDIATE = True
 MODE1_TYPED_STRICT = False
 # Hard cap for MODE 1 assembly rows per CSV.
 # Set to an int (e.g., 40) to force a max output size; keep as None to disable.
-CYCLE_LIMIT = 40
+CYCLE_LIMIT = None
 MODE_TYPED_SCHEMA_VERSION = "typed_intermediate_v1"
 def resolve_arms_object_fusion_folder(
     root_data_path,
@@ -392,7 +393,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = True # take all files, based off the very first sort order.
+        ONE_SHOT = False # take all files, based off the very first sort order.
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         if "ObjectFusion" in CLUSTER_TYPE:
@@ -4851,7 +4852,7 @@ def main():
     def compute_partition_cluster_count(row_count, max_rows_per_csv):
         if row_count <= 0:
             return 1
-        return max(1, int(math.ceil(float(row_count) / float(max_rows_per_csv)))-1)
+        return max(1, int(math.ceil(float(row_count) / float(max_rows_per_csv)))-DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT)
 
     def partition_segment_with_kmeans(df_segment, max_rows_per_csv):
         row_count = len(df_segment.index)
