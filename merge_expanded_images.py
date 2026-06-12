@@ -30,7 +30,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "output_folder/_sort723_p1/100tobuild"
-FOLDER_NAME = "output_folder/_installation_base_bound_venice"
+FOLDER_NAME = "output_folder/_installation_basel_test"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -122,28 +122,38 @@ FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
 # VID_DIMS_TEST = [1746,1746]
-VID_DIMS_TEST = [2160,2160] # this is the target dimension for videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+VID_DIMS_TEST = [1746] # this is the target dimension for videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
 
 USE_CANONICAL_RATIOS = True
 
-RATIOS_1080 = {1080 : [ {0.665 : [718, 1080]}, 
+RATIOS_DICT = {
+    1080 : [ {0.665 : [718, 1080]}, 
 {0.750 : [810,1080]}, {0.798 : [862,1080]}, 
 {0.856 : [924, 1080]}, {1.000 : [1080, 1080]}, 
 {1.169 : [1263, 1080]}, {1.253 : [1354, 1080]}, 
-{1.337 : [1444, 1080]}, {1.504: [1625 ,1080]}]}
+{1.337 : [1444, 1080]}, {1.504: [1625 ,1080]}], 
 
-RATIOS_2160 = {2160 : [ {0.665 : [1436, 2160]}, 
+    1746 : [ {0.665 : [1161, 1746]}, 
+{0.750 : [1309,1746]}, {0.798 : [1393,1746]}, 
+{0.856 : [1494, 1746]}, {1.000 : [1746, 1746]}, 
+{1.169 : [2041,1746]}, {1.253 : [2187,1746]}, 
+{1.337 : [2334,1746]}, {1.504: [2625,1746]}],
+
+    2160 : [{0.665 : [1436, 2160]}, 
 {0.750 : [1620,2160]}, {0.798 : [1724,2160]}, 
 {0.856 : [1848, 2160]}, {1.000 : [2160, 2160]}, 
 {1.169 : [2526,2160]}, {1.253 : [2707,2160]}, 
-{1.337 : [2888,2160]}, {1.504: [3249 ,2160]}]}
+{1.337 : [2888,2160]}, {1.504: [3249 ,2160]}]
+}
 
-LIMIT_1080 = [1920, 1080]
-LIMIT_2160 = [3840, 2160]
-
+LIMIT_DICT = {
+    1080: [1920, 1080],
+    1746: [3104, 1746],
+    2160: [3840, 2160]
+}
 
 SCALE_IMGS = False # default
 if USE_CURRENT_DIMS: 
@@ -383,24 +393,21 @@ def crop_scale_canonical(img1, ratios_table=None, limit=None):
     img_height, img_width = img1.shape[:2]
     print(f"crop_scale_canonical: img shape {img1.shape}, VID_DIMS_TEST[0]={VID_DIMS_TEST[0]}")
 
-    if ratios_table is None:
-        if VID_DIMS_TEST[0] == 1080:
-            ratios_table = RATIOS_1080
-            limit = LIMIT_1080
-            print("crop_scale_canonical: VID_DIMS_TEST[0]=1080, selected RATIOS_1080, limit", limit)
-        elif VID_DIMS_TEST[0] == 2160:
-            ratios_table = RATIOS_2160
-            limit = LIMIT_2160
-            print("crop_scale_canonical: VID_DIMS_TEST[0]=2160, selected RATIOS_2160, limit", limit)
-        else:
+    if ratios_table is None and VID_DIMS_TEST[0] is not None:
+        this_dim = VID_DIMS_TEST[0]
+        try: 
+            ratio_list = RATIOS_DICT[this_dim]
+            limit = LIMIT_DICT[this_dim]
+            # ratios_table = eval("RATIOS_"+this_dim)
+            # limit = eval("LIMIT_"+this_dim)
+            print(f"crop_scale_canonical: VID_DIMS_TEST[0]={this_dim}, selected ratio_list {ratio_list}, limit", limit)
+        except: 
             print(f"ERROR crop_scale_canonical: VID_DIMS_TEST[0]={VID_DIMS_TEST[0]} must be 1080 or 2160 to select a ratios table — exiting")
             import sys; sys.exit(1)
     else:
         print("crop_scale_canonical: using provided ratios_table, limit", limit)
 
-    base_dim = list(ratios_table.keys())[0]
-    ratio_list = ratios_table[base_dim]
-    print(f"crop_scale_canonical: base_dim={base_dim}, {len(ratio_list)} canonical ratios available")
+    print(f"crop_scale_canonical: this_dim={this_dim}, {len(ratio_list)} canonical ratios available")
 
     aspect_ratio = img_width / img_height
     print(f"crop_scale_canonical: image aspect_ratio (w/h) = {aspect_ratio:.4f}")
