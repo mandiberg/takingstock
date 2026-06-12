@@ -25,13 +25,14 @@ def concatenate_sql_files(base_folder, merged_file):
 			print(len(files), "files in", root)
 			for file in files:
 				if file.endswith(".sql") and file != "merged.sql":
+					print(f"Processing file: {file} in {root}")
 					file_path = os.path.join(root, file)
 					with open(file_path, "r", encoding="utf-8") as infile:
 						# outfile.write(f"-- Start of {file_path}\n")
 						outfile.write(infile.read())
 						total_files += 1
 						# outfile.write(f"\n-- End of {file_path}\n\n")
-	print(f"Merged all .sql files into {merged_file} with total {total_files} files.")
+	print(f" XXX Merged all DUPE .sql files into {merged_file} with total {total_files} files.")
 
 def compare_both_folders(dedupe_this, duped, removed_files):
     os.makedirs(removed_files, exist_ok=True)
@@ -51,14 +52,14 @@ def compare_both_folders(dedupe_this, duped, removed_files):
             if file.endswith('.sql'):
                 rel_path = os.path.relpath(os.path.join(root, file), duped)
                 deduped_sql_files.add(rel_path)
-
+    print(f" XXX Found {len(dedupe_sql_files)} .sql files in dedupe_this and {len(deduped_sql_files)} .sql files in duped.")
 	# Find files in dedupe_this not in duped
     to_copy = dedupe_sql_files - deduped_sql_files
 
 
     for rel_path in to_copy:
         file_name = os.path.basename(rel_path)
-    # print(f"File {file_name} is in dedupe_this but not in duped.")
+        print(f"File {file_name} is in dedupe_this but not in duped.")
         src = os.path.join(dedupe_this, rel_path)
         dst = os.path.join(removed_files, file_name)
     # if file_name.endswith(".sql"):
@@ -84,7 +85,7 @@ def build_not_dupe_sql(removed_files):
                                 image_id_j = m.group(2)
                                 outfile.write(f"INSERT IGNORE INTO IsNotDupeOf (image_id_i, image_id_j, manual_check) VALUES ({image_id_i},{image_id_j}, 1);\n")
                         total_files += 1
-    print(f"Merged all .sql files into {IS_NOT_DUPES_FILE} with total {total_files} files.")
+    print(f" XXX Merged all NOT DUPE .sql files into {IS_NOT_DUPES_FILE} with total {total_files} files.")
 
 
 

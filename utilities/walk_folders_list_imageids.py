@@ -50,6 +50,8 @@ def build_dedupe_sql(folderpath, image_ids):
     with open(output_filepath, "w") as f:
         f.write("USE Stock;\n")
         for image_id in image_ids:
+            if isinstance(image_id, tuple):
+                image_id = image_id[0]
             stmt = f"UPDATE Encodings SET is_dupe_of = 1 WHERE image_id = {image_id};\n"
             f.write(stmt)
 
@@ -68,7 +70,7 @@ keyword_id = None
 
 # ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
 # ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/clustercc332_pNone_t553_h0_FOR_SQLinput"
-ROOT = "/Volumes/LaCie/dedupe/dupe"
+ROOT = "/Volumes/LaCie/dedupe/" # for dedupe/exclue, just point to the parent folder holding both
 # ROOT = "/Volumes/LaCie/dedupe/exclude"
 
 
@@ -77,17 +79,19 @@ if "_t" in ROOT:
 all_image_ids = []
 for foldername in os.listdir(ROOT):
     # foldername is 
-    if "dupe" in foldername:
+    if "dupe" in [foldername]:
         DEDUPE = True
     elif "exclude" in foldername:
         EXCLUDE = True
-    print(f"Processing folder: {foldername}")
+    print(f"Processing folder: {foldername}, DEDUPE: {DEDUPE}, EXCLUDE: {EXCLUDE}")
     folderpath = os.path.join(ROOT, foldername)
     if os.path.isdir(folderpath):
         image_ids = parse_folder(folderpath, EXCLUDE)
         if DEDUPE:
+            print(f"Going to build dedupe SQL for {len(image_ids)} image IDs")
             build_dedupe_sql(folderpath, image_ids)
         elif EXCLUDE:
+            print(f"Going to build exclude SQL for {len(image_ids)} image IDs")
             # image_ids is a list of tuples (image_id, cluster_id, p_id)
             build_exclude_sql(folderpath, image_ids)
         else:

@@ -78,6 +78,7 @@ VOLUME_MIN = 0
 VOLUME_MAX = .8
 FIT_VOL_MIN = .3
 FIT_VOL_MAX = 1
+SCALE_EXPONENT = 0 # this is normally 1, but maybe 0 will produce linear scaling?
 FADEOUT = 7
 FADE_TIME = 1
 QUIET =.5
@@ -263,7 +264,7 @@ def scale_volume(row, cycler, audio_data, sample_rate):
     elif len(key_index)>0:
         # if keys are found, set the volume and fade in out based on the keys found
         fadein,fadeout=calculate_fades(key_index,desc_count, audio_data, sample_rate)
-        vol = scale_volume_exp(volume_fit,1)*1
+        vol = scale_volume_exp(volume_fit,SCALE_EXPONENT)*1
         print(key_index)
         # start,end=key_index[0],key_index[-1]
         # vol =0

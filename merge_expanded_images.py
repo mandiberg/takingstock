@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 1
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 # Provide the path to the folder containing the images
@@ -30,14 +30,14 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "output_folder/_sort723_p1/100tobuild"
-FOLDER_NAME = "output_folder/_testdefault3"
+FOLDER_NAME = "output_folder/_installation_base_bound_venice"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 6  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None
@@ -122,7 +122,7 @@ FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
 # VID_DIMS_TEST = [1746,1746]
-VID_DIMS_TEST = [1080,1080]
+VID_DIMS_TEST = [2160,2160] # this is the target dimension for videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
@@ -420,6 +420,15 @@ def crop_scale_canonical(img1, ratios_table=None, limit=None):
     print(f"crop_scale_canonical: closest canonical ratio={closest_ratio_key}, target dims (w,h)={closest_dims}, diff={min_diff:.4f}")
 
     target_w, target_h = closest_dims
+
+    # Many mp4 pipelines/codecs require even frame dimensions.
+    # Round down to the nearest even size to avoid silent writer failures.
+    if target_w % 2 != 0:
+        print(f"crop_scale_canonical: target width {target_w} is odd, decrementing to {target_w - 1}")
+        target_w -= 1
+    if target_h % 2 != 0:
+        print(f"crop_scale_canonical: target height {target_h} is odd, decrementing to {target_h - 1}")
+        target_h -= 1
     if target_w > limit[0] or target_h > limit[1]:
         print(f"WARNING crop_scale_canonical: target dims [{target_w},{target_h}] exceed limit {limit} — clamping")
         target_w = min(target_w, limit[0])
@@ -431,18 +440,28 @@ def crop_scale_canonical(img1, ratios_table=None, limit=None):
     scale_w = target_w / img_width
     scale_h = target_h / img_height
     scale = max(scale_w, scale_h)
-    scaled_w = int(img_width * scale)
-    scaled_h = int(img_height * scale)
+    # Use ceil and floor guards so resized dims are never smaller than target dims.
+    scaled_w = max(target_w, int(math.ceil(img_width * scale)))
+    scaled_h = max(target_h, int(math.ceil(img_height * scale)))
     print(f"crop_scale_canonical: scale_w={scale_w:.4f}, scale_h={scale_h:.4f}, using scale={scale:.4f}")
     print(f"crop_scale_canonical: resizing to ({scaled_w}, {scaled_h}) before crop")
 
     img1 = cv2.resize(img1, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)
     print(f"crop_scale_canonical: img shape after resize {img1.shape}")
 
-    start_row = (scaled_h - target_h) // 2
-    start_col = (scaled_w - target_w) // 2
+    start_row = max(0, (scaled_h - target_h) // 2)
+    start_col = max(0, (scaled_w - target_w) // 2)
     print(f"crop_scale_canonical: center-crop start_row={start_row}, start_col={start_col}")
-    img1 = img1[start_row:start_row + target_h, start_col:start_col + target_w]
+    end_row = min(start_row + target_h, scaled_h)
+    end_col = min(start_col + target_w, scaled_w)
+    img1 = img1[start_row:end_row, start_col:end_col]
+    if img1.shape[0] != target_h or img1.shape[1] != target_w:
+        # Final safety net against any boundary/rounding edge case.
+        print(
+            "crop_scale_canonical: safety resize to target dims",
+            f"from {img1.shape[:2]} to ({target_h}, {target_w})",
+        )
+        img1 = cv2.resize(img1, (target_w, target_h), interpolation=cv2.INTER_AREA)
     print(f"crop_scale_canonical: img shape after center-crop {img1.shape}")
 
     return img1
@@ -1145,6 +1164,23 @@ def write_video(img_array, subfolder_path=None):
     # img = cv2.imread(image_path)
     height, width, _ = images_to_build[0].shape
 
+    # Defensive normalization: enforce even frame size for mp4 encoders.
+    # If an odd size slipped through, trim one pixel and keep the image content centered.
+    if width % 2 != 0:
+        width -= 1
+    if height % 2 != 0:
+        height -= 1
+    if width <= 0 or height <= 0:
+        raise ValueError(
+            f"invalid output dimensions after preprocessing: width={width}, height={height}, first_shape={images_to_build[0].shape}"
+        )
+    if images_to_build[0].shape[1] != width or images_to_build[0].shape[0] != height:
+        print(f"write_video: enforcing even output dims -> ({width}, {height})")
+        for i in range(len(images_to_build)):
+            img = images_to_build[i]
+            if img.shape[1] != width or img.shape[0] != height:
+                images_to_build[i] = cv2.resize(img, (width, height), interpolation=cv2.INTER_AREA)
+
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}"
@@ -1152,6 +1188,10 @@ def write_video(img_array, subfolder_path=None):
     video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+".mp4")
     print("video_path", video_path)
     video_writer = cv2.VideoWriter(video_path, fourcc, FRAMERATE, (width, height))
+    if not video_writer.isOpened():
+        raise RuntimeError(
+            f"failed to open VideoWriter for path={video_path}, codec=mp4v, fps={FRAMERATE}, dims=({width},{height})"
+        )
 
 
     if IS_VIDEO_MERGE:
@@ -1279,6 +1319,10 @@ def write_video(img_array, subfolder_path=None):
 
     video_writer.release()
 
+    if not os.path.exists(video_path):
+        raise FileNotFoundError(
+            f"video file was not created by writer: {video_path}"
+        )
     print("outfile size", os.path.getsize(video_path))
 
     print(f"Video saved at: {video_path}")
