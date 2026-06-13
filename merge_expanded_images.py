@@ -23,7 +23,7 @@ MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video",
 MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
-DEBUG = True
+DEBUG = False
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
@@ -111,8 +111,8 @@ elif "make_video" in CURRENT_MODE:
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
         MERGE_PERIOD = 2  # set to 2 to double ramp duration
         FULL_MERGE_PERIOD = 0  # set >0 to hold at MERGE_COUNT for N frames
-        AUTO_DISTRIBUTE_CYCLE_PERIOD = False
-        SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe
+        AUTO_DISTRIBUTE_CYCLE_PERIOD = True
+        SMOOTH_MERGE_COUNT = 3 # how many transition tween frames betwen each keyframe
 
 # import moviepy only if making videos
 if IS_VIDEO:
@@ -1231,8 +1231,22 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
                     debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle, skipped_reason="final_boundary_singleton")
                     continue
             elif SINGLETON_MODE == "distinct_singleton":
-                # Distinct singleton mode writes the full singleton frame.
-                pass
+                # Distinct singleton mode still suppresses boundary runs to avoid abrupt multi-frame holds.
+                if current_pos > 0 and is_leading_boundary_singleton:
+                    singleton_skip_counts["leading_non_first"] += 1
+                    print("skipping leading singleton run on non-first cycle (distinct mode)")
+                    debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle, skipped_reason="leading_boundary_singleton")
+                    continue
+                if (not is_final_cycle) and is_trailing_boundary_singleton:
+                    singleton_skip_counts["terminal_non_final"] += 1
+                    print("skipping trailing singleton run on non-final cycle (distinct mode)")
+                    debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle, skipped_reason="terminal_boundary_singleton")
+                    continue
+                if is_final_cycle and is_trailing_boundary_singleton:
+                    singleton_skip_counts["terminal_final"] += 1
+                    print("skipping trailing singleton on final cycle to improve end seam (distinct mode)")
+                    debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle, skipped_reason="final_boundary_singleton")
+                    continue
             else:
                 print(f"unknown SINGLETON_MODE={SINGLETON_MODE!r}, defaulting to blended_singleton behavior")
                 if current_pos > 0 and is_leading_boundary_singleton:
