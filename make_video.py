@@ -1,4 +1,5 @@
 import math
+from random import random
 import cv2
 import pandas as pd
 import os
@@ -102,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/installation_baselbound" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/installation_baselbound_T37metas" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -3260,6 +3261,23 @@ def write_images(img_list):
 
 def enrich_image_metas(df):
     print("enriching image metas")
+    KEYWORD_TO_SCORE_DIVISOR = 4
+    RANDOM_DIVISOR = 5
+    def count_keywords_in_description(description, keywords):
+        print("count_keywords_in_description called with description:", description)
+        keywords = ["banknote", "money", "dollar", "euro", "pounds", "credit", "financ", "card", "currenc", "cash", "rupee", "yen", "yuan", 'ruble', "mark", "rupee", "peso", "franc", "lira", "shekel", "ether", "crypto", "bitcoin"]
+        if not description or not isinstance(description, str):
+            return 0
+        description_lower = description.lower()
+        count = sum(1 for keyword in keywords if keyword in description_lower)
+        print(f"count_keywords_in_description called with description: {description}, count: {count}")
+        # score is calculated as the count divided by 4 + a random number between .0 and .2
+        random_number = (random() / RANDOM_DIVISOR)  # Random number between 0.0 and 0.2
+        raw_score = (count / KEYWORD_TO_SCORE_DIVISOR) + random_number
+        score = min(raw_score, .9)  # Ensure the score does not exceed 1.0
+        print(f"count_keywords_in_description called with description: {description}, count: {count}, score: {score}, random_number: {random_number}")
+        return score
+
     parts = SegmentHelper_name.split("_")
     topic_id = None
     for part in parts:
@@ -3273,7 +3291,8 @@ def enrich_image_metas(df):
                 continue
     if topic_id is None:
         if SegmentHelper_name == "SegmentHelper_TheOffice":
-            topic_id = 11
+            # default to T11 but change to T37 for money 82, and credit card 95
+            topic_id = 37
             print(f"Parsed topic_id=11 from SegmentHelper_name: {SegmentHelper_name}")
         else:
             print(f"Could not parse topic_id from SegmentHelper_name: {SegmentHelper_name}")
@@ -3299,6 +3318,9 @@ def enrich_image_metas(df):
                 f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
                 f"using topic_id={topic_id}"
             )
+    # go back through and count_keywords_in_description for each row, and add a column for that count
+    df['topic_score'] = df['description'].apply(lambda desc: count_keywords_in_description(desc, []))
+    
     image_ids = df['image_id'].dropna().tolist()
     detection_payloads = {}
     if image_ids:
