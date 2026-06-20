@@ -103,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/installation_baselbound_T37metas" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_june14_trim" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -294,7 +294,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     '''
 
     # main switches
-    INSTALLATION_VIDEO = True # if false, it will do the animation TSP sort
+    INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
@@ -325,7 +325,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
     SORT_TYPE_NONEOBJECT = "object_fusion" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
-    MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
+    # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
 
     if HAND_POSE_GESTURE_FUSION:
         # SELECT ON HAND LOCATION + OBJECT SIGNATURE
@@ -449,7 +449,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 200 # for testing. 
+    FORCE_TARGET_COUNT = 100 # this controls TSP sort target output count. 
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -471,7 +471,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         MIN_VIDEO_FUSION_COUNT = 200 # this is the cut off for the CSV fusion pairs
         if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
-        
+    print(f"MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, MIN_CYCLE_COUNT {MIN_CYCLE_COUNT}, FORCE_TARGET_COUNT {FORCE_TARGET_COUNT}")
 
 
     # HAAAAAAACK
@@ -5412,7 +5412,8 @@ def main():
                     print(f"setting SELECT for IS_ONE_TOPIC {TOPIC_NO}")
                     this_topic = TOPIC_NO[0] if isinstance(TOPIC_NO, list) else TOPIC_NO
                     FUSION_PAIR_DICT = {this_topic: "no_pairs"}
-
+        else: 
+            print("FUSION_PAIR_DICT is not None")
         # pulls keys from the FUSION_PAIR_DICT, which are the topics/keywords
         # topic_keyword_list = FUSION_PAIR_DICT.keys()
         topic_keyword_list = []
@@ -5461,8 +5462,10 @@ def main():
                     log_fusion_pairs_summary("set n_cluster_topics from FUSION_PAIR_DICT", n_cluster_topics)
                     print(f"small_fusion_columns (for fusion pair classification): {small_fusion_columns}")
                 elif USE_FUSION_PAIR_DICT:
+                    print("using USE_FUSION_PAIR_DICT to generate n_cluster_topics: ", FUSION_PAIR_DICT)
                     n_cluster_topics = FUSION_PAIR_DICT[this_topic]
                 else: 
+                    print("generate n_cluster_topics from FUSION_PAIRS,", FUSION_PAIRS)
                     n_cluster_topics = FUSION_PAIRS
                 log_fusion_pairs_summary(
                     f"IS_HAND_POSE_FUSION and not ONLY_ONE topic={this_topic} fusion_pairs",
@@ -5769,7 +5772,10 @@ def main():
                 if first_loop:
                     if isinstance(n_cluster_topics, list):
                         cluster_topic_iter = n_cluster_topics
+                        print("cluster_topic_iter is a list:", type(cluster_topic_iter), cluster_topic_iter)
                     else:
+                        print("cluster_topic_iter is not a list, exiting:", type(cluster_topic_iter), cluster_topic_iter)
+                        exit()
                         cluster_topic_iter = []
                     route_counts = object_column_totals = arms_to_meta_map = None
                     route_bucket_stats = {}
@@ -5786,8 +5792,9 @@ def main():
                         except Exception as meta_e:
                             print(f"Failed to load Arms->MetaBody map, disabling meta fallback: {meta_e}")
                             arms_to_meta_map = {}
-
+                    print("about to itterate cluster_topic_iter:", cluster_topic_iter)
                     for cluster_topic_no in cluster_topic_iter:
+                        print(f"cluster_topic_no {cluster_topic_no}")
                         route_policy = None
                         if MULTIPOLICY:
                             route_policy = classify_fusion_pair_route(
@@ -5878,7 +5885,8 @@ def main():
                     else:
                         print("doing regular linear")
                         select_map_images(this_cluster, this_topic, hsv_cluster)
-
+            else:
+                print("not finding the hooks to start select_map_images() ")
             if "3D" in CURRENT_MODE:
                 # do 3D bodies processing
                 print("doing 3D bodies specific processing")

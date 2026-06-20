@@ -5483,11 +5483,13 @@ class SortPose:
         return df, hsv_sum_df, total_df
 
     def find_sorted_suitable_indices(self, topic_no, min_value, folder_path=None, hsv_cluster_groups=None, manifest_file="fusion_manifest.json", multipolicy=False):
+        print("[find_sorted_suitable_indices] starting")
         small_fusion_columns = {}
         if folder_path is None:
             raise ValueError("folder_path is required for manifest-driven CSV discovery")
 
         manifest_path = os.path.join(folder_path, manifest_file)
+        print(f"manifest_path {manifest_path}")
         if not os.path.exists(manifest_path):
             raise FileNotFoundError(f"Missing fusion manifest: {manifest_path}")
 
@@ -5528,8 +5530,8 @@ class SortPose:
             try:
                 candidate_entity_id = int(raw_entity_id)
             except (TypeError, ValueError):
+                print("TypeError, ValueError exception for raw_entity_id", raw_entity_id)
                 continue
-
             known_entity_ids.append(candidate_entity_id)
             if candidate_entity_id == isolated_topic:
                 file_name = candidate_name
@@ -5594,7 +5596,7 @@ class SortPose:
 
         # Optionally, you can check the shape of the array
         # print("Shape of the array:", gesture_array.shape)
-        print(gesture_array)  # Print the array to verify its contents
+        print("gesture_array", gesture_array)  # Print the array to verify its contents
 
         def find_indices(gesture_array, min_value, column_list=None, multipolicy=False):
             """Find (row, hsv_group) pairs where values exceed min_value.

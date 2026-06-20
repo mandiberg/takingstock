@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 3
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
@@ -32,7 +32,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "output_folder/_sort723_p1/100tobuild"
-FOLDER_NAME = "output_folder/_installation_base_bound_venice_combined"
+FOLDER_NAME = "output_folder/_looping_berlin_june20"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -112,7 +112,7 @@ elif "make_video" in CURRENT_MODE:
         MERGE_PERIOD = 2  # set to 2 to double ramp duration
         FULL_MERGE_PERIOD = 0  # set >0 to hold at MERGE_COUNT for N frames
         AUTO_DISTRIBUTE_CYCLE_PERIOD = True
-        SMOOTH_MERGE_COUNT = 3 # how many transition tween frames betwen each keyframe
+        SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe. 2 is standard (3 frames per image/10 img per second). I slowed it down with 3 (4 frames per image)
 
 # import moviepy only if making videos
 if IS_VIDEO:
@@ -134,12 +134,12 @@ FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
 # VID_DIMS_TEST = [1746,1746]
-VID_DIMS_TEST = [1746] # this is the target dimension for videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
 
-USE_CANONICAL_RATIOS = True
+USE_CANONICAL_RATIOS = False
 
 RATIOS_DICT = {
     1080 : [ {0.665 : [718, 1080]}, 
@@ -148,11 +148,11 @@ RATIOS_DICT = {
 {1.169 : [1263, 1080]}, {1.253 : [1354, 1080]}, 
 {1.337 : [1444, 1080]}, {1.504: [1625 ,1080]}], 
 
-    1746 : [ {0.665 : [1161, 1746]}, 
-{0.750 : [1309,1746]}, {0.798 : [1393,1746]}, 
-{0.856 : [1494, 1746]}, {1.000 : [1746, 1746]}, 
-{1.169 : [2041,1746]}, {1.253 : [2187,1746]}, 
-{1.337 : [2334,1746]}, {1.504: [2625,1746]}],
+    1712 : [ {0.665 : [1129, 1712]}, 
+{0.750 : [1284,1712]}, {0.798 : [1366,1712]}, 
+{0.856 : [1465, 1712]}, {1.000 : [1712, 1712]}, 
+{1.169 : [2001,1712]}, {1.253 : [2145,1712]}, 
+{1.337 : [2288,1712]}, {1.504: [2574,1712]}],
 
     2160 : [{0.665 : [1436, 2160]}, 
 {0.750 : [1620,2160]}, {0.798 : [1724,2160]}, 
@@ -163,7 +163,7 @@ RATIOS_DICT = {
 
 LIMIT_DICT = {
     1080: [1920, 1080],
-    1746: [3104, 1746],
+    1712: [3043, 1712],
     2160: [3840, 2160]
 }
 
