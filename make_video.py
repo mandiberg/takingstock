@@ -103,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_june14_trim" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_june14_trim/_done" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -3832,12 +3832,12 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
         )
     elif use_pose_crop:
         print(f"Using POSE_CROP_DICT for pose_no={pose_no} cluster_no={cluster_no}")
-        sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT.get(cluster_no, 1)]
+        sort.image_edge_multiplier = resolve_multiplier(POSE_CROP_DICT.get(cluster_no, "sq_default"))
     elif cluster_no is not None and USE_FUSION_PAIR_DICT and not FORCE_CANONICAL_MULT_CREATION:
         print(f"Using FUSION_PAIR_DICT for cluster_no={cluster_no} pose_no={pose_no}")
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         if crop_dict_index is not None:
-            sort.image_edge_multiplier = MULTIPLIER_LIST[crop_dict_index]
+            sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
     elif image_edge_multiplier is None:
         print("No multiplier found in canonical registry or pose crop dict; calculating dynamic multiplier from body landmarks")
         # dynamic fallback — populate_image_dims not available at module level;
@@ -4840,14 +4840,14 @@ def main():
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if canonical_multiplier is None and use_pose_crop:
             print("using pose_no to set image_edge_multiplier", pose_no)
-            pose_type = POSE_CROP_DICT.get(cluster_no, 1)
-            sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT.get(cluster_no, 1)]
+            pose_type = POSE_CROP_DICT.get(cluster_no, "sq_default")
+            sort.image_edge_multiplier = resolve_multiplier(POSE_CROP_DICT.get(cluster_no, "sq_default"))
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
         elif canonical_multiplier is None and cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
             print("using cluster_no to set image_edge_multiplier", cluster_no)
             # for ArmsPoses etc
             print("crop_dict_index", crop_dict_index)
-            if crop_dict_index is not None: sort.image_edge_multiplier = MULTIPLIER_LIST[crop_dict_index]
+            if crop_dict_index is not None: sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
             else: print(" ><>< PROBLEM!! no crop_dict_index found for cluster_no ", cluster_no)
             if VERBOSE: print(f"using cluster_no {cluster_no} for image_edge_multiplier", sort.image_edge_multiplier)
 

@@ -37,45 +37,45 @@ POSE_CROP_DICT = {
     # arms fusion 768
     # this is where you set the crop for looping videos
     # 15 Tie, SQ
-    128:18, 254:18, 343:18,  710:18,  
+    128:"sq_sm", 254:"sq_sm", 343:"sq_sm",  710:"sq_sm",  
     # tighter, shift left
-    204:17,
-    399:22, 541:22, # shift down a little bit
-    7:23, # medium, left
-    519:28, # prob needs bigger
-    593:9, # seated lotus 
-    698:28, 649:28,  # biiig square 
-    756:33, # massive left
+    204:"9x16_regular_miami",
+    399:"sq_medium_lower", 541:"sq_medium_lower", # shift down a little bit
+    7:"sq_sm", # medium, left
+    519:"sq_medium_lower", 
+    593:"sq_lotus_seated", # seated lotus 
+    698:"sq_big_center", 649:"sq_big_center",  # biiig square 
+    756:"sq_massive_left", # massive left
 
     # 15 Tie, Horiz
-    134:14, 176:14,  25:14, 344:14, 364:14,  738:14, 78:14,
+    134:"9x16_xwide_flag_arms_perp", 176:"9x16_xwide_flag_arms_perp",  25:"9x16_xwide_flag_arms_perp", 344:"9x16_xwide_flag_arms_perp", 364:"9x16_xwide_flag_arms_perp",  738:"9x16_xwide_flag_arms_perp", 78:"9x16_xwide_flag_arms_perp",
     # tighter
-    182:17, 707:17,
+    182:"9x16_regular_miami", 707:"9x16_regular_miami",
     # shift left, as SQ
-    286:30, 494:30,
+    286:"sq_big_left", 494:"sq_big_left",
     # pointing right
-    670:32,
+    670:"sq_massive_right",
 
     # 15 Tie, Vert 25:reg 27:tighter-torso
-    126:25,  183:25,   626:25,  702:25, 
+    126:"16x9_fullbody",  183:"16x9_fullbody",   626:"16x9_fullbody",  702:"16x9_fullbody", 
     #crop thigh
-    155:27,471:27,605:27, 647:27,
-    597:31, # arms up, is_feet
+    155:"16x9_portrait_torso",471:"16x9_portrait_torso",605:"16x9_portrait_torso", 647:"16x9_portrait_torso",
+    597:"16x9_fullbody_armsup_isfeet", # arms up, is_feet
 
     # laptop
-    359:32, 77:32, 385:32,  # shift right
-    369:33, 745:33, # shift left
-    426:28,  # biiig square
-    552:9, # seated lotus
-    673:22, # medium square
+    359:"sq_massive_right", 77:"sq_massive_right", 385:"sq_massive_right",  # shift right
+    369:"sq_massive_left", 745:"sq_massive_left", # shift left
+    426:"sq_big_center",  # biiig square
+    552:"sq_lotus_seated", # seated lotus
+    673:"sq_sm_plus", # medium square
 
     # phone 28:bigSQ, 29 shift right, 30 shift left
-    253:30, 
-    350:30, 472:18, 537:18,   82:18, 
+    253:"sq_big_left", 
+    350:"sq_big_left", 472:"sq_sm", 537:"sq_sm",   82:"sq_sm", 
 
-    181:18, 18:18, 479:18, 572:18,
-    69:30, # shift left 
-    729:23, # medium, left
+    181:"sq_sm", 18:"sq_sm", 479:"sq_sm", 572:"sq_sm",
+    69:"sq_big_left", # shift left 
+    729:"sq_medium_left", # medium, left
     # 126: 25, 332: 25, 662: 27, 702: 25, 
     # 734: 27, 
     # 697: 18, 
@@ -100,48 +100,132 @@ POSE_CROP_DICT = {
     # # laptop:
     # 224:29,291:29,503:29,711:29,
 }
-
-
-
-MULTIPLIER_LIST = [
+MULTIPLIER_DICT = {
     # [top,right,bottom,left]
-    [1.5,3,3.3,3], # 0 2x3 but go lower
-    [1.3,1.85,2.4,1.85], # 1 SQ
-    [1.5,3,2.5,3], # 2 # 2x3 landscape 2025
-    [1.5,2,4.5,2], # 3 # 3x2 portrait 2025
-    [1.5,2.5,2.6,2.5], # 4 # 4x5 landscape 2025
-    [1.5,2,3.5,2], # 5 # 5x4 portrait 2025
-    [1.5,2.2,4,2.2], # 6 5x4 but go lower and wider 
-    [1.5,2,4.5,2], # 7 ~6x2 full length portrait 2025 
-    [4.5,3.5,5.5,3.5], # 8 arms raised lotus 
-    [1.5,3.5,5.5,3.5], # 9 seated lotus
-    [3.5,3.5,3.5,3.5], # 10 arms raised and gunshow 2025 
-    [1.3,1.85,2.4,1.85], # 11 -- placeholder to test if SQ
-    [1.5,3.75,3.5,3.75], # 12 extra wide 2x3 landscape (shruggie "why" pose)
-    [1.8,4.5,3.3,4.5], # 13 extra extra wide 9x16 landscape (flag pose - arms up)
-    [1.4,4.5,3.9,4.5], # 14 extra extra wide 9x16 landscape (flag pose - arms perpendicular)
-    [1.3,1.3,2.4,2.4], # 15 SQ shift LEFT
-    [3,4.5,6,4.5], # 16 extra big SQ (SQ flag pose)
-    [1.6,3.5,3,3.5], # 17 regular 9x16 landscape (regular Miami vids)  
-    [1.6,2.35,2.9,2.35], # 18 slightly bigger SQ
-    [1.4,2.55,3.1,2.15], # 19 slightly bigger SQ shift RIGHT
-    [2.2,2.5,4,3.9], # 20 selfie shift LEFT - arm out)
-    [1.6,2.1,2.6,2.1], # 21 SM-Medium SQ (for wider arms)
-    [1.2,2.6,4.0,2.6], # 22 Medium SQ (lower)
-    [1.4,2.3,3.8,2.9], # 23 Medium SQ (left)
-    [1.4,2.9,3.8,2.3], # 24 Medium SQ (right)
-    [1.5,3.6,10.5,3.6], # 25 16x9 full body portrait (regular head crop)
-    [3,3.65,9.2,3.65], # 26 16x9 full body portrait (arms up, crop at knee)
-    [1.5,1.7,4.5,1.7], # 27 # 16x9 portrait 2025
-    [1.4,3.2,4.8,3.2], # 28 big square
-    [1.4,3.9,4.8,2.5], # 29 big square shift RIGHT
-    [1.4,2.5,4.8,3.9], # 30 big square shift LEFT
-    [3.6,4.05,11.5,4.05], # 31 16x9 full body portrait (arms up, is_feet)
-    [2,5,6,3], # 32 massive square shift RIGHT
-    [2,3,6,5], # 33 massive square shift LEFT
+    "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
+
+    "sq_sm": [1.4,2.3,3.2, 2.3], # 18 slightly bigger SQ
+    "sq_sm_left": [1.4,1.9,3.2, 2.7], # 18 slightly bigger SQ
+
+    "sq_sm_plus": [1.4,2.5,3.6, 2.5], # 18 slightly bigger SQ
+
+    "sq_medium_lower": [1.3,2.6,3.9,2.6], # 22 Medium SQ (lower)
+    "sq_medium_left": [1.4,2.3,3.8,2.9], # 23 Medium SQ (left)
+    "sq_medium_right": [1.4,2.9,3.8,2.3], # 24 Medium SQ (right)
+
+    "sq_big_up": [1.7,3.2,4.5,3.2], # 28 big square
+    "sq_big_center": [1.4,3.2,4.8,3.2], # 28 big square
+    "sq_big_right": [1.4,3.9,4.8,2.5], # 29 big square shift RIGHT
+    "sq_big_left": [1.4,2.5,4.8,3.9], # 30 big square shift LEFT
+
+    "sq_massive_right": [2,5,6,3], # 32 massive square shift RIGHT
+    "sq_massive_left": [2,3,6,5], # 33 massive square shift LEFT
+
+    # legacy
+    "sq_selfie_shift_left": [2.2,2.5,4,3.9], # 20 selfie shift LEFT - arm out)
+    "sq_xbig_flag": [3,4.5,6,4.5], # 16 extra big SQ (SQ flag pose)
+    "sq_shift_left": [1.3,1.3,2.4,2.4], # 15 (more space on left)
+    "sq_large_shift_right": [1.4,2.55,3.1,2.15], # 19 (more space on right)
+    "sq_sm_medium": [1.6,2.1,2.6,2.1], # 21 SM-Medium SQ (for wider arms)
+
+# 9x16
+    "9x16_regular_miami": [1.5,4,3,4], # 17 regular Miami
+    "9x16_xwide_flag_arms_up": [1.8,4.5,3.3,4.5], # 13
+    "9x16_xwide_flag_arms_perp": [1.4,4.5,3.606,4.5], # 14
+
+    "16x9_portrait_torso": [1.5,1.8125,4.9,1.8125], # 27 # 16x9 portrait 2025
+    "16x9_fullbody": [1.5,3.375,10.5,3.375], # 25 16x9 full body portrait (regular head crop)
+    "16x9_fullbody_armsup_isfeet": [3.5,4.19,11.5,4.19], # 31 16x9 full body portrait (arms up, is_feet)
+    "16x9_fullbody_armsup_knee": [3,3.65,9.2,3.65], # 26 16x9 full body portrait (arms up, crop at knee)
 
 
+    "2x3_low": [1.5,3,3.3,3], # 0 2x3 but go lower
+    "2x3_landscape": [1.5,3,2.5,3], # 2 # 2x3 landscape 2025
+    "3x2_portrait": [1.5,2,4.5,2], # 3 # 3x2 portrait 2025
+    "4x5_landscape": [1.5,2.5,2.6,2.5], # 4 # 4x5 landscape 2025
+    "5x4_portrait": [1.5,2,3.5,2], # 5 # 5x4 portrait 2025
+    "5x4_low_wide": [1.5,2.2,4,2.2], # 6 5x4 but go lower and wider
+    "6x2_full_length_portrait": [1.5,2,4.5,2], # 7 ~6x2 full length portrait 2025
+    "sq_lotus_armsup": [4.5,3.5,5.5,3.5], # 8 arms raised lotus
+    "sq_lotus_seated": [1.5,3.5,5.5,3.5], # 9 seated lotus
+    "sq_armsup_gunshow": [3.5,3.5,3.5,3.5], # 10 arms raised and gunshow 2025
+    "2x3_xwide_shruggie": [1.5,3.75,3.5,3.75], # 12 extra wide 2x3 landscape (shruggie "why" pose)
+
+}
+
+# Phase 1 compat: keep legacy index IDs alive while migrating to semantic keys.
+MULTIPLIER_KEY_BY_LEGACY_INDEX = {
+    0: "2x3_low",
+    1: "sq_default",
+    2: "2x3_landscape",
+    3: "3x2_portrait",
+    4: "4x5_landscape",
+    5: "5x4_portrait",
+    6: "5x4_low_wide",
+    7: "6x2_full_length_portrait",
+    8: "sq_lotus_armsup",
+    9: "sq_lotus_seated",
+    10: "sq_armsup_gunshow",
+    11: "sq_default",
+    12: "2x3_xwide_shruggie",
+    13: "9x16_xwide_flag_arms_up",
+    14: "9x16_xwide_flag_arms_perp",
+    15: "sq_shift_left",
+    16: "sq_xbig_flag",
+    17: "9x16_regular_miami",
+    18: "sq_sm",
+    19: "sq_large_shift_right",
+    20: "sq_selfie_shift_left",
+    21: "sq_sm_medium",
+    22: "sq_medium_lower",
+    23: "sq_medium_left",
+    24: "sq_medium_right",
+    25: "16x9_fullbody",
+    26: "16x9_fullbody_armsup_knee",
+    27: "16x9_portrait_torso",
+    28: "sq_big_center",
+    29: "sq_big_right",
+    30: "sq_big_left",
+    31: "16x9_fullbody_armsup_isfeet",
+    32: "sq_massive_right",
+    33: "sq_massive_left",
+}
+
+# Backward-compatible list form retained for legacy call sites.
+MULTIPLIER_LIST = [
+    MULTIPLIER_DICT[MULTIPLIER_KEY_BY_LEGACY_INDEX[idx]]
+    for idx in sorted(MULTIPLIER_KEY_BY_LEGACY_INDEX.keys())
 ]
+
+
+# Phase 2 strict mode: when True, reject legacy integer multiplier IDs.
+STRICT_MULTIPLIER_KEYS = False
+
+
+def resolve_multiplier(multiplier_ref, default_key="sq_default"):
+    """Resolve a multiplier from semantic key, legacy index, or direct list."""
+    if multiplier_ref is None:
+        return list(MULTIPLIER_DICT[default_key])
+
+    if isinstance(multiplier_ref, (list, tuple)) and len(multiplier_ref) == 4:
+        return list(multiplier_ref)
+
+    if isinstance(multiplier_ref, int):
+        if STRICT_MULTIPLIER_KEYS:
+            raise KeyError(
+                f"Legacy multiplier index {multiplier_ref} is disabled in strict mode; use semantic key."
+            )
+        key = MULTIPLIER_KEY_BY_LEGACY_INDEX.get(multiplier_ref)
+        if key is None:
+            return list(MULTIPLIER_DICT[default_key])
+        return list(MULTIPLIER_DICT[key])
+
+    if isinstance(multiplier_ref, str):
+        key = multiplier_ref.strip()
+        if key in MULTIPLIER_DICT:
+            return list(MULTIPLIER_DICT[key])
+
+    return list(MULTIPLIER_DICT[default_key])
 
 CLUSTER_CROP_DICT = {
     "ArmsPoses3D":{

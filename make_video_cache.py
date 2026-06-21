@@ -3523,14 +3523,14 @@ def main():
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if canonical_multiplier is None and pose_no is not None and USE_POSE_CROP_DICT:
             print("using pose_no to set image_edge_multiplier", pose_no)
-            pose_type = POSE_CROP_DICT.get(cluster_no, 1)
-            sort.image_edge_multiplier = MULTIPLIER_LIST[POSE_CROP_DICT[cluster_no]]
+            pose_type = POSE_CROP_DICT.get(cluster_no, "sq_default")
+            sort.image_edge_multiplier = resolve_multiplier(POSE_CROP_DICT.get(cluster_no, "sq_default"))
             if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
         elif canonical_multiplier is None and cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
             print("using cluster_no to set image_edge_multiplier", cluster_no)
             # for ArmsPoses etc
             print("crop_dict_index", crop_dict_index)
-            if crop_dict_index is not None: sort.image_edge_multiplier = MULTIPLIER_LIST[crop_dict_index]
+            if crop_dict_index is not None: sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
             else: print(" ><>< PROBLEM!! no crop_dict_index found for cluster_no ", cluster_no)
             if VERBOSE: print(f"using cluster_no {cluster_no} for image_edge_multiplier", sort.image_edge_multiplier)
 
