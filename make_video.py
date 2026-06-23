@@ -1268,6 +1268,11 @@ if not io.IS_TENCH:
             if dedupe_cluster_id is None or dedupe_pose_id is None:
                 return ""
             pair_clause = f"(ex.c_id = {dedupe_cluster_id} AND ex.p_id = {dedupe_pose_id})"
+            return build_exclude_where_sql_from_pair_clause(pair_clause)
+
+        def build_exclude_where_sql_from_pair_clause(pair_clause):
+            if not pair_clause:
+                return ""
             if INSTALLATION_VIDEO:
                 return f"({pair_clause} AND (ex.looping_only IS NULL OR ex.looping_only != 1))"
             return pair_clause
@@ -1514,9 +1519,19 @@ if not io.IS_TENCH:
         cluster = cluster.replace(".cluster_id = -1", ".cluster_id IS NOT NULL")
 
         if MODE == 0:
-            exclude_where_sql = build_exclude_where_sql(dedupe_cluster_id, dedupe_pose_id)
+            # Prefer SQL column-based pair matching for fusion queries so Exclude
+            # filtering remains correct even if cluster tokens are formatted unexpectedly.
+            from_sql = local_from + from_affect + from_hsv
+            if IS_HAND_POSE_FUSION and " ihp." in from_sql and " ih." in from_sql:
+                exclude_where_sql = build_exclude_where_sql_from_pair_clause(
+                    "(ex.c_id = ihp.cluster_id AND ex.p_id = ih.cluster_id)"
+                )
+                exclude_source = "sql_pair_columns"
+            else:
+                exclude_where_sql = build_exclude_where_sql(dedupe_cluster_id, dedupe_pose_id)
+                exclude_source = "parsed_tokens"
             if exclude_where_sql:
-                image_id_column = resolve_base_image_id_column(local_from + from_affect + from_hsv)
+                image_id_column = resolve_base_image_id_column(from_sql)
                 local_where += (
                     f" AND NOT EXISTS ("
                     f"SELECT 1 FROM Exclude ex "
@@ -1528,7 +1543,7 @@ if not io.IS_TENCH:
                 print(
                     "[MODE0 EXCLUDE] Applied Exclude backstop in SELECT "
                     f"cluster={dedupe_cluster_id} pose={dedupe_pose_id} "
-                    f"installation_video={INSTALLATION_VIDEO}"
+                    f"installation_video={INSTALLATION_VIDEO} source={exclude_source}"
                 )
         print(f"cluster SELECT is {cluster}")
 
