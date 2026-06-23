@@ -103,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_june14_trim/_done" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_june21_berlin_itter/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -421,17 +421,15 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     else:
         # this is for short animation production, set crop sizes 1:1 or 9:16/16:9
         GENERATE_FUSION_PAIRS = False # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
-        # TSP_SORT = True
-        # CHOP_ITTER_TSP_SORT = True
         MULTIPOLICY = True # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
         AUTO_EDGE_CROP = False # override for production, will call in POSE_CROP_DICT
         USE_POSE_CROP_DICT = True # override canonical multipliers for production
         EXPAND = False # if USE_POSE_CROP_DICT, then no expansion
         # turning all three off to do old style non-tsp itter-sort    
         TSP_SORT = True
-        CHOP_ITTER_TSP_SORT = False
+        CHOP_ITTER_TSP_SORT = True
         ONE_SHOT = False # take all files, based off the very first sort order.
-        ONLY_SAVE_CACHE = True # when doing animations, save the images for manual review
+        ONLY_SAVE_CACHE = True # if False, = 1 in MODE it will save images to each folder
 
     if GENERATE_FUSION_PAIRS:
         # this is an override for development purposes. will only make CSVs from these clusters:
@@ -449,7 +447,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 100 # this controls TSP sort target output count. 
+    FORCE_TARGET_COUNT = 150 # this controls TSP sort target output count. 
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 

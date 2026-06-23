@@ -37,45 +37,49 @@ POSE_CROP_DICT = {
     # arms fusion 768
     # this is where you set the crop for looping videos
     # 15 Tie, SQ
-    128:"sq_sm", 254:"sq_sm", 343:"sq_sm",  710:"sq_sm",  
+    128:"sq_sm", 254:"sq_sm", 343:"sq_sm",  
     # tighter, shift left
-    204:"9x16_regular_miami",
-    399:"sq_medium_lower", 541:"sq_medium_lower", # shift down a little bit
+    399:"sq_medium_lower", 541:"sq_sm_plus", # shift down a little bit
     7:"sq_sm", # medium, left
-    519:"sq_medium_lower", 
+    182:"sq_medium",
+    519:"sq_medium_fromabove", 
     593:"sq_lotus_seated", # seated lotus 
-    698:"sq_big_center", 649:"sq_big_center",  # biiig square 
+    698:"sq_big_center", 649:"sq_big_up",  # biiig square 
     756:"sq_massive_left", # massive left
 
     # 15 Tie, Horiz
-    134:"9x16_xwide_flag_arms_perp", 176:"9x16_xwide_flag_arms_perp",  25:"9x16_xwide_flag_arms_perp", 344:"9x16_xwide_flag_arms_perp", 364:"9x16_xwide_flag_arms_perp",  738:"9x16_xwide_flag_arms_perp", 78:"9x16_xwide_flag_arms_perp",
+    134:"9x16_xwide_flag_arms_perp", 176:"9x16_xwide_flag_arms_perp",   344:"9x16_xwide_flag_arms_perp", 364:"9x16_xwide_flag_arms_perp",  738:"9x16_xwide_flag_arms_perp", 78:"9x16_xwide_flag_arms_perp",
     # tighter
-    182:"9x16_regular_miami", 707:"9x16_regular_miami",
+    25:"9x16_xwide_left",
+    204:"9x16_regular_left",
+    707:"9x16_xwide_flag_arms_up",
     # shift left, as SQ
-    286:"sq_big_left", 494:"sq_big_left",
+    494:"sq_massive_left",
+    286:"9x16_xwide_right", 
     # pointing right
-    670:"sq_massive_right",
+    670:"sq_big_right",
 
     # 15 Tie, Vert 25:reg 27:tighter-torso
     126:"16x9_fullbody",  183:"16x9_fullbody",   626:"16x9_fullbody",  702:"16x9_fullbody", 
     #crop thigh
-    155:"16x9_portrait_torso",471:"16x9_portrait_torso",605:"16x9_portrait_torso", 647:"16x9_portrait_torso",
+    155:"16x9_portrait_torso",471:"16x9_portrait_torso",605:"16x9_portrait_torso", 647:"16x9_portrait_torso", #647, 698 needs sort on XYZhand
     597:"16x9_fullbody_armsup_isfeet", # arms up, is_feet
 
     # laptop
-    359:"sq_massive_right", 77:"sq_massive_right", 385:"sq_massive_right",  # shift right
-    369:"sq_massive_left", 745:"sq_massive_left", # shift left
-    426:"sq_big_center",  # biiig square
+    359:"sq_big_right", 77:"sq_big_right", 385:"9x16_xwide_right",  # shift right
+    369:"sq_big_left", 745:"sq_massive_left", # shift left
+    426:"sq_medium",  # biiig square
     552:"sq_lotus_seated", # seated lotus
     673:"sq_sm_plus", # medium square
 
     # phone 28:bigSQ, 29 shift right, 30 shift left
-    253:"sq_big_left", 
+    253:"sq_medium_left", 
     350:"sq_big_left", 472:"sq_sm", 537:"sq_sm",   82:"sq_sm", 
 
-    181:"sq_sm", 18:"sq_sm", 479:"sq_sm", 572:"sq_sm",
-    69:"sq_big_left", # shift left 
-    729:"sq_medium_left", # medium, left
+    181:"sq_sm", 18:"sq_sm", 479:"sq_sm", 
+    572:"sq_sm_left",
+    69:"sq_medium_left", # shift left 
+    729:"sq_sm_left", # medium, left
     # 126: 25, 332: 25, 662: 27, 702: 25, 
     # 734: 27, 
     # 697: 18, 
@@ -109,13 +113,15 @@ MULTIPLIER_DICT = {
 
     "sq_sm_plus": [1.4,2.5,3.6, 2.5], # 18 slightly bigger SQ
 
+    "sq_medium_fromabove": [1.7,2.8,3.9,2.8], # 22 Medium SQ (lower)
+    "sq_medium": [1.4,2.6,3.8,2.6], # 22 Medium SQ (lower)
     "sq_medium_lower": [1.3,2.6,3.9,2.6], # 22 Medium SQ (lower)
     "sq_medium_left": [1.4,2.3,3.8,2.9], # 23 Medium SQ (left)
     "sq_medium_right": [1.4,2.9,3.8,2.3], # 24 Medium SQ (right)
 
-    "sq_big_up": [1.7,3.2,4.5,3.2], # 28 big square
+    "sq_big_up": [1.7,3.3,4.7,3.3], # 28 big square
     "sq_big_center": [1.4,3.2,4.8,3.2], # 28 big square
-    "sq_big_right": [1.4,3.9,4.8,2.5], # 29 big square shift RIGHT
+    "sq_big_right": [1.4,4.1,4.8,2.3], # 29 big square shift RIGHT
     "sq_big_left": [1.4,2.5,4.8,3.9], # 30 big square shift LEFT
 
     "sq_massive_right": [2,5,6,3], # 32 massive square shift RIGHT
@@ -130,10 +136,13 @@ MULTIPLIER_DICT = {
 
 # 9x16
     "9x16_regular_miami": [1.5,4,3,4], # 17 regular Miami
+    "9x16_regular_left": [1.5,3.5,3,4.5], # 
     "9x16_xwide_flag_arms_up": [1.8,4.5,3.3,4.5], # 13
     "9x16_xwide_flag_arms_perp": [1.4,4.5,3.606,4.5], # 14
+    "9x16_xwide_left": [1.4,2.5,3.606,6.5], # 14
+    "9x16_xwide_right": [1.4,6.5,3.606,2.5], # 14
 
-    "16x9_portrait_torso": [1.5,1.8125,4.9,1.8125], # 27 # 16x9 portrait 2025
+    "16x9_portrait_torso": [1.5,1.9,5.03,1.9], # 27 # 16x9 portrait 2025
     "16x9_fullbody": [1.5,3.375,10.5,3.375], # 25 16x9 full body portrait (regular head crop)
     "16x9_fullbody_armsup_isfeet": [3.5,4.19,11.5,4.19], # 31 16x9 full body portrait (arms up, is_feet)
     "16x9_fullbody_armsup_knee": [3,3.65,9.2,3.65], # 26 16x9 full body portrait (arms up, crop at knee)
@@ -448,7 +457,7 @@ KEYWORD_DICT = {
 }
 
 
-# FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
+FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 #     # this is FIRST ROUND for doing object fusion with hand position/gesture clusters. for money, cards, phones, etc. 
 #     # 58: [[23,21], [16,21], [23,67], [8,41], [2,41], [2,100], [23,41], [12,24], [22,100], [23,100], [129,100], [7,105], [7,54], [16,100], [16,41], [12,33], [28,24], [20,102], [7,41], [22,24], [12,19], [26,67], [12,100], [22,27], [8,57], [7,57], [24,41], [1,41], [24,57], [8,120], [28,100], [7,64]],
 #     # 258: [[16,28], [16,34], [16,110], [23,110]],
@@ -459,7 +468,7 @@ KEYWORD_DICT = {
 #     # 2341: [[28,100], [1,119], [30,114], [3,114], [2,100], [30,111], [15,92], [18,119], [1,4], [28,117], [14,114], [25,119], [15,89], [30,89], [15,114], [8,57], [15,25], [15,111], [12,100], [18,4], [23,21], [16,114], [22,100], [1,65], [2,41], [1,57], [16,21], [30,92], [25,65], [15,35], [30,65], [1,125], [2,117], [8,119], [30,55], [15,65], [28,200], [15,100], [15,41], [16,92], [16,100], [22,27], [16,65], [28,100], [16,41], [30,92], [16,110], [14,92], [8,57], [22,100], [23,67], [23,110], [15,65]],
     
 #     # second round
-#     # TKmoney, ight  
+#     # TKmoney, right  
 #     2341: [[14, 114], [15, 111], [15, 25], [15, 89], [16, 114], [1, 119], [1, 65], [25, 119], [25, 65], [30, 111], [30, 114], [30, 89], [30, 92], [3, 114],],
 #     # TKmoney, enter 
 #     1685: [[16, 100], [16, 21], [16, 92], [2, 100], [23, 21], [15, 65], [30, 92], ],
@@ -473,12 +482,28 @@ KEYWORD_DICT = {
 #     733: [[14, 21], [14, 92], ],
 #     58: [[23, 21], [23, 67], ],
 
-# }
+    # third round, BER airplane
+    # missing fan of money in each hand
+    # TKmoney, right  
+    # 2341: [[14, 114], [15, 111], [15, 25], [15, 89], [16, 114], [1, 119], [1, 65], [25, 119], [25, 65], [30, 111], [30, 114], [30, 89], [30, 92], [3, 114],],
+    2341: [[1, 119], [3, 114], [28,100], [30,111], [30,114], ],
+    # TKmoney, enter 
+    # 1685: [[16, 100], [16, 21], [16, 92], [2, 100], [23, 21], [15, 65], [30, 92], ],
+    1685: [[16, 21], [23, 21], [16,28]], # collapse 2263 into 
+    # TKmoney, enter COLLAPSE
+    2263: [[23, 21], ],
+    2341: [[23, 21], [8, 57], ],
+    # TKcard
+    258: [ [16, 28], [16, 34], ],
+    734: [[30, 114], [3, 114], [18, 4], [1, 4], ],
+    # TKmisc, andsort
+    733: [[28, 100], [14, 21], [14, 92], ],
+    58: [[23, 21], [23, 67], ],
+}
 
+# 55 SELECTS for looping T11 arms3D sort, Berlin
 FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     0: [
-
-        # 55 SELECTS
     # TK, 15/sq], 
     [128, 15], [204, 15], [254, 15], [286, 15], [343, 15], [399, 15], [519, 15], [541, 15], [593, 15], [597, 15], [649, 15], [698, 15], [707, 15], [710, 15], [756, 15], [7, 15], 
     #15/horiz], 
@@ -690,30 +715,6 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 # }
 
 
-# FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
-#     0: [
-# #         # LUMEN tests
-# #         #[arms_pose_cluster, object_signature_cluster]
-
-# #         # phone:
-#         [350,25],
-       
-# #         # laptop:
-# #         # [224,34],[291,34],[503,34],[711,34],
-
-# #         # # arms_head:
-# #         # [126,15],[332,15],[662,15],[702,15],[734,15],[654,15],
-
-# #         # # money both hands
-#         [319,1685],
-
-# #         # # credit card both hands
-# #         # [272,258],[701,258],
-        
-#         [47,734]
-        
-#     ]
-# }
 
 
 FUSION_PAIR_DICT_DETECTIONS_ARMS3D128 = {

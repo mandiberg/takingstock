@@ -10,6 +10,17 @@ Save that list as a text file in the same folder, called image_ids.txt
 
 import os
 
+WALK_FOLDERS = False
+DEDUPE = EXCLUDE = False
+LOOPING_ONLY = True
+keyword_id = None
+
+# ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
+ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/excludes"
+# ROOT = "/Volumes/LaCie/dedupe/" # for dedupe/exclue, just point to the parent folder holding both
+# ROOT = "/Volumes/LaCie/dedupe/exclude"
+
+
 def parse_folder(folderpath, exclude=False):
     image_ids = []
     cluster_id = p_id = None
@@ -55,23 +66,17 @@ def build_dedupe_sql(folderpath, image_ids):
             stmt = f"UPDATE Encodings SET is_dupe_of = 1 WHERE image_id = {image_id};\n"
             f.write(stmt)
 
-def build_exclude_sql(folderpath, image_ids):
-    print(f"Building exclude SQL for {len(image_ids)} image_ids")
+def build_exclude_sql(folderpath, image_ids, looping=False):
+    print(f"Building exclude SQL for {len(image_ids)} image_ids and is looping {looping}")
     output_filepath = os.path.join(folderpath, f"exclude.sql")
     with open(output_filepath, "w") as f:
         f.write("USE Stock;\n")
         for image_id, c_id, p_id in image_ids:
-            stmt = f"INSERT IGNORE INTO Exclude (image_id, c_id, p_id) VALUES ({image_id}, {c_id}, {p_id});\n"
+            if looping: 
+                stmt = f"INSERT IGNORE INTO Exclude (image_id, c_id, p_id, looping_only) VALUES ({image_id}, {c_id}, {p_id}, True);\n"
+            else:                
+                stmt = f"INSERT IGNORE INTO Exclude (image_id, c_id, p_id) VALUES ({image_id}, {c_id}, {p_id});\n"
             f.write(stmt)
-
-WALK_FOLDERS = False
-DEDUPE = EXCLUDE = False
-keyword_id = None
-
-# ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
-# ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/clustercc332_pNone_t553_h0_FOR_SQLinput"
-ROOT = "/Volumes/LaCie/dedupe/" # for dedupe/exclue, just point to the parent folder holding both
-# ROOT = "/Volumes/LaCie/dedupe/exclude"
 
 
 if "_t" in ROOT:
@@ -93,7 +98,7 @@ for foldername in os.listdir(ROOT):
         elif EXCLUDE:
             print(f"Going to build exclude SQL for {len(image_ids)} image IDs")
             # image_ids is a list of tuples (image_id, cluster_id, p_id)
-            build_exclude_sql(folderpath, image_ids)
+            build_exclude_sql(folderpath, image_ids, LOOPING_ONLY)
         else:
             build_sql(folderpath, keyword_id, image_ids, foldername, orientation=None)
         subfilenames = os.listdir(folderpath)
