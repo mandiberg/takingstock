@@ -58,6 +58,16 @@ class SortPose:
             USE_HEAD_POSE = config.get('USE_HEAD_POSE', USE_HEAD_POSE)
             IQR_SCALE_FACTOR = config.get('IQR_SCALE_FACTOR', IQR_SCALE_FACTOR)
             self.DO_HSV_KNN = config.get('DO_HSV_KNN', False)
+            self.FORCE_TARGET_COUNT = config.get('FORCE_TARGET_COUNT', None)
+            self.HEAD_POSE_DYNAMIC_TARGETING = config.get('HEAD_POSE_DYNAMIC_TARGETING', True)
+            self.MAX_DYNAMIC_IQR_SCALE = config.get('MAX_DYNAMIC_IQR_SCALE', 3.0)
+
+        if not hasattr(self, 'FORCE_TARGET_COUNT'):
+            self.FORCE_TARGET_COUNT = None
+        if not hasattr(self, 'HEAD_POSE_DYNAMIC_TARGETING'):
+            self.HEAD_POSE_DYNAMIC_TARGETING = True
+        if not hasattr(self, 'MAX_DYNAMIC_IQR_SCALE'):
+            self.MAX_DYNAMIC_IQR_SCALE = 3.0
 
         if image_edge_multiplier is None:
             image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
@@ -753,6 +763,73 @@ class SortPose:
                 merged_list.append(value)
         return merged_list
 
+    def _build_head_pose_joint_mask(self, df_clean, xyz, median_list, margin_dict):
+        """Build a joint boolean mask for head-pose filtering across pitch/yaw/roll."""
+        joint_mask = pd.Series(True, index=df_clean.index)
+        for angle in xyz:
+            idx = xyz.index(angle)
+            med = median_list[idx] if idx < len(median_list) else 0
+            joint_mask &= (df_clean[angle] - med).abs() <= margin_dict[angle]
+        return joint_mask
+
+    def _resolve_head_pose_iqr_scale(self, df_clean, xyz, stats, median_list):
+        """Resolve IQR scale, expanding for small clusters when FORCE_TARGET_COUNT is set."""
+        base_scale = float(self.IQR_SCALE_FACTOR) if self.IQR_SCALE_FACTOR is not None else 1.0
+        if not self.HEAD_POSE_DYNAMIC_TARGETING:
+            return base_scale, None, None
+
+        n = len(df_clean)
+        target = getattr(self, "FORCE_TARGET_COUNT", None)
+        if target is None:
+            return base_scale, None, None
+
+        try:
+            target = int(target)
+        except (TypeError, ValueError):
+            return base_scale, None, None
+
+        if target <= 0 or n <= 0:
+            return base_scale, None, None
+
+        desired_keep = min(n, target)
+        iqr_by_angle = {}
+        for angle in xyz:
+            iqr_val = stats[angle].get("iqr", 1.0)
+            if pd.isna(iqr_val) or iqr_val <= 0:
+                iqr_val = 1.0
+            iqr_by_angle[angle] = float(iqr_val)
+
+        base_margin_dict = {angle: iqr_by_angle[angle] * base_scale for angle in xyz}
+        base_keep = int(self._build_head_pose_joint_mask(df_clean, xyz, median_list, base_margin_dict).sum())
+        if base_keep >= desired_keep:
+            return base_scale, desired_keep, base_keep
+
+        max_scale = max(base_scale, float(self.MAX_DYNAMIC_IQR_SCALE))
+        max_margin_dict = {angle: iqr_by_angle[angle] * max_scale for angle in xyz}
+        max_keep = int(self._build_head_pose_joint_mask(df_clean, xyz, median_list, max_margin_dict).sum())
+        if max_keep <= base_keep:
+            return base_scale, desired_keep, base_keep
+        if max_keep < desired_keep:
+            return max_scale, desired_keep, max_keep
+
+        # Binary-search the minimal scale that reaches desired_keep.
+        low = base_scale
+        high = max_scale
+        best_scale = max_scale
+        best_keep = max_keep
+        for _ in range(12):
+            mid = (low + high) / 2.0
+            mid_margin_dict = {angle: iqr_by_angle[angle] * mid for angle in xyz}
+            mid_keep = int(self._build_head_pose_joint_mask(df_clean, xyz, median_list, mid_margin_dict).sum())
+            if mid_keep >= desired_keep:
+                best_scale = mid
+                best_keep = mid_keep
+                high = mid
+            else:
+                low = mid
+
+        return best_scale, desired_keep, best_keep
+
     def analyze_head_pose_by_cluster(self, df_clean):
         """Print and CSV-append head pose stats for the current cluster.
 
@@ -910,20 +987,33 @@ class SortPose:
 
                 stats = self.analyze_head_pose_by_cluster(df_clean)
 
-                # Build adaptive margin_dict from IQR scaled by self.IQR_SCALE_FACTOR
+                # Safely extract median values (handle Series or list)
+                if hasattr(median_xyz, '__getitem__'):
+                    median_list = list(median_xyz) if not isinstance(median_xyz, list) else median_xyz
+                else:
+                    median_list = median_xyz
+
+                resolved_iqr_scale, desired_keep, estimated_keep = self._resolve_head_pose_iqr_scale(
+                    df_clean,
+                    xyz,
+                    stats,
+                    median_list,
+                )
+                if desired_keep is not None:
+                    print(
+                        f"   target-aware IQR scaling: base={self.IQR_SCALE_FACTOR:.3f} "
+                        f"resolved={resolved_iqr_scale:.3f} target_keep={desired_keep}/{len(df_clean)} "
+                        f"estimated_joint_keep={estimated_keep}"
+                    )
+
+                # Build adaptive margin_dict from IQR scaled by resolved scale.
                 margin_dict = {}
                 for angle in xyz:
                     iqr = stats[angle]["iqr"]
                     # Ensure IQR is a valid number (not NaN or zero); use small default if needed
                     if pd.isna(iqr) or iqr == 0:
                         iqr = 1.0
-                    margin_dict[angle] = iqr * self.IQR_SCALE_FACTOR
-                
-                # Safely extract median values (handle Series or list)
-                if hasattr(median_xyz, '__getitem__'):
-                    median_list = list(median_xyz) if not isinstance(median_xyz, list) else median_xyz
-                else:
-                    median_list = median_xyz
+                    margin_dict[angle] = iqr * resolved_iqr_scale
                 
                 low_high_dict = {}
                 for angle in xyz:
@@ -937,7 +1027,7 @@ class SortPose:
                         break
                 
                 if low_high_dict is not None:
-                    print(f"   adaptive margin_dict (IQR × {self.IQR_SCALE_FACTOR}): {{{', '.join([f'{k}: {v:.2f}' for k, v in margin_dict.items()])}}}")
+                    print(f"   adaptive margin_dict (IQR × {resolved_iqr_scale:.3f}): {{{', '.join([f'{k}: {v:.2f}' for k, v in margin_dict.items()])}}}")
                     print("   low_high_dict: ", low_high_dict)
 
                     # Filter df_clean by the adaptive margins, then use those indices on the original df

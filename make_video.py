@@ -72,7 +72,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -449,7 +449,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 250 # this controls TSP sort target output count. 
+    FORCE_TARGET_COUNT = 250 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -469,7 +469,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     else:
         # smaller numbers when using HSV clusters
         MIN_VIDEO_FUSION_COUNT = 200 # this is the cut off for the CSV fusion pairs
-        if TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
+        if not INSTALLATION_VIDEO: MIN_CYCLE_COUNT = 80 # creating a low cutoff when doing the targetting looping videos (when fully excluded, this count can be quite low and still viable)
+        elif TSP_SORT: MIN_CYCLE_COUNT = FORCE_TARGET_COUNT
         else: MIN_CYCLE_COUNT = 150 # this is the cut off for the SQL query results
     print(f"MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, MIN_CYCLE_COUNT {MIN_CYCLE_COUNT}, FORCE_TARGET_COUNT {FORCE_TARGET_COUNT}")
 
@@ -983,6 +984,7 @@ cfg = {
     'TSP_SORT': TSP_SORT,
     'USE_HEAD_POSE': USE_HEAD_POSE,
     'DO_HSV_KNN': DO_HSV_KNN,
+    'FORCE_TARGET_COUNT': FORCE_TARGET_COUNT,
 }
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE

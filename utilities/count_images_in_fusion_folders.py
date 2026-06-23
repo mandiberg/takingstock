@@ -8,7 +8,7 @@ And for comparing one run to an other to see if any need further pruning
 '''
 
 FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_looping_june22_BER"
-
+FOLDER = "/Volumes/LaCie/output_folder/_looping_june22_BK_trimmed"
 
 def extract_fustion_cluster(name):
     name = name.replace("_ct", "_")
@@ -45,6 +45,8 @@ def get_list(folderpath):
             # print("is jpg", file)
             # print("current image_list", image_list)
             # print("current folder_list", folder_list)
+        if "mp4" in file or "csv" in file or "DS_Store" in file:
+            continue
         else:
             # print("is folder,", file)
             folder_list.append(file)
