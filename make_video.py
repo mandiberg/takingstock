@@ -72,7 +72,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 6  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -103,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_june21_berlin_itter/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_june23_TSPdebug/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -296,6 +296,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # main switches
     INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
+    HSV_SOURCE_MODE = "object" # "background" or "object" or "both"
     
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
@@ -340,7 +341,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         IS_ONE_TOPIC = True
         TOPIC_NO = [63] # I'm not sure this matters
 
-        # to make HSV sort work with hand pose gesture, you need to have class_id = 0
+        # to make HSV sort work with hand pose gesture, you need 
+        # USE_HSV = True
+        # and to have class_id = 0
         # that will force it to look for pose/gesture pairs in this MANUALLY created matrix:
         # /utilities/data/heft_clusters_ArmsPoses3D_768/ArmsPoses3D_all.csv
         # this matrix is a WILD guess, picking the biggest pairs across each signature. it will likely produce some noise
@@ -390,7 +393,6 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     CLUSTER_MIN_HSV_OBJ = 1000
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
-    HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
@@ -426,10 +428,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         USE_POSE_CROP_DICT = True # override canonical multipliers for production
         EXPAND = False # if USE_POSE_CROP_DICT, then no expansion
         # turning all three off to do old style non-tsp itter-sort    
-        TSP_SORT = True
-        CHOP_ITTER_TSP_SORT = True
+        TSP_SORT = False
+        CHOP_ITTER_TSP_SORT = False
         ONE_SHOT = False # take all files, based off the very first sort order.
-        ONLY_SAVE_CACHE = True # if False, = 1 in MODE it will save images to each folder
+        ONLY_SAVE_CACHE = False # if False, = 1 in MODE it will save images to each folder
 
     if GENERATE_FUSION_PAIRS:
         # this is an override for development purposes. will only make CSVs from these clusters:
@@ -447,7 +449,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 150 # this controls TSP sort target output count. 
+    FORCE_TARGET_COUNT = 250 # this controls TSP sort target output count. 
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 

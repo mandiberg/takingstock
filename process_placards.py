@@ -92,7 +92,7 @@ new_excludes = [i for i in range(4000) if i not in [1,58,15,7,25,113]]
 EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = new_excludes
 # redo any detection below this threshold
 DET_ID_THRESHOLD_CUSTOM = 139180213 # last reset after c45 on TheOffice
-DET_ID_THRESHOLD_COCO = 12455146 # last reset was with c45, should continue with this 
+DET_ID_THRESHOLD_COCO = 12455146 # last reset was with c45, should continue with this (restarted at shutterstock B/BE)
 WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE = "SegmentHelper_NewDetections_June2"  # set to None to disable
 
 # this was added by copilot, kind of overkill
@@ -112,10 +112,10 @@ if WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE:
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-FILE_FOLDER = "/Volumes/LaCie/segment_images" #halfway through
+# FILE_FOLDER = "/Volumes/LaCie/segment_images" #halfway through
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl" 
 # FILE_FOLDER ="/Volumes/OWC54/segment_images"
-# FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
+FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
