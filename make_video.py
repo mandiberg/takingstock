@@ -1147,6 +1147,7 @@ if not io.IS_TENCH:
         image_id = Column(Integer, ForeignKey('Images.image_id'))
         c_id = Column(Integer)
         p_id = Column(Integer)
+        looping_only = Column(Boolean)
 
     # not currently in use
     if IS_HAND_POSE_FUSION and CLUSTER2:
@@ -1241,6 +1242,36 @@ if not io.IS_TENCH:
         from_affect = where_affect = from_hsv = where_hsv = xyz_where = " "
         cluster_dict_AND = cluster_dict_NOT = None
         effective_use_hsv = USE_HSV if use_hsv_override is None else bool(use_hsv_override)
+
+        # start of code that handles excluded images by fusion cluster
+        def normalize_exclude_token(value):
+            if value is None:
+                return None
+            if isinstance(value, str):
+                token = value.strip()
+                if not token or token.lower() in ("none", "nan"):
+                    return None
+                if token[0] in ("c", "p") and len(token) > 1:
+                    token = token[1:]
+                value = token
+            try:
+                return int(float(value))
+            except (TypeError, ValueError):
+                return None
+
+        def resolve_base_image_id_column(from_sql):
+            if " s " in from_sql or " s\n" in from_sql or " s\t" in from_sql:
+                return "s.image_id"
+            return "i.image_id"
+
+        def build_exclude_where_sql(dedupe_cluster_id, dedupe_pose_id):
+            if dedupe_cluster_id is None or dedupe_pose_id is None:
+                return ""
+            pair_clause = f"(ex.c_id = {dedupe_cluster_id} AND ex.p_id = {dedupe_pose_id})"
+            if INSTALLATION_VIDEO:
+                return f"({pair_clause} AND (ex.looping_only IS NULL OR ex.looping_only != 1))"
+            return pair_clause
+        # end of code that handles excluded images by fusion cluster
 
         def is_query_list_string(topic_no, inclusion=True):
             if inclusion:
@@ -1344,6 +1375,13 @@ if not io.IS_TENCH:
         if hsv_cluster and isinstance(hsv_cluster, list) and len(hsv_cluster) == 2:
             hsv_cluster = handle_hsv_cluster_lists(cluster_no, hsv_cluster)
             print(f"after handling hsv, cluster_no {cluster_no} and hsv_cluster {hsv_cluster}")
+
+        dedupe_cluster_id = dedupe_pose_id = None
+        if isinstance(cluster_no, list):
+            if len(cluster_no) >= 1:
+                dedupe_cluster_id = normalize_exclude_token(cluster_no[0])
+            if len(cluster_no) >= 2:
+                dedupe_pose_id = normalize_exclude_token(cluster_no[1])
 
         print(f"checking SegmentHelper_name {SegmentHelper_name} for heft keywords and MODES {MODES[MODE_CHOICE]}")
         if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords" and "heft" in MODES[MODE_CHOICE]:
@@ -1474,6 +1512,24 @@ if not io.IS_TENCH:
 
         # treat -1 cluster_id as special case meaning "no cluster filter" so not null
         cluster = cluster.replace(".cluster_id = -1", ".cluster_id IS NOT NULL")
+
+        if MODE == 0:
+            exclude_where_sql = build_exclude_where_sql(dedupe_cluster_id, dedupe_pose_id)
+            if exclude_where_sql:
+                image_id_column = resolve_base_image_id_column(local_from + from_affect + from_hsv)
+                local_where += (
+                    f" AND NOT EXISTS ("
+                    f"SELECT 1 FROM Exclude ex "
+                    f"WHERE ex.image_id = {image_id_column} "
+                    f"AND ex.image_id IS NOT NULL "
+                    f"AND {exclude_where_sql}"
+                    f")"
+                )
+                print(
+                    "[MODE0 EXCLUDE] Applied Exclude backstop in SELECT "
+                    f"cluster={dedupe_cluster_id} pose={dedupe_pose_id} "
+                    f"installation_video={INSTALLATION_VIDEO}"
+                )
         print(f"cluster SELECT is {cluster}")
 
         selectsql = f"SELECT {local_select} FROM {local_from + from_affect + from_hsv} WHERE {local_where + where_affect + where_hsv + xyz_where} {cluster} LIMIT {str(LIMIT)};"
@@ -3966,10 +4022,17 @@ def _mode1_filter_excluded_images(db_session, df, dedupe_cluster_id, dedupe_pose
 
     rows_before = int(len(df.index))
     lookup_start = time.perf_counter()
+    base_pair_filter = (Exclude.c_id == dedupe_cluster_id) & (Exclude.p_id == dedupe_pose_id)
+    if INSTALLATION_VIDEO:
+        exclude_filter = base_pair_filter & (
+            (Exclude.looping_only.is_(None)) | (Exclude.looping_only != 1)
+        )
+    else:
+        exclude_filter = base_pair_filter
+
     excluded_rows = db_session.query(Exclude.image_id).filter(
-        Exclude.c_id == dedupe_cluster_id,
-        Exclude.p_id == dedupe_pose_id,
         Exclude.image_id.isnot(None),
+        exclude_filter,
     ).all()
     lookup_elapsed = time.perf_counter() - lookup_start
     timing["db_exclude_lookup"] = timing.get("db_exclude_lookup", 0.0) + lookup_elapsed
