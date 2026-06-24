@@ -296,6 +296,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # main switches
     INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
+    DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     HSV_SOURCE_MODE = "object" # "background" or "object" or "both"
     
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
@@ -391,8 +392,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     CLUSTER_MIN_HSV_FACEANGLE = CLUSTER_MIN_HSV_BG = 1200
     CLUSTER_MIN_HSV_OBJ = 1000
-    OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000
-    DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
+    OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000 # for DO_SMALL_CLUSTER_FUSION_BUCKET
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
@@ -433,10 +433,15 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         ONE_SHOT = False # take all files, based off the very first sort order.
         ONLY_SAVE_CACHE = False # if False, = 1 in MODE it will save images to each folder
 
+    if DO_SMALL_CLUSTER_FUSION_BUCKET:
+        # set above, going to override fusion pairs, MULTIPOLICY and set keep clusters
+        GENERATE_FUSION_PAIRS = True # 
+        MULTIPOLICY = True # 
+        OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
+
     if GENERATE_FUSION_PAIRS:
         # this is an override for development purposes. will only make CSVs from these clusters:
         # OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
-        OBJECT_KEEP_CLUSTERS = []
         if bool(OBJECT_KEEP_CLUSTERS):
             # how to skip objects (columns!)
             SKIP_OBJECT_NONE_CLUSTERS = [i for i in range(4000) if i not in OBJECT_KEEP_CLUSTERS] # skip these and go to 18

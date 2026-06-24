@@ -47,14 +47,14 @@ POSE_CROP_DICT = {
     756:"sq_massive_left", # massive left
 
     # 15 Tie, Horiz
-    134:"9x16_xwide_flag_arms_perp",   344:"9x16_xwide_flag_arms_up", 
-    364:"9x16_xxwide_flag_arms_perp",  738:"9x16_xwide_flag_arms_perp", 78:"9x16_xwide_flag_arms_perp",
+    134:"9x16_xwide_flag_arms_perp",   344:"9x16_regular_up", 
+    364:"9x16_xxxwide",  738:"9x16_xwide_flag_arms_perp", 78:"9x16_xxwide_flag_arms_perp",
     # tighter
     182:"9x16_shoulders",
-    25:"sq_big_left",
+    25:"sq_xbig_left",
     176:"9x16_regular_left", 
     204:"9x16_xwide_left",
-    707:"sq_massive_up",
+    707:"sq_xbig_up",
     # shift left, as SQ
     494:"sq_massive_left",
     286:"9x16_xxwide_right", 
@@ -76,7 +76,7 @@ POSE_CROP_DICT = {
     745:"sq_xmassive_left",
 
     # phone 28:bigSQ, 29 shift right, 30 shift left
-    253:"sq_plus_left", 
+    253:"sq_sm_plus", 
     350:"sq_big_left", 472:"sq_sm_left", 537:"sq_sm",   82:"sq_sm", 
 
     181:"sq_sm", 18:"sq_sm_plus", 479:"sq_sm", 
@@ -111,7 +111,7 @@ MULTIPLIER_DICT = {
     # [top,right,bottom,left]
     "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
 
-    "sq_sm_up": [1.6,2.3,3.0, 2.3], # 18 slightly bigger SQ
+    "sq_sm_up": [1.8,2.3,2.8, 2.3], # 18 slightly bigger SQ
     "sq_sm": [1.4,2.3,3.2, 2.3], # 18 slightly bigger SQ
     "sq_sm_lower": [1.3,2.3,3.3, 2.3], # 18 slightly bigger SQ
     "sq_sm_left": [1.4,1.9,3.2, 2.7], # 18 slightly bigger SQ
@@ -130,7 +130,9 @@ MULTIPLIER_DICT = {
     "sq_big_right": [1.4,3.7,4.8,2.5], # 29 big square shift RIGHT
     "sq_big_left": [1.4,2.5,4.8,3.7], # 30 big square shift LEFT
 
-    "sq_massive_up": [2.5,5,5.5,3], # 32 massive square shift RIGHT
+    "sq_xbig_up": [2.2,3.7,5.2,3.7], # 32 big square shift up
+    "sq_xbig_left": [1.8,2.7,5.6,4.7], # 32 big square shift up
+
     "sq_massive_right": [2,5,6,3], # 32 massive square shift RIGHT
     "sq_massive_left": [2,3,6,5], # 33 massive square shift LEFT
     "sq_xmassive_left": [2.5,3.5,8,7], # 33 massive square shift LEFT
@@ -144,13 +146,16 @@ MULTIPLIER_DICT = {
 
     # 9x16
     "9x16_regular_miami": [1.5,4,3,4],
-    "9x16_shoulders": [1.4,2.25,1.553125,2.25],
-    "9x16_regular_left": [1.5,3.5,3,4.5],
+    "9x16_regular_up": [1.7,4,2.8,4],
+    # "9x16_shoulders": [1.54,2.475,1.70843794,2.475],
+    "9x16_shoulders": [1.45,3,1.925,3],
+    "9x16_regular_left": [1.4,3.1,3.1,4.9],
     "9x16_xwide_flag_arms_up": [1.8,4.4444444,3.2,4.4444444],
     "9x16_xwide_flag_arms_perp": [1.4,4.4444444,3.6,4.4444444],
     "9x16_xxwide_flag_arms_perp": [1.4,5.25,4.50625,5.25],
+    "9x16_xxxwide": [1.55,6,5.2,6],
     "9x16_xwide_left": [1.4,4.6,4.50625,5.9],
-    "9x16_xwide_right": [1.6,5.9,4.30625,4.6],
+    "9x16_xwide_right": [1.7,6.1,4.20625,4.4],
     "9x16_xxwide_right": [1.55,8,5.2,4],
     # 16x9
     "16x9_portrait_torso": [1.6,1.9,5.1555,1.9],
@@ -894,7 +899,7 @@ OBJ_DONT_SUBSELECT = TRUST_FACE_PAIR_CACHE = True
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 # TRUST_FACE_PAIR_CACHE = True # set False to force re-test all face pairs, ignoring cached pass/fail results
-TEMP_FOCUS_CLUSTER_HACK_LIST = OBJECT_NONE_CLUSTERS = []
+TEMP_FOCUS_CLUSTER_HACK_LIST = OBJECT_NONE_CLUSTERS = OBJECT_KEEP_CLUSTERS = []
 
 
 
