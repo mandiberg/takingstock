@@ -37,25 +37,27 @@ POSE_CROP_DICT = {
     # arms fusion 768
     # this is where you set the crop for looping videos
     # 15 Tie, SQ
-    128:"sq_sm", 254:"sq_sm", 343:"sq_sm",  
+    128:"sq_sm", 254:"sq_sm_up", 343:"sq_sm",  
     # tighter, shift left
-    399:"sq_medium_lower", 541:"sq_sm_plus", # shift down a little bit
+    399:"sq_sm_plus", 541:"sq_sm_lower", # shift down a little bit
     7:"sq_sm", # medium, left
-    182:"sq_medium",
     519:"sq_medium_fromabove", 
     593:"sq_lotus_seated", # seated lotus 
     698:"sq_big_center", 649:"sq_big_up",  # biiig square 
     756:"sq_massive_left", # massive left
 
     # 15 Tie, Horiz
-    134:"9x16_xwide_flag_arms_perp", 176:"9x16_xwide_flag_arms_perp",   344:"9x16_xwide_flag_arms_perp", 364:"9x16_xwide_flag_arms_perp",  738:"9x16_xwide_flag_arms_perp", 78:"9x16_xwide_flag_arms_perp",
+    134:"9x16_xwide_flag_arms_perp",   344:"9x16_xwide_flag_arms_up", 
+    364:"9x16_xxwide_flag_arms_perp",  738:"9x16_xwide_flag_arms_perp", 78:"9x16_xwide_flag_arms_perp",
     # tighter
-    25:"9x16_xwide_left",
-    204:"9x16_regular_left",
-    707:"9x16_xwide_flag_arms_up",
+    182:"9x16_shoulders",
+    25:"sq_big_left",
+    176:"9x16_regular_left", 
+    204:"9x16_xwide_left",
+    707:"sq_massive_up",
     # shift left, as SQ
     494:"sq_massive_left",
-    286:"9x16_xwide_right", 
+    286:"9x16_xxwide_right", 
     # pointing right
     670:"sq_big_right",
 
@@ -67,18 +69,19 @@ POSE_CROP_DICT = {
 
     # laptop
     359:"sq_big_right", 77:"sq_big_right", 385:"9x16_xwide_right",  # shift right
-    369:"sq_big_left", 745:"sq_massive_left", # shift left
+    369:"sq_big_left",  # shift left
     426:"sq_medium",  # biiig square
     552:"sq_lotus_seated", # seated lotus
     673:"sq_sm_plus", # medium square
+    745:"sq_xmassive_left",
 
     # phone 28:bigSQ, 29 shift right, 30 shift left
-    253:"sq_medium_left", 
-    350:"sq_big_left", 472:"sq_sm", 537:"sq_sm",   82:"sq_sm", 
+    253:"sq_plus_left", 
+    350:"sq_big_left", 472:"sq_sm_left", 537:"sq_sm",   82:"sq_sm", 
 
-    181:"sq_sm", 18:"sq_sm", 479:"sq_sm", 
+    181:"sq_sm", 18:"sq_sm_plus", 479:"sq_sm", 
     572:"sq_sm_left",
-    69:"sq_medium_left", # shift left 
+    69:"sq_medium",  
     729:"sq_sm_left", # medium, left
     # 126: 25, 332: 25, 662: 27, 702: 25, 
     # 734: 27, 
@@ -108,12 +111,15 @@ MULTIPLIER_DICT = {
     # [top,right,bottom,left]
     "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
 
+    "sq_sm_up": [1.6,2.3,3.0, 2.3], # 18 slightly bigger SQ
     "sq_sm": [1.4,2.3,3.2, 2.3], # 18 slightly bigger SQ
+    "sq_sm_lower": [1.3,2.3,3.3, 2.3], # 18 slightly bigger SQ
     "sq_sm_left": [1.4,1.9,3.2, 2.7], # 18 slightly bigger SQ
 
     "sq_sm_plus": [1.4,2.5,3.6, 2.5], # 18 slightly bigger SQ
+    "sq_plus_left": [1.4,2.3,3.6, 2.7], # 18 slightly bigger SQ
 
-    "sq_medium_fromabove": [1.7,2.8,3.9,2.8], # 22 Medium SQ (lower)
+    "sq_medium_fromabove": [1.7,3.1,4.6,3.1], # 22 Medium SQ (lower)
     "sq_medium": [1.4,2.6,3.8,2.6], # 22 Medium SQ (lower)
     "sq_medium_lower": [1.3,2.6,3.9,2.6], # 22 Medium SQ (lower)
     "sq_medium_left": [1.4,2.3,3.8,2.9], # 23 Medium SQ (left)
@@ -121,32 +127,36 @@ MULTIPLIER_DICT = {
 
     "sq_big_up": [1.7,3.3,4.7,3.3], # 28 big square
     "sq_big_center": [1.4,3.2,4.8,3.2], # 28 big square
-    "sq_big_right": [1.4,4.1,4.8,2.3], # 29 big square shift RIGHT
-    "sq_big_left": [1.4,2.5,4.8,3.9], # 30 big square shift LEFT
+    "sq_big_right": [1.4,3.7,4.8,2.5], # 29 big square shift RIGHT
+    "sq_big_left": [1.4,2.5,4.8,3.7], # 30 big square shift LEFT
 
+    "sq_massive_up": [2.5,5,5.5,3], # 32 massive square shift RIGHT
     "sq_massive_right": [2,5,6,3], # 32 massive square shift RIGHT
     "sq_massive_left": [2,3,6,5], # 33 massive square shift LEFT
+    "sq_xmassive_left": [2.5,3.5,8,7], # 33 massive square shift LEFT
 
     # legacy
-    "sq_selfie_shift_left": [2.2,2.5,4,3.9], # 20 selfie shift LEFT - arm out)
+    "sq_selfie_shift_left": [2.2,2.4,4,3.8], # 20 selfie shift LEFT - arm out)
     "sq_xbig_flag": [3,4.5,6,4.5], # 16 extra big SQ (SQ flag pose)
     "sq_shift_left": [1.3,1.3,2.4,2.4], # 15 (more space on left)
-    "sq_large_shift_right": [1.4,2.55,3.1,2.15], # 19 (more space on right)
+    "sq_large_shift_right": [1.4,2.45,3.1,2.05], # 19 (more space on right)
     "sq_sm_medium": [1.6,2.1,2.6,2.1], # 21 SM-Medium SQ (for wider arms)
 
-# 9x16
-    "9x16_regular_miami": [1.5,4,3,4], # 17 regular Miami
-    "9x16_regular_left": [1.5,3.5,3,4.5], # 
-    "9x16_xwide_flag_arms_up": [1.8,4.5,3.3,4.5], # 13
-    "9x16_xwide_flag_arms_perp": [1.4,4.5,3.606,4.5], # 14
-    "9x16_xwide_left": [1.4,2.5,3.606,6.5], # 14
-    "9x16_xwide_right": [1.4,6.5,3.606,2.5], # 14
-
-    "16x9_portrait_torso": [1.5,1.9,5.03,1.9], # 27 # 16x9 portrait 2025
-    "16x9_fullbody": [1.5,3.375,10.5,3.375], # 25 16x9 full body portrait (regular head crop)
-    "16x9_fullbody_armsup_isfeet": [3.5,4.19,11.5,4.19], # 31 16x9 full body portrait (arms up, is_feet)
-    "16x9_fullbody_armsup_knee": [3,3.65,9.2,3.65], # 26 16x9 full body portrait (arms up, crop at knee)
-
+    # 9x16
+    "9x16_regular_miami": [1.5,4,3,4],
+    "9x16_shoulders": [1.4,2.25,1.553125,2.25],
+    "9x16_regular_left": [1.5,3.5,3,4.5],
+    "9x16_xwide_flag_arms_up": [1.8,4.4444444,3.2,4.4444444],
+    "9x16_xwide_flag_arms_perp": [1.4,4.4444444,3.6,4.4444444],
+    "9x16_xxwide_flag_arms_perp": [1.4,5.25,4.50625,5.25],
+    "9x16_xwide_left": [1.4,4.6,4.50625,5.9],
+    "9x16_xwide_right": [1.6,5.9,4.30625,4.6],
+    "9x16_xxwide_right": [1.55,8,5.2,4],
+    # 16x9
+    "16x9_portrait_torso": [1.6,1.9,5.1555,1.9],
+    "16x9_fullbody": [1.5,3.375,10.5,3.375],
+    "16x9_fullbody_armsup_isfeet": [3.5,4.5,12.5,4.5],
+    "16x9_fullbody_armsup_knee": [3,3.375,9,3.375],
 
     "2x3_low": [1.5,3,3.3,3], # 0 2x3 but go lower
     "2x3_landscape": [1.5,3,2.5,3], # 2 # 2x3 landscape 2025
@@ -505,39 +515,27 @@ KEYWORD_DICT = {
 FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     0: [
     # TK, 15/sq], 
-    [128, 15], [204, 15], [254, 15], [286, 15], [343, 15], [399, 15], [519, 15], [541, 15], [593, 15], 
-    [597, 15], [649, 15], [698, 15], [707, 15], [756, 15], [7, 15], 
+    [204, 15], [254, 15], [286, 15],  [399, 15], [519, 15], [541, 15], [593, 15], 
+    [597, 15], [649, 15], [698, 15], [707, 15], [756, 15],  
     #15/horiz], 
-    [134, 15], [176, 15], [182, 15], [25, 15], [344, 15], [364, 15], [494, 15], [670, 15], [738, 15], [78, 15], 
+     [176, 15], [182, 15], [25, 15], [344, 15], [364, 15], [494, 15], [670, 15], [738, 15], [78, 15], 
     #15/vert], 
-    [126, 15], [183, 15], [471, 15], [605, 15], [626, 15], [647, 15], [702, 15], 
+     [183, 15], [471, 15], [605, 15], [647, 15], [702, 15], 
     # 15 vert, crop thigh
     [155, 15], 
     #11], 
-    [359, 11], [369, 11], [385, 11], [426, 11], [552, 11], [673, 11], [745, 11], [77, 11], #[TKphone], 
+    [369, 11], [385, 11], [426, 11], [552, 11], [673, 11], [745, 11], [77, 11], #[TKphone], 
     [253, 7], [350, 25], [472, 7], [537, 282], [69, 282], [729, 7], [82, 282], 
     # [TKmisc, Dsort  ], 
     [181, 2230], [18, 3052], [18, 733], [479, 2230], [572, 734],
 
+
+    # excluding: [359, 11],[128, 15], [7, 15], [626, 15], [343, 15],
+    # prob exc: [134, 15], (too chaotic) [126, 15], (too small)
    ]
 }
 
 
-# 55 SELECTS for looping T11 arms3D sort, Berlin
-FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
-    0: [
-
-[729, 7], [181, 2230], [572, 734], [176, 15], [552, 11], [183, 15], [593, 15], [519, 15], [369, 11], [670, 15], [18, 3052], [182, 15], [286, 15], [399, 15], [756, 15], [541, 15], [426, 11], [649, 15], [7, 15], [647, 15], [479, 2230], [359, 11], [698, 15], [78, 15], [738, 15], [254, 15], [204, 15], [18, 733], [472, 7], [134, 15], [128, 15], [25, 15], [77, 11], [126, 15], [745, 11], [626, 15],
-    #11], 
-    # [359, 11], [369, 11], [385, 11], [426, 11], [552, 11], 
-    # [673, 11], 
-    # [745, 11], [77, 11], #[TKphone], 
-    # [253, 7], [350, 25], [472, 7], [537, 282], [69, 282], [729, 7], [82, 282], 
-    # # [TKmisc, Dsort  ], 
-    # [181, 2230], [18, 3052], [18, 733], [479, 2230], [572, 734],
-
-   ]
-}
 
 # FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 #     0: [

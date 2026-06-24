@@ -16,9 +16,9 @@ LOOPING_ONLY = True
 keyword_id = None
 
 # ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
-ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/excludes"
+# ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/excludes"
 # ROOT = "/Volumes/LaCie/dedupe/" # for dedupe/exclue, just point to the parent folder holding both
-# ROOT = "/Volumes/LaCie/dedupe/exclude"
+ROOT = "/Volumes/LaCie/output_folder/_excludes"
 
 
 def parse_folder(folderpath, exclude=False):
