@@ -541,6 +541,29 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 }
 
 
+# 55 SELECTS for looping T11 arms3D sort, Berlin
+FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
+    0: [
+    # TK, 15/sq], 
+    
+    # [399, 15], 
+    # [541, 15], 
+    # [698, 15], 
+    
+    # #15/vert], 
+    #  [183, 15], 
+    #  [605, 15], 
+    #  [647, 15], 
+    
+    # biiig ones to catch colors
+    [1, 15], [202, 15], [646, 15], [612, 15], [686, 15], [172, 15], [310, 15], [92, 15]
+
+
+    # excluding: [359, 11],[128, 15], [7, 15], [626, 15], [343, 15],
+    # prob exc: [134, 15], (too chaotic) [126, 15], (too small)
+   ]
+}
+
 
 # FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 #     0: [
@@ -849,10 +872,12 @@ HSV_GROUP_PRESETS = {
     ],
     # Initial object-color grouping, can be tuned as object HSV runs mature.
     "object_color_v1": [
-        [0], [1], [2],
-        [3, 4, 5, 6, 22],
-        [7, 8, 9, 10, 11, 12, 13],
-        [14, 15, 16, 17, 18, 19, 20, 21],
+        # [0], [1], [2],
+        # [3, 4, 5, 6, 22],
+        # [7], [8, 9, 10, 11], [12, 13],
+        # [14], [15, 16, 17, 18, 19], [20], [21],
+        [0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12], [13], [14], [15], [16], [17], [18], [19], [20], [21], [22],
+
     ],
 }
 
