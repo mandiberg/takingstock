@@ -9,6 +9,7 @@ import torch
 from openaiAPI import api_key
 import time
 from concurrent.futures import ThreadPoolExecutor
+from collections import Counter
 from sqlalchemy.exc import OperationalError
 from ultralytics import YOLO
 import json
@@ -26,6 +27,42 @@ from tools_ocr import OCRTools
 from tools_clustering import ToolsClustering
 from tools_yolo import YOLOTools
 
+
+def _argv_flag(flag_name):
+    return flag_name in sys.argv
+
+
+def _argv_int(flag_name, default_value):
+    if flag_name in sys.argv:
+        idx = sys.argv.index(flag_name)
+        if idx + 1 < len(sys.argv):
+            try:
+                return int(sys.argv[idx + 1])
+            except ValueError:
+                print(f"Invalid int for {flag_name}: {sys.argv[idx + 1]}, using default {default_value}")
+    return default_value
+
+
+SALVAGE_HSV_MODE = _argv_flag("--salvage-hsv")
+SALVAGE_APPLY_UPDATES = _argv_flag("--apply")
+SALVAGE_INCLUDE_REDONE = _argv_flag("--salvage-include-redone")
+
+'''salvage mode use:
+
+Dry run only:
+python process_placards.py --salvage-hsv
+
+Dry run + apply updates:
+python process_placards.py --salvage-hsv --apply
+
+Optional tuning:
+python process_placards.py --salvage-hsv --salvage-batch 8000 --salvage-load-workers 12 --report-class-id 27
+
+--salvage-include-redone (default behavior is to skip already redone rows).
+
+'''
+
+
 # MySQL setup (preserving credentials framework)
 from mp_db_io import DataIO
 io = DataIO()
@@ -39,25 +76,33 @@ engine = create_engine(
 Session = sessionmaker(bind=engine)
 session = Session()
 
-openai_client = OpenAI(
-    # defaults to os.environ.get("OPENAI_API_KEY")
-    api_key=api_key,
-)
-
-ocr_engine = PaddleOCR(
-    use_doc_orientation_classify=False, 
-    use_doc_unwarping=False, 
-    use_textline_orientation=False) # text detection + text recognition
-
-device = "mps" if torch.backends.mps.is_available() else "cpu"
-print("Using device:", device)
-yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-# yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
-yolo_custom_model = YOLO("models/takingstock_c45_h200_4x_yolo26x/weights/best.pt").to(device)
-
 VERBOSE = True
-ocr = OCRTools(DEBUGGING=True)
 yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
+
+if not SALVAGE_HSV_MODE:
+    openai_client = OpenAI(
+        # defaults to os.environ.get("OPENAI_API_KEY")
+        api_key=api_key,
+    )
+
+    ocr_engine = PaddleOCR(
+        use_doc_orientation_classify=False,
+        use_doc_unwarping=False,
+        use_textline_orientation=False) # text detection + text recognition
+
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    print("Using device:", device)
+    yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
+    # yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
+    yolo_custom_model = YOLO("models/takingstock_c45_h200_4x_yolo26x/weights/best.pt").to(device)
+    ocr = OCRTools(DEBUGGING=True)
+else:
+    openai_client = None
+    ocr_engine = None
+    yolo_model = None
+    yolo_custom_model = None
+    ocr = None
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
 
 
 # # Get the number of classes
@@ -65,7 +110,8 @@ yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 # print(f"Number of classes: {num_classes}")
 # 
 # # See the actual class names
-print(yolo_custom_model.names)
+if not SALVAGE_HSV_MODE:
+    print(yolo_custom_model.names)
 # exit()
 
 blank = False
@@ -112,16 +158,19 @@ if WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE:
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-# FILE_FOLDER = "/Volumes/LaCie/segment_images" #halfway through
+FILE_FOLDER = "/Volumes/LaCie/segment_images" #halfway through
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl" 
 # FILE_FOLDER ="/Volumes/OWC54/segment_images"
-FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
+# FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 YOLO_BATCH_SIZE = 8  # number of images per YOLO batch inference call (M3 Ultra: try 32-64)
 IMAGE_LOAD_WORKERS = 8  # concurrent cv2.imread workers before each YOLO batch
+SALVAGE_QUERY_BATCH = _argv_int("--salvage-batch", 5000)
+SALVAGE_LOAD_WORKERS = _argv_int("--salvage-load-workers", IMAGE_LOAD_WORKERS)
+SALVAGE_REPORT_CLASS_ID = _argv_int("--report-class-id", 27)
 CONF_THRESHOLD = 0.30
 IS_DRAW_BOX = True
 MOVE_OR_COPY = "copy"  # "move" or "copy"
@@ -263,10 +312,15 @@ this_cluster, this_crosswalk = cl.set_cluster_metacluster(Clusters, ImagesCluste
 meta_cluster_dict = cl.get_meta_cluster_dict(session, ClustersMetaClusters)
 print("this_cluster: ", this_cluster)
 
-slogan_dict = ocr.get_all_slogans(session, Slogans)
-print("Loaded slogans:", slogan_dict)
-refined_dict = ocr.get_all_refined(session, RefinedText)
-print("Loaded refined:", refined_dict)
+if not SALVAGE_HSV_MODE:
+    slogan_dict = ocr.get_all_slogans(session, Slogans)
+    print("Loaded slogans:", slogan_dict)
+    refined_dict = ocr.get_all_refined(session, RefinedText)
+    print("Loaded refined:", refined_dict)
+else:
+    slogan_dict = {}
+    refined_dict = {}
+    print("SALVAGE_HSV_MODE enabled: skipping OCR/OpenAI data preload")
 
 median_dict = cl.get_cluster_medians(session, this_cluster)
 print("Loaded cluster medians:", median_dict)
@@ -950,5 +1004,270 @@ def detect_from_folder(folder_index, csv_foldercount_path, folder_path, folder, 
                 }
     io.write_csv(csv_foldercount_path, [folder_path])
 
+
+def _resolve_site_folder(site_name_id):
+    try:
+        idx = int(site_name_id)
+    except (TypeError, ValueError):
+        return None
+    if idx < 0 or idx >= len(io.folder_list):
+        return None
+    return os.path.basename(io.folder_list[idx])
+
+
+def _load_image_for_salvage(load_item):
+    image_id, image_path = load_item
+    image = cv2.imread(image_path)
+    return image_id, image
+
+
+def _normalize_bbox_for_image(raw_bbox, image):
+    try:
+        bbox = io.unstring_json(raw_bbox)
+    except Exception:
+        return None
+    if not isinstance(bbox, dict):
+        return None
+
+    required_keys = ["left", "top", "right", "bottom"]
+    if any(k not in bbox for k in required_keys):
+        return None
+
+    h, w = image.shape[:2]
+    try:
+        left = max(0, min(w, int(round(float(bbox["left"])))) )
+        top = max(0, min(h, int(round(float(bbox["top"])))) )
+        right = max(0, min(w, int(round(float(bbox["right"])))) )
+        bottom = max(0, min(h, int(round(float(bbox["bottom"])))) )
+    except (TypeError, ValueError):
+        return None
+
+    if right <= left or bottom <= top:
+        return None
+    return {"left": left, "top": top, "right": right, "bottom": bottom}
+
+
+def _format_confusion_report(confusion_counter):
+    if not confusion_counter:
+        return "No confusion data (no rows processed for report class)."
+
+    rows = []
+    for (old_meta, new_meta), count in confusion_counter.items():
+        rows.append({
+            "old_meta": old_meta,
+            "new_meta": new_meta,
+            "count": count,
+        })
+    df = pd.DataFrame(rows)
+    df = df.sort_values(["count", "old_meta", "new_meta"], ascending=[False, True, True])
+
+    out_lines = []
+    out_lines.append("Top old_meta -> new_meta counts:")
+    for _, row in df.head(25).iterrows():
+        out_lines.append(
+            f"  {row['old_meta']} -> {row['new_meta']}: {int(row['count'])}"
+        )
+
+    pivot = pd.pivot_table(
+        df,
+        index="old_meta",
+        columns="new_meta",
+        values="count",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    out_lines.append("Confusion matrix (old_meta rows, new_meta cols):")
+    out_lines.append(str(pivot))
+    return "\n".join(out_lines)
+
+
+def salvage_hsv_detection_ids(apply_updates=False):
+    mode_label = "APPLY" if apply_updates else "DRY_RUN"
+    print(
+        f"[SALVAGE {mode_label}] starting with batch={SALVAGE_QUERY_BATCH}, "
+        f"load_workers={SALVAGE_LOAD_WORKERS}, report_class_id={SALVAGE_REPORT_CLASS_ID}, "
+        f"include_redone={SALVAGE_INCLUDE_REDONE}"
+    )
+
+    stats = {
+        "rows_seen": 0,
+        "rows_with_bbox": 0,
+        "rows_image_missing": 0,
+        "rows_invalid_bbox": 0,
+        "rows_assignment_failed": 0,
+        "rows_compared": 0,
+        "rows_changed": 0,
+        "rows_unchanged": 0,
+        "rows_written": 0,
+        "images_loaded": 0,
+        "images_missing": 0,
+        "class_confusion": Counter(),
+    }
+
+    last_detection_id = 0
+    batch_no = 0
+
+    while True:
+        rows_query = (
+            session.query(
+                Detections.detection_id,
+                Detections.image_id,
+                Detections.class_id,
+                Detections.bbox,
+                Detections.cluster_id,
+                Detections.meta_cluster_id,
+                Detections.hsv_redone,
+                Images.site_name_id,
+                Images.imagename,
+            )
+            .join(Images, Images.image_id == Detections.image_id)
+            .filter(Detections.detection_id > last_detection_id)
+            .filter(Detections.bbox.isnot(None))
+            .order_by(Detections.detection_id.asc())
+        )
+
+        if not SALVAGE_INCLUDE_REDONE:
+            rows_query = rows_query.filter(
+                sqlalchemy.or_(Detections.hsv_redone.is_(None), Detections.hsv_redone == False)
+            )
+
+        rows_query = rows_query.limit(SALVAGE_QUERY_BATCH)
+
+        rows = rows_query.all()
+
+        if not rows:
+            break
+
+        batch_no += 1
+        last_detection_id = rows[-1].detection_id
+        stats["rows_seen"] += len(rows)
+        stats["rows_with_bbox"] += len(rows)
+
+        image_key_map = {}
+        for row in rows:
+            image_key_map[row.image_id] = (row.site_name_id, row.imagename)
+
+        load_items = []
+        for image_id, (site_name_id, imagename) in image_key_map.items():
+            site_folder = _resolve_site_folder(site_name_id)
+            if site_folder is None:
+                continue
+            image_path = os.path.join(FILE_FOLDER, site_folder, imagename)
+            load_items.append((image_id, image_path))
+
+        loaded_images = {}
+        if load_items:
+            max_workers = min(SALVAGE_LOAD_WORKERS, len(load_items))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                for image_id, image in executor.map(_load_image_for_salvage, load_items):
+                    if image is None:
+                        stats["images_missing"] += 1
+                    else:
+                        loaded_images[image_id] = image
+                        stats["images_loaded"] += 1
+
+        pending_updates = []
+        for row in rows:
+            image = loaded_images.get(row.image_id)
+            if image is None:
+                stats["rows_image_missing"] += 1
+                continue
+
+            bbox = _normalize_bbox_for_image(row.bbox, image)
+            if bbox is None:
+                stats["rows_invalid_bbox"] += 1
+                continue
+
+            try:
+                new_meta_cluster_id, new_cluster_id, _cluster_dist = bbox_to_cluster_id(image, bbox)
+            except Exception:
+                stats["rows_assignment_failed"] += 1
+                continue
+
+            stats["rows_compared"] += 1
+            old_cluster_id = row.cluster_id
+            old_meta_cluster_id = row.meta_cluster_id
+
+            if row.class_id == SALVAGE_REPORT_CLASS_ID:
+                stats["class_confusion"][(old_meta_cluster_id, new_meta_cluster_id)] += 1
+
+            changed = (
+                (old_cluster_id != new_cluster_id)
+                or (old_meta_cluster_id != new_meta_cluster_id)
+            )
+
+            if changed:
+                stats["rows_changed"] += 1
+                if apply_updates:
+                    pending_updates.append(
+                        {
+                            "detection_id": row.detection_id,
+                            "cluster_id": new_cluster_id,
+                            "meta_cluster_id": new_meta_cluster_id,
+                            "hsv_redone": True,
+                        }
+                    )
+            else:
+                stats["rows_unchanged"] += 1
+                if apply_updates:
+                    pending_updates.append(
+                        {
+                            "detection_id": row.detection_id,
+                            "hsv_redone": True,
+                        }
+                    )
+
+        if apply_updates and pending_updates:
+            if TESTING_NO_DB_WRITE:
+                print("TESTING_NO_DB_WRITE=True, skipping salvage writes for this batch")
+            else:
+                session.bulk_update_mappings(Detections, pending_updates)
+                session.commit()
+                stats["rows_written"] += len(pending_updates)
+
+        print(
+            f"[SALVAGE {mode_label}] batch {batch_no}: rows={len(rows)} "
+            f"compared={stats['rows_compared']} changed={stats['rows_changed']} "
+            f"written={stats['rows_written']}"
+        )
+
+    return stats
+
+
+def print_salvage_report(stats, report_label):
+    print(f"\n===== {report_label} REPORT =====")
+    print(f"rows_seen: {stats['rows_seen']}")
+    print(f"rows_with_bbox: {stats['rows_with_bbox']}")
+    print(f"rows_image_missing: {stats['rows_image_missing']}")
+    print(f"rows_invalid_bbox: {stats['rows_invalid_bbox']}")
+    print(f"rows_assignment_failed: {stats['rows_assignment_failed']}")
+    print(f"rows_compared: {stats['rows_compared']}")
+    print(f"rows_changed: {stats['rows_changed']}")
+    print(f"rows_unchanged: {stats['rows_unchanged']}")
+    print(f"rows_written: {stats['rows_written']}")
+    print(f"images_loaded: {stats['images_loaded']}")
+    print(f"images_missing: {stats['images_missing']}")
+    print(f"Tie class report class_id: {SALVAGE_REPORT_CLASS_ID}")
+    print(_format_confusion_report(stats["class_confusion"]))
+    print("===== END REPORT =====\n")
+
+
+def run_salvage_hsv_workflow():
+    dry_stats = salvage_hsv_detection_ids(apply_updates=False)
+    print_salvage_report(dry_stats, "DRY RUN")
+
+    if not SALVAGE_APPLY_UPDATES:
+        print("Dry run complete. Re-run with --salvage-hsv --apply to write updates.")
+        return
+
+    print("--apply set: running second pass with DB writes enabled.")
+    apply_stats = salvage_hsv_detection_ids(apply_updates=True)
+    print_salvage_report(apply_stats, "APPLY")
+
 if __name__ == "__main__":
-    main()
+    if SALVAGE_HSV_MODE:
+        run_salvage_hsv_workflow()
+        session.close()
+        engine.dispose()
+    else:
+        main()

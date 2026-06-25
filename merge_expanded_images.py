@@ -32,7 +32,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_looping_june24_itter100/"
+FOLDER_NAME = "output_folder/_small_clusters_test/moved_folders"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -97,7 +97,7 @@ elif "make_video" in CURRENT_MODE:
 
     if "linear" in CURRENT_MODE:
         SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe
-        MERGE_COUNT = 1 # how many additional images are sent in to the merge funciton (1 + MERGE_COUNT is total)
+        MERGE_COUNT = 8 # how many additional images are sent in to the merge funciton (1 + MERGE_COUNT is total)
     elif "osc" in CURRENT_MODE:
         OSCILATING_MERGE = True # if true, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE 
         LOOPING = True

@@ -109,7 +109,8 @@ POSE_CROP_DICT = {
 }
 MULTIPLIER_DICT = {
     # [top,right,bottom,left]
-    "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
+    # "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
+    "sq_default": [1.5,2.5,3.4,2.5], # HACK temp for 1k smaller reprocess
 
     "sq_sm_up": [1.8,2.3,2.8, 2.3], # 18 slightly bigger SQ
     "sq_sm": [1.4,2.3,3.2, 2.3], # 18 slightly bigger SQ

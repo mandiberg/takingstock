@@ -433,7 +433,8 @@ class YOLOTools:
 
         hue, saturation, value, luminance = self.hsv_on_cropped_image(image_bbox_slice)
 
-        normalized_hue = hue/360
+        # OpenCV HSV hue channel is [0, 179] for uint8 images.
+        normalized_hue = hue/180
         normalized_saturation = saturation/255
         normalized_value = value/255
         normalized_luminance = luminance/255

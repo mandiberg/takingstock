@@ -486,6 +486,7 @@ class Detections(Base):
     bbox_norm = Column(JSON)
     meta_cluster_id = Column(Integer)
     cluster_id = Column(Integer)
+    hsv_redone = Column(Boolean, default=False)
 
     __table_args__ = (
         UniqueConstraint('image_id', 'class_id', 'obj_no', name='uq_image_class_obj'),

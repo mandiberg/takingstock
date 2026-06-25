@@ -30,7 +30,7 @@ except ModuleNotFoundError as e:
     raise SystemExit("moviepy is not importable in this Python environment.")
 
 # ROOT = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/MUD_model_files"
-ROOT = "/Volumes/LaCie/output_folder/_moneymix/loop"
+ROOT = "/Volumes/LaCie/output_folder/_looping_june24_itter100/looping_videos_part1_june24"
 LOOPS_PER_VIDEO = 5
 
 OUTPUT_FOLDER = os.path.join(ROOT, "looped_videos")
