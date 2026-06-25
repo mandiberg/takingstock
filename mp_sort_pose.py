@@ -152,7 +152,7 @@ class SortPose:
         self.CHECK_RANGE_EARLY = 50
         self.SORT_TYPE = SORT_TYPE
         self.TSP_SORT = TSP_SORT
-        self.MIN_COL_SUM_MULTIPLIER = 5 # this determines which columns are "small" under MULTIPOLICY
+        self.MIN_COL_SUM_MULTIPLIER = 50 # this determines which columns are "small" under MULTIPOLICY
 
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
@@ -5708,7 +5708,9 @@ class SortPose:
                 min_column_sum = min_value * self.MIN_COL_SUM_MULTIPLIER
                 # get the sums of each column and find the columns that are below the min_value threshold
                 column_sums = gesture_array.sum(axis=0)
+                # only take the large small clusters
                 small_columns = np.where(column_sums <= min_column_sum)[0].tolist()
+                # small_columns = np.where((column_sums <= min_column_sum) & (column_sums >= min_column_sum/2))[0].tolist()
                 small_fusion_columns.extend(small_columns)
                 # zero out the small columns so they won't interfere with group sums                gesture_array[:, small_columns] = 0
                 print(f"Multipolicy enabled: identified small columns with sums <= {min_column_sum}: {small_columns}")
