@@ -103,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/looping_june24_itter100/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/12kless/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -296,7 +296,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # main switches
     INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
-    DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
+    DO_SMALL_CLUSTER_FUSION_BUCKET = True # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     HSV_SOURCE_MODE = "object" # "background" or "object" or "both"
     
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
@@ -392,7 +392,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     CLUSTER_MIN_HSV_FACEANGLE = CLUSTER_MIN_HSV_BG = 1200
     CLUSTER_MIN_HSV_OBJ = 1000
-    OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000 # for DO_SMALL_CLUSTER_FUSION_BUCKET
+    OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 10000 # for DO_SMALL_CLUSTER_FUSION_BUCKET
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
@@ -430,15 +430,15 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         # turning all three off to do old style non-tsp itter-sort    
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
-        ONE_SHOT = False # take all files, based off the very first sort order.
+        ONE_SHOT = True # take all files, based off the very first sort order.
         ONLY_SAVE_CACHE = False # if False, = 1 in MODE it will save images to each folder
 
     if DO_SMALL_CLUSTER_FUSION_BUCKET:
         # set above, going to override fusion pairs, MULTIPOLICY and set keep clusters
         GENERATE_FUSION_PAIRS = True # 
         MULTIPOLICY = True # 
-        OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
-
+        # OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
+        OBJECT_KEEP_CLUSTERS = []
     if GENERATE_FUSION_PAIRS:
         # this is an override for development purposes. will only make CSVs from these clusters:
         # OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
@@ -5786,8 +5786,13 @@ def main():
                 meta_cluster_id = route_policy.get("meta_cluster_id")
                 print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
                 print(f"cluster_topic_no[0]: {cluster_topic_no[0]}, START_CLUSTER: {START_CLUSTER} IS_CLUSTER: {IS_CLUSTER}")
-                if IS_CLUSTER and cluster_topic_no < START_CLUSTER: return
-                if isinstance(cluster_topic_no, list) and cluster_topic_no[0] < START_CLUSTER: return # for fusion pairs, IS_CLUSTER is False
+                if IS_CLUSTER and cluster_topic_no < START_CLUSTER: 
+                    print(f"skipping cluster_topic_no {cluster_topic_no} because it is less than START_CLUSTER {START_CLUSTER}")
+                    return
+                if isinstance(cluster_topic_no, list) and cluster_topic_no[0] < START_CLUSTER and cluster_topic_no[0] != -1: 
+                    # cluster_topic_no[0] != -1 avoids letting this derail the small clusters that get -1 for pose
+                    print(f"skipping fusion pair {cluster_topic_no} because it is less than START_CLUSTER {START_CLUSTER}")
+                    return # for fusion pairs, IS_CLUSTER is False
                 if (
                     isinstance(cluster_topic_no, list)
                     and len(cluster_topic_no) >= 2
@@ -5799,6 +5804,7 @@ def main():
                     )
                     return
                 if DO_OBJECT_COLLAPSE and isinstance(cluster_topic_no, list) and len(cluster_topic_no) >= 2:
+                    print(f"[COLLAPSE] checking fusion pair {cluster_topic_no} for pose_no {_pose_val} against collapse mapping")
                     try:
                         _pose_val = int(float(cluster_topic_no[1]))
                     except (TypeError, ValueError):
@@ -5926,9 +5932,11 @@ def main():
                                 )
                                 fallback_policy = dict(route_policy)
                                 fallback_policy["use_hsv"] = False
+                                print(f"[MULTIPOLICY - do_first_select_map_images] pair={cluster_topic_no} falling back to non-HSV route")
                                 do_first_select_map_images(cluster_topic_no, second_cluster_topic, None, route_policy=fallback_policy)
                             else:
                                 for hsv_cluster in hsv_groups:
+                                    print(f"[MULTIPOLICY - do_first_select_map_images] pair={cluster_topic_no} using HSV cluster {hsv_cluster} from preset {preset_name}")   
                                     do_first_select_map_images(
                                         cluster_topic_no,
                                         second_cluster_topic,
@@ -5936,6 +5944,7 @@ def main():
                                         route_policy=route_policy,
                                     )
                         else:
+                            print(f"[MULTIPOLICY - do_first_select_map_images] pair={cluster_topic_no} using [else] non-HSV route")
                             do_first_select_map_images(cluster_topic_no, second_cluster_topic, None, route_policy=route_policy)
 
                     if MULTIPOLICY and route_bucket_stats:
