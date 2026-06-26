@@ -32,7 +32,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_small_clusters_35"
+FOLDER_NAME = "output_folder/_looping_june24_itter100"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -56,6 +56,13 @@ MERGE_PERIOD = 1  # repeats each merge-size level during ramp up/down
 FULL_MERGE_PERIOD = 0  # explicit hold-at-peak frames per cycle
 AUTO_DISTRIBUTE_CYCLE_PERIOD = False  # optionally spread images into near-even full cycles
 SINGLETON_MODE = "blended_singleton"  # blended_singleton preserves the current soft singleton behavior
+# Preserve full frame budget by default: do not drop boundary singletons.
+SKIP_BOUNDARY_SINGLETONS = False
+# Keep strict-unique exports at target duration by avoiding extra seam coda frames.
+STRICT_UNIQUE_SEAM_EXTRA_FRAMES = False
+# Target number of visible singleton frames at cycle transitions in strict mode.
+# Keeping this at 1 preserves a clean transition without changing frame count.
+TRANSITION_SINGLETON_TARGET = 1
 
 
 singleton_skip_counts = {
@@ -236,7 +243,10 @@ def build_loop_seam_transition(last_frame, first_frame, blend_steps=LOOP_SEAM_BL
     if last_u8.shape != first_u8.shape:
         first_u8 = cv2.resize(first_u8, (last_u8.shape[1], last_u8.shape[0]), interpolation=cv2.INTER_AREA)
 
-    total = max(1, int(blend_steps))
+    if blend_steps is None or int(blend_steps) <= 0:
+        return []
+
+    total = int(blend_steps)
     # Keep only interior alphas so we do not duplicate the already-written endpoints.
     alphas = np.linspace(0.0, 1.0, total + 2)[1:-1]
     seam_frames = []
@@ -1201,6 +1211,38 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
             last_non_singleton = i
             break
 
+    if STRICT_UNIQUE_IMAGE_PLACEMENT and schedule:
+        target_singletons = max(0, int(TRANSITION_SINGLETON_TARGET))
+
+        def _promote_singleton_step(step):
+            if step["size"] != 1:
+                return
+            promoted_size = min(2, step["end_idx"] - current_pos)
+            if promoted_size <= 1:
+                return
+            step["size"] = promoted_size
+            new_start = step["end_idx"] - promoted_size
+            step["start_idx"] = max(current_pos, new_start)
+
+        # Keep singleton(s) anchored at the start of the cycle and promote all
+        # later singleton steps to 2-frame blends. In this scheduler, the first
+        # step is inherently singleton (end_idx-current_pos == 1), so anchoring
+        # there avoids back-to-back singleton frames at cycle boundaries.
+        singleton_idxs = [i for i, step in enumerate(schedule) if step["size"] == 1]
+        keep_count = min(target_singletons, len(singleton_idxs))
+        keep_idx_set = set(singleton_idxs[:keep_count])
+        for idx in singleton_idxs:
+            if idx not in keep_idx_set:
+                _promote_singleton_step(schedule[idx])
+
+        # Recompute singleton boundaries after normalization for phase/debug labels.
+        first_non_singleton = next((i for i, s in enumerate(schedule) if s["size"] > 1), len(schedule))
+        last_non_singleton = -1
+        for i in range(len(schedule) - 1, -1, -1):
+            if schedule[i]["size"] > 1:
+                last_non_singleton = i
+                break
+
     for step_i, step in enumerate(schedule):
         start_idx = step["start_idx"]
         end_idx = step["end_idx"]
@@ -1210,7 +1252,7 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         is_leading_boundary_singleton = step["size"] == 1 and step_i < first_non_singleton
         is_trailing_boundary_singleton = step["size"] == 1 and step_i > last_non_singleton
 
-        if STRICT_UNIQUE_IMAGE_PLACEMENT and BLEND_END_TO_FIRST:
+        if SKIP_BOUNDARY_SINGLETONS and STRICT_UNIQUE_IMAGE_PLACEMENT and BLEND_END_TO_FIRST:
             if SINGLETON_MODE == "blended_singleton":
                 # Preserve the current soft singleton behavior by dropping boundary singleton frames.
                 if current_pos > 0 and is_leading_boundary_singleton:
@@ -1511,7 +1553,10 @@ def write_video(img_array, subfolder_path=None):
                     if BLEND_END_TO_FIRST:
                         # Coda: bridge last rendered frame back toward first rendered frame.
                         # Excludes endpoints, so this adds only in-between blend frames.
-                        seam_blend_steps = 2 if STRICT_UNIQUE_IMAGE_PLACEMENT else LOOP_SEAM_BLEND_STEPS
+                        if STRICT_UNIQUE_IMAGE_PLACEMENT and not STRICT_UNIQUE_SEAM_EXTRA_FRAMES:
+                            seam_blend_steps = 0
+                        else:
+                            seam_blend_steps = 2 if STRICT_UNIQUE_IMAGE_PLACEMENT else LOOP_SEAM_BLEND_STEPS
                         seam_frames = build_loop_seam_transition(
                             last_image_written,
                             first_image_written,

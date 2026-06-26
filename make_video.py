@@ -431,11 +431,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         ONE_SHOT = False # take all files, based off the very first sort order.
-        ONLY_SAVE_CACHE = True # if False, = 1 in MODE it will save images to each folder
+        ONLY_SAVE_CACHE = False # if False, = 1 in MODE it will save images to each folder
 
     if DO_SMALL_CLUSTER_FUSION_BUCKET:
         # set above, going to override fusion pairs, MULTIPOLICY and set keep clusters
-        GENERATE_FUSION_PAIRS = True # 
+        GENERATE_FUSION_PAIRS = False # 
         MULTIPOLICY = True # 
         OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 13000 # override defaults to grab as much as we can
         # after you do a bulk run of all suitable clusters, put the ones you want in this list, and it will only run those:
@@ -458,7 +458,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 400 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    FORCE_TARGET_COUNT = 1200 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
