@@ -32,7 +32,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_small_clusters_test/moved_folders"
+FOLDER_NAME = "output_folder/_small_clusters_35"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -1570,6 +1570,23 @@ def write_video(img_array, subfolder_path=None):
         f"terminal_final={singleton_skip_counts['terminal_final']}",
         f"total={singleton_skip_total}",
     )
+    if FRAMERATE:
+        estimated_duration = run_counter / FRAMERATE
+        print(
+            "[video accounting]",
+            f"frames_written={run_counter}",
+            f"offset_buffered={len(pending_offset_frames)}",
+            f"singleton_skipped={singleton_skip_total}",
+            f"estimated_duration_s={estimated_duration:.3f}",
+        )
+    else:
+        print(
+            "[video accounting]",
+            f"frames_written={run_counter}",
+            f"offset_buffered={len(pending_offset_frames)}",
+            f"singleton_skipped={singleton_skip_total}",
+            "estimated_duration_s=None",
+        )
 
     video_writer.release()
 

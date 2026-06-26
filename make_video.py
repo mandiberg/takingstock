@@ -103,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/10kless/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/small_clusters_intermediates/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -392,7 +392,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     CLUSTER_MIN_HSV_FACEANGLE = CLUSTER_MIN_HSV_BG = 1200
     CLUSTER_MIN_HSV_OBJ = 1000
-    OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 10000 # for DO_SMALL_CLUSTER_FUSION_BUCKET
+    OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000 # for DO_SMALL_CLUSTER_FUSION_BUCKET
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
@@ -437,8 +437,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         # set above, going to override fusion pairs, MULTIPOLICY and set keep clusters
         GENERATE_FUSION_PAIRS = True # 
         MULTIPOLICY = True # 
-        # OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
-        OBJECT_KEEP_CLUSTERS = []
+        OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 13000 # override defaults to grab as much as we can
+        # after you do a bulk run of all suitable clusters, put the ones you want in this list, and it will only run those:
+        OBJECT_KEEP_CLUSTERS = [21, 2883, 2996, 3096, 3131, 3150, 321, 3234, 3252, 3276, 3408, 3546, 3634, 3682]
+        OBJECT_KEEP_CLUSTERS = [2230]
+        # use an empty list for the first run, to test everything
+        # OBJECT_KEEP_CLUSTERS = []
     if GENERATE_FUSION_PAIRS:
         # this is an override for development purposes. will only make CSVs from these clusters:
         # OBJECT_KEEP_CLUSTERS = [25,2341,1685,734,727,2263,586,28,733,258,960,84,2230,728,783,964,1660,2630,3052,3269]
@@ -454,7 +458,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 100 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    FORCE_TARGET_COUNT = 400 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -4785,6 +4789,7 @@ def main():
         cell_count = int(route_counts.get(arms_cluster_id, {}).get(object_cluster_id, 0))
         column_total = int(object_column_totals.get(object_cluster_id, 0))
 
+        print(f"Classifying fusion pair: arms_cluster={arms_cluster_id}, object_cluster={object_cluster_id}, cell_count={cell_count}, column_total={column_total}")
         # Bucket 4 first: low-support object columns route to MetaBody fallback.
         if (
             DO_SMALL_CLUSTER_FUSION_BUCKET

@@ -16,13 +16,13 @@ import json
 
 
 import sqlalchemy
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, ForeignKey
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
 # importing project-specific models
 import sys
-from my_declarative_base import Encodings, Images, Slogans, ImagesSlogans, RefinedText, Detections, NoDetections, NoDetectionsCustom, ImagesObjectSignatures
+from my_declarative_base import Base, Encodings, Images, Slogans, ImagesSlogans, RefinedText, Detections, NoDetections, NoDetectionsCustom, ImagesObjectSignatures
 from tools_ocr import OCRTools
 from tools_clustering import ToolsClustering
 from tools_yolo import YOLOTools
@@ -76,6 +76,18 @@ engine = create_engine(
 Session = sessionmaker(bind=engine)
 session = Session()
 
+HelperTable_name = "SegmentHelper_TheOffice" # if you set to None, comment out the helpertable join in the query
+class HelperTable(Base):
+    __tablename__ = HelperTable_name
+    seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
+    image_id = Column(Integer, primary_key=True, autoincrement=True)
+
+class ImagesArmsPoses3D(Base):
+    __tablename__ = "ImagesArmsPoses3D"
+    image_id = Column(Integer, primary_key=True)
+    cluster_id = Column(Integer)
+    cluster_dist = Column(Float)
+    
 VERBOSE = True
 yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 
@@ -1106,6 +1118,17 @@ def salvage_hsv_detection_ids(apply_updates=False):
 
     last_detection_id = 0
     batch_no = 0
+    salvage_signature = 15
+    salvage_pose = 647
+    salvage_class_id = 82
+
+    # [698, 15], 
+    
+    # #15/vert], 
+    #  [183, 15], 
+    #  [605, 15], 
+    #  [647, 15], 
+
 
     while True:
         rows_query = (
@@ -1121,8 +1144,14 @@ def salvage_hsv_detection_ids(apply_updates=False):
                 Images.imagename,
             )
             .join(Images, Images.image_id == Detections.image_id)
+            .join(HelperTable, HelperTable.image_id == Detections.image_id)
+            .join(ImagesObjectSignatures, ImagesObjectSignatures.image_id == Detections.image_id)
+            .join(ImagesArmsPoses3D, ImagesArmsPoses3D.image_id == Detections.image_id)
             .filter(Detections.detection_id > last_detection_id)
             .filter(Detections.bbox.isnot(None))
+            # .filter(Detections.class_id == salvage_class_id)
+            .filter(ImagesObjectSignatures.cluster_id == salvage_signature)
+            .filter(ImagesArmsPoses3D.cluster_id == salvage_pose)
             .order_by(Detections.detection_id.asc())
         )
 
@@ -1253,16 +1282,16 @@ def print_salvage_report(stats, report_label):
 
 
 def run_salvage_hsv_workflow():
-    dry_stats = salvage_hsv_detection_ids(apply_updates=False)
-    print_salvage_report(dry_stats, "DRY RUN")
 
     if not SALVAGE_APPLY_UPDATES:
+        dry_stats = salvage_hsv_detection_ids(apply_updates=False)
+        print_salvage_report(dry_stats, "DRY RUN")
         print("Dry run complete. Re-run with --salvage-hsv --apply to write updates.")
         return
-
-    print("--apply set: running second pass with DB writes enabled.")
-    apply_stats = salvage_hsv_detection_ids(apply_updates=True)
-    print_salvage_report(apply_stats, "APPLY")
+    else:
+        print("--apply set: running second pass with DB writes enabled.")
+        apply_stats = salvage_hsv_detection_ids(apply_updates=True)
+        print_salvage_report(apply_stats, "APPLY")
 
 if __name__ == "__main__":
     if SALVAGE_HSV_MODE:
