@@ -109,8 +109,8 @@ POSE_CROP_DICT = {
 }
 MULTIPLIER_DICT = {
     # [top,right,bottom,left]
-    # "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
-    "sq_default": [1.5,2.5,3.4,2.5], # HACK temp for 1k smaller reprocess
+    "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
+    # "sq_default": [1.5,2.5,3.4,2.5], # HACK temp for 1k smaller reprocess
 
     "sq_sm_up": [1.8,2.3,2.8, 2.3], # 18 slightly bigger SQ
     "sq_sm": [1.4,2.3,3.2, 2.3], # 18 slightly bigger SQ
@@ -535,6 +535,9 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     # [TKmisc, Dsort  ], 
     [181, 2230], [18, 3052], [18, 733], [479, 2230], [572, 734],
 
+    # small clusters (bitcoin, clock, etc)
+    [-1, 2230], [-121], [-1,  2883], [-1,  2996], [-1,  3096], [-1,  3131], [-1,  321], [-1,  3234], 
+    [-1,  3408], [-1,  3546], [-1,  3634],
 
     # excluding: [359, 11],[128, 15], [7, 15], [626, 15], [343, 15],
     # prob exc: [134, 15], (too chaotic) [126, 15], (too small)
@@ -547,15 +550,14 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     0: [
     # TK, 15/sq], 
     
-    [-1, 2230], [-121], [-1,  2883], [-1,  2996], [-1,  3096], [-1,  3131], [-1,  3150], [-1,  321], [-1,  3234], [-1,  3252], [-1,  3276], [-1,  3408], [-1,  3546], [-1,  3634], [-1,  3682],
-    # [399, 15], 
-    # [541, 15], 
-    # [698, 15], 
+    [399, 15], 
+    [541, 15], 
+    [698, 15], 
     
-    # #15/vert], 
-    #  [183, 15], 
-    #  [605, 15], 
-    #  [647, 15], 
+    #15/vert], 
+     [183, 15], 
+     [605, 15], 
+     [647, 15], 
     
     # # biiig ones to catch colors
     # [1, 15], [202, 15], [646, 15], [612, 15], [686, 15], [172, 15], [310, 15], [92, 15]

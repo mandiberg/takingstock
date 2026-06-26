@@ -1120,7 +1120,7 @@ def salvage_hsv_detection_ids(apply_updates=False):
     batch_no = 0
     salvage_signature = 15
     salvage_pose = 647
-    salvage_class_id = 82
+    salvage_class_id = 27
 
     # [698, 15], 
     
@@ -1149,9 +1149,9 @@ def salvage_hsv_detection_ids(apply_updates=False):
             .join(ImagesArmsPoses3D, ImagesArmsPoses3D.image_id == Detections.image_id)
             .filter(Detections.detection_id > last_detection_id)
             .filter(Detections.bbox.isnot(None))
-            # .filter(Detections.class_id == salvage_class_id)
-            .filter(ImagesObjectSignatures.cluster_id == salvage_signature)
-            .filter(ImagesArmsPoses3D.cluster_id == salvage_pose)
+            .filter(Detections.class_id == salvage_class_id)
+            # .filter(ImagesObjectSignatures.cluster_id == salvage_signature)
+            # .filter(ImagesArmsPoses3D.cluster_id == salvage_pose)
             .order_by(Detections.detection_id.asc())
         )
 
