@@ -106,6 +106,15 @@ POSE_CROP_DICT = {
     
     # # laptop:
     # 224:29,291:29,503:29,711:29,
+
+    # -1 clusters -- small object signatures done all in one bucket. 
+    # KLUDGE: code treats the signature as the cluster, eg bitcoin is 2886
+    # there is a potential for these to conflict with the regular ones above
+    
+    2230: "sq_sm",2883: "sq_sm",2996: "sq_sm",3150: "sq_sm",321: "sq_sm_plus",3234: "sq_massive_left", 
+    3408: "sq_sm",3546: "sq_sm",3634: "sq_sm",
+    2058: "sq_sm", 21: "sq_sm_left",
+
 }
 MULTIPLIER_DICT = {
     # [top,right,bottom,left]
@@ -536,9 +545,9 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     [181, 2230], [18, 3052], [18, 733], [479, 2230], [572, 734],
 
     # small clusters (bitcoin, clock, etc)
-    [-1, 2230],  [-1,  2883], [-1,  2996],  [-1,  321], [-1,  3234], 
+    [-1,  2883], [-1,  2996], [-1,  3150], [-1,  321], [-1,  3234], 
     [-1,  3408], [-1,  3546], [-1,  3634],
-    [-1, 2058], [-1,21],
+    [-1, 2058], 
 
     # excluding: [359, 11],[128, 15], [7, 15], [626, 15], [343, 15],
     # prob exc: [134, 15], (too chaotic) [126, 15], (too small)
@@ -552,16 +561,11 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     0: [
     # TK, 15/sq], 
     
-    [399, 15], 
-    [541, 15], 
-    # [698, 15], 
-    
-    #15/vert], 
-    #  [183, 15], 
-     [605, 15], 
-     [647, 15], 
+    [-1,  2883], [-1,  2996], [-1,  3150], [-1,  321], [-1,  3234], 
+    [-1,  3408], [-1,  3546], [-1,  3634],
+    [-1, 2058], 
 
-    #  [478, 15],
+  
     
 
     # # small clusters (bitcoin, clock, etc)

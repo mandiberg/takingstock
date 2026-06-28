@@ -179,8 +179,9 @@ MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 BATCH_SIZE = 100
 YOLO_BATCH_SIZE = 8  # number of images per YOLO batch inference call (M3 Ultra: try 32-64)
-IMAGE_LOAD_WORKERS = 8  # concurrent cv2.imread workers before each YOLO batch
-SALVAGE_QUERY_BATCH = _argv_int("--salvage-batch", 5000)
+if SALVAGE_HSV_MODE: IMAGE_LOAD_WORKERS = 16
+else: IMAGE_LOAD_WORKERS = 8  # concurrent cv2.imread workers before each YOLO batch
+SALVAGE_QUERY_BATCH = _argv_int("--salvage-batch", 10000)
 SALVAGE_LOAD_WORKERS = _argv_int("--salvage-load-workers", IMAGE_LOAD_WORKERS)
 SALVAGE_REPORT_CLASS_ID = _argv_int("--report-class-id", 27)
 CONF_THRESHOLD = 0.30
@@ -1118,9 +1119,9 @@ def salvage_hsv_detection_ids(apply_updates=False):
 
     last_detection_id = 0
     batch_no = 0
-    salvage_signature = 15
+    salvage_signature = 7
     salvage_pose = 647
-    salvage_class_id = 73
+    salvage_class_id = 1
 
     # [698, 15], 
     
@@ -1147,6 +1148,7 @@ def salvage_hsv_detection_ids(apply_updates=False):
             .join(HelperTable, HelperTable.image_id == Detections.image_id)
             .join(ImagesObjectSignatures, ImagesObjectSignatures.image_id == Detections.image_id)
             .join(ImagesArmsPoses3D, ImagesArmsPoses3D.image_id == Detections.image_id)
+            .filter(Detections.hsv_redone.is_(None))
             .filter(Detections.detection_id > last_detection_id)
             .filter(Detections.bbox.isnot(None))
             # .filter(Detections.class_id == salvage_class_id)
@@ -1255,7 +1257,7 @@ def salvage_hsv_detection_ids(apply_updates=False):
                 stats["rows_written"] += len(pending_updates)
 
         print(
-            f"[SALVAGE {mode_label}] batch {batch_no}: rows={len(rows)} "
+            f"[SALVAGE {mode_label}] batch {batch_no}: last_detection_id={last_detection_id}, rows={len(rows)} "
             f"compared={stats['rows_compared']} changed={stats['rows_changed']} "
             f"written={stats['rows_written']}"
         )
