@@ -1071,7 +1071,7 @@ class ToolsClustering:
         
         cluster_id, cluster_dist = min(this_dist_dict.items(), key=lambda x: x[1])
 
-        print("assigned cluster_id", cluster_id)
+        # print("assigned cluster_id", cluster_id)
         return cluster_id, cluster_dist
 
     # ==================== OBJECT-HAND RELATIONSHIP METHODS ====================

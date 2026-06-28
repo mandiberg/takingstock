@@ -15,7 +15,7 @@ DEDUPE = EXCLUDE = False
 LOOPING_ONLY = True
 keyword_id = None
 
-# ROOT= "/Volumes/OWC4/segment_images/phone_tests_nov4_money1000"
+# ROOT= "//Volumes/LaCie/output_folder/_looping_videos_process_state/647_thumbsup_extras_round2_arelooping_exclude_already"
 # ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/excludes"
 # ROOT = "/Volumes/LaCie/dedupe/" # for dedupe/exclue, just point to the parent folder holding both
 ROOT = "/Volumes/LaCie/output_folder/_excludes"

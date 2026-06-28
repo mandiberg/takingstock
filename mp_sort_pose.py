@@ -150,6 +150,7 @@ class SortPose:
         self.CHECK_DESC_DIST = 30
         self.CHECK_RANGE_LATE = 100
         self.CHECK_RANGE_EARLY = 50
+
         self.SORT_TYPE = SORT_TYPE
         self.TSP_SORT = TSP_SORT
         self.MIN_COL_SUM_MULTIPLIER = 50 # this determines which columns are "small" under MULTIPOLICY
@@ -1647,8 +1648,9 @@ class SortPose:
 
         pass1_start = time.perf_counter()
         for i in range(n_rows):
-            # only check within check_range frames for speed
-            if i < 1000: check_range = self.CHECK_RANGE_LATE
+            # only check within check_range frames for speed, except if PURGING DUPES. 
+            if PURGING_DUPES: check_range = self.CHECK_RANGE_EARLY * 10
+            elif i < 1000: check_range = self.CHECK_RANGE_LATE
             else: check_range = self.CHECK_RANGE_EARLY
             for j in range(i + 1, n_rows):
                 if abs(i - j) > check_range: continue
