@@ -111,8 +111,8 @@ POSE_CROP_DICT = {
     # KLUDGE: code treats the signature as the cluster, eg bitcoin is 2886
     # there is a potential for these to conflict with the regular ones above
     
-    2230: "sq_sm",2883: "sq_sm",2996: "sq_sm",3150: "sq_sm",321: "sq_sm_plus",3234: "sq_massive_left", 
-    3408: "sq_sm",3546: "sq_sm",3634: "sq_sm",
+    2230: "sq_sm",2883: "9x16_face",2996: "sq_tight_face",3150: "sq_tight_face",321: "sq_sm_lower",3234: "16x9_fullbody_armsup_isfeet", 
+    3408: "16x9_fullbody",3546: "sq_sm",3634: "sq_sm",
     2058: "sq_sm", 21: "sq_sm_left",
 
 }
@@ -120,6 +120,9 @@ MULTIPLIER_DICT = {
     # [top,right,bottom,left]
     "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
     # "sq_default": [1.5,2.5,3.4,2.5], # HACK temp for 1k smaller reprocess
+
+    "sq_tight_face": [1,1.1,1.2, 1.1], # 18 slightly bigger SQ
+
 
     "sq_sm_up": [1.8,2.3,2.8, 2.3], # 18 slightly bigger SQ
     "sq_sm": [1.4,2.3,3.2, 2.3], # 18 slightly bigger SQ
@@ -159,6 +162,8 @@ MULTIPLIER_DICT = {
     "9x16_regular_up": [1.7,4,2.8,4],
     # "9x16_shoulders": [1.54,2.475,1.70843794,2.475],
     "9x16_shoulders": [1.45,3,1.925,3],
+    "9x16_face": [.9,2,1.35,2],
+    # "9x16_face": [1.0,2.222222,1.5,2.222222],
     "9x16_regular_left": [1.4,3.1,3.1,4.9],
     "9x16_xwide_flag_arms_up": [1.8,4.4444444,3.2,4.4444444],
     "9x16_xwide_flag_arms_perp": [1.4,4.4444444,3.6,4.4444444],
@@ -546,8 +551,8 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 
     # small clusters (bitcoin, clock, etc)
     [-1,  2883], [-1,  2996], [-1,  3150], [-1,  321], [-1,  3234], 
-    [-1,  3408], [-1,  3546], [-1,  3634],
-    [-1, 2058], 
+    [-1,  3408], [-1,  3634],
+
 
     # excluding: [359, 11],[128, 15], [7, 15], [626, 15], [343, 15],
     # prob exc: [134, 15], (too chaotic) [126, 15], (too small)
@@ -561,11 +566,10 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     0: [
     # TK, 15/sq], 
     
-    [-1,  2883], [-1,  2996], [-1,  3150], [-1,  321], [-1,  3234], 
-    [-1,  3408], [-1,  3546], [-1,  3634],
-    [-1, 2058], 
+    # [-1,  2883], [-1,  2996], [-1,  3150], [-1,  321], [-1,  3234], 
+    # [-1,  3408], [-1,  3634],
 
-  
+[-1,  321],
     
 
     # # small clusters (bitcoin, clock, etc)

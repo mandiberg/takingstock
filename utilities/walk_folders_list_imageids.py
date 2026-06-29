@@ -17,7 +17,7 @@ keyword_id = None
 
 # ROOT= "//Volumes/LaCie/output_folder/_looping_videos_process_state/647_thumbsup_extras_round2_arelooping_exclude_already"
 # ROOT= "/Users/michaelmandiberg/Documents/projects-active/facemap_production/excludes"
-# ROOT = "/Volumes/LaCie/dedupe/" # for dedupe/exclue, just point to the parent folder holding both
+# ROOT = "/Volumes/LaCie/output_folder/_current_good_images" # for dedupe/exclue, just point to the parent folder holding both
 ROOT = "/Volumes/LaCie/output_folder/_excludes"
 
 
@@ -66,14 +66,16 @@ def build_dedupe_sql(folderpath, image_ids):
             stmt = f"UPDATE Encodings SET is_dupe_of = 1 WHERE image_id = {image_id};\n"
             f.write(stmt)
 
-def build_exclude_sql(folderpath, image_ids, looping=False):
+def build_exclude_sql(folderpath, image_ids, looping=False, is_good=False):
     print(f"Building exclude SQL for {len(image_ids)} image_ids and is looping {looping}")
     output_filepath = os.path.join(folderpath, f"exclude.sql")
     with open(output_filepath, "w") as f:
         f.write("USE Stock;\n")
         for image_id, c_id, p_id in image_ids:
-            if looping: 
-                stmt = f"INSERT IGNORE INTO Exclude (image_id, c_id, p_id, looping_only) VALUES ({image_id}, {c_id}, {p_id}, True);\n"
+            if is_good: 
+                stmt = f"INSERT IGNORE INTO Exclude (image_id, c_id, p_id, looping_only, is_good) VALUES ({image_id}, {c_id}, {p_id}, True, 1);\n"
+            elif looping: 
+                stmt = f"INSERT IGNORE INTO Exclude (image_id, c_id, p_id, looping_only, is_good) VALUES ({image_id}, {c_id}, {p_id}, True, 0);\n"
             else:                
                 stmt = f"INSERT IGNORE INTO Exclude (image_id, c_id, p_id) VALUES ({image_id}, {c_id}, {p_id});\n"
             f.write(stmt)
@@ -96,9 +98,13 @@ for foldername in os.listdir(ROOT):
             print(f"Going to build dedupe SQL for {len(image_ids)} image IDs")
             build_dedupe_sql(folderpath, image_ids)
         elif EXCLUDE:
+            if "looping" in foldername: looping_only = True 
+            else: looping_only = False
+            if "good" in foldername: is_good = True 
+            else: is_good = False
             print(f"Going to build exclude SQL for {len(image_ids)} image IDs")
             # image_ids is a list of tuples (image_id, cluster_id, p_id)
-            build_exclude_sql(folderpath, image_ids, LOOPING_ONLY)
+            build_exclude_sql(folderpath, image_ids, looping_only, is_good)
         else:
             build_sql(folderpath, keyword_id, image_ids, foldername, orientation=None)
         subfilenames = os.listdir(folderpath)

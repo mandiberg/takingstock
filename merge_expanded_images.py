@@ -32,7 +32,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_small_1000"
+FOLDER_NAME = "output_folder/_small_sig_itter100"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -42,7 +42,7 @@ IS_CLUSTER = True
 PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = 80
+CROP_AFTER_COUNT = None
 
 LOOPING = False # defaults
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
@@ -1226,13 +1226,15 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
             new_start = step["end_idx"] - promoted_size
             step["start_idx"] = max(current_pos, new_start)
 
-        # Keep singleton(s) anchored at the start of the cycle and promote all
-        # later singleton steps to 2-frame blends. In this scheduler, the first
-        # step is inherently singleton (end_idx-current_pos == 1), so anchoring
-        # there avoids back-to-back singleton frames at cycle boundaries.
+        # Non-final cycles keep the leading singleton so the next cycle can begin cleanly.
+        # The final cycle keeps the trailing singleton and we later replace that frame
+        # with the very first frame, which closes the loop without adding duration.
         singleton_idxs = [i for i, step in enumerate(schedule) if step["size"] == 1]
         keep_count = min(target_singletons, len(singleton_idxs))
-        keep_idx_set = set(singleton_idxs[:keep_count])
+        if is_final_cycle:
+            keep_idx_set = set(singleton_idxs[-keep_count:])
+        else:
+            keep_idx_set = set(singleton_idxs[:keep_count])
         for idx in singleton_idxs:
             if idx not in keep_idx_set:
                 _promote_singleton_step(schedule[idx])
@@ -1310,6 +1312,8 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
                     continue
 
         images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
+        if is_final_cycle and step["size"] == 1 and first_image_written is not None and step_i == max(keep_idx_set) if 'keep_idx_set' in locals() and keep_idx_set else False:
+            images_to_return = first_image_written.copy()
         debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle)
         phase = "merging_up" if step_i < first_non_singleton else ("merging_down" if step_i > last_non_singleton else ("holding" if step["size"] == max(schedule_sizes) else "transition"))
         debug_meta = {

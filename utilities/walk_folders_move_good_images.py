@@ -8,7 +8,7 @@ so you only are cleaning *new* images.
 This will walk the folder and move for all subfolders
 '''
 
-FOLDER = "/Volumes/LaCie/output_folder/_small_1000/"
+FOLDER = "/Volumes/LaCie/output_folder/_small_sig_itter100/"
 GOOD_IMAGES = "/Volumes/LaCie/output_folder/_current_good_images"
 
 
@@ -45,7 +45,7 @@ for root, dirs, files in os.walk(FOLDER):
         for uid in GOOD_IDS:
             for filename in files:
                 if str(uid) in filename:
-                    new_path = os.path.join(FOLDER, this_new_folder, os.path.basename(filename))
+                    new_path = os.path.join(this_new_folder, os.path.basename(filename))
                     print(f"Moving {filename} to {new_path}")
                     try:
                         os.rename(filename, new_path)

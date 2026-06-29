@@ -297,6 +297,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     DO_SMALL_CLUSTER_FUSION_BUCKET = True # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
+    ONLY_USE_GOOD_IMAGES = True # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "object" # "background" or "object" or "both"
     
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
@@ -391,7 +392,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
 
     CLUSTER_MIN_HSV_FACEANGLE = CLUSTER_MIN_HSV_BG = 1200
-    CLUSTER_MIN_HSV_OBJ = 1000
+    CLUSTER_MIN_HSV_OBJ = 200
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000 # for DO_SMALL_CLUSTER_FUSION_BUCKET
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
@@ -458,7 +459,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 100 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    FORCE_TARGET_COUNT = 5000 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -1534,9 +1535,31 @@ if not io.IS_TENCH:
             # filtering remains correct even if cluster tokens are formatted unexpectedly.
             from_sql = local_from + from_affect + from_hsv
             if IS_HAND_POSE_FUSION and " ihp." in from_sql and " ih." in from_sql:
-                exclude_where_sql = build_exclude_where_sql_from_pair_clause(
-                    "(ex.c_id = ihp.cluster_id AND ex.p_id = ih.cluster_id)"
-                )
+                if ONLY_USE_GOOD_IMAGES:
+                    image_id_column = resolve_base_image_id_column(from_sql)
+                    local_where += (
+                        f" AND EXISTS ("
+                        f"SELECT 1 FROM Exclude ex "
+                        f"WHERE ex.image_id = {image_id_column} "
+                        f"AND ex.image_id IS NOT NULL "
+                        f"AND ex.is_good = 1 "
+                        f")"
+                    )
+                    print(
+                        "[MODE0 EXCLUDE -- ONLY_USE_GOOD_IMAGES] only taking known good images "
+                        f"though it doesn't call cluster, it is ={dedupe_cluster_id} pose={dedupe_pose_id} "
+                        f"installation_video={INSTALLATION_VIDEO}"
+                    )
+                    exclude_where_sql = False # skip the conflicting exclude statement below
+                elif DO_SMALL_CLUSTER_FUSION_BUCKET:
+                    # handle the fact that they are written to exclude as -1 for ihp armspose3D 
+                    exclude_where_sql = build_exclude_where_sql_from_pair_clause(
+                        "(ex.c_id = -1 AND ex.p_id = ih.cluster_id)"
+                    )
+                else:                
+                    exclude_where_sql = build_exclude_where_sql_from_pair_clause(
+                        "(ex.c_id = ihp.cluster_id AND ex.p_id = ih.cluster_id)"
+                    )
                 exclude_source = "sql_pair_columns"
             else:
                 exclude_where_sql = build_exclude_where_sql(dedupe_cluster_id, dedupe_pose_id)
@@ -3916,7 +3939,13 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
         )
     elif use_pose_crop:
         print(f"Using POSE_CROP_DICT for pose_no={pose_no} cluster_no={cluster_no}")
-        sort.image_edge_multiplier = resolve_multiplier(POSE_CROP_DICT.get(cluster_no, "sq_default"))
+        if DO_SMALL_CLUSTER_FUSION_BUCKET:
+            # for small clusters, cluster is -1, so dict is keyed to pose_no
+            crop_key = POSE_CROP_DICT.get(pose_no, "sq_default")
+        else:
+            crop_key = POSE_CROP_DICT.get(cluster_no, "sq_default")
+        sort.image_edge_multiplier = resolve_multiplier(crop_key)
+        print(f"POSE_CROP_DICT multiplier for pose_no={pose_no} cluster_no={cluster_no}: {sort.image_edge_multiplier}")
     elif cluster_no is not None and USE_FUSION_PAIR_DICT and not FORCE_CANONICAL_MULT_CREATION:
         print(f"Using FUSION_PAIR_DICT for cluster_no={cluster_no} pose_no={pose_no}")
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
