@@ -72,7 +72,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -297,7 +297,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     DO_SMALL_CLUSTER_FUSION_BUCKET = True # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
-    ONLY_USE_GOOD_IMAGES = True # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
+    ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "object" # "background" or "object" or "both"
     
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
@@ -1570,7 +1570,7 @@ if not io.IS_TENCH:
                     f" AND NOT EXISTS ("
                     f"SELECT 1 FROM Exclude ex "
                     f"WHERE ex.image_id = {image_id_column} "
-                    f"AND ex.image_id IS NOT NULL "
+                    f"AND (ex.image_id IS NOT NULL AND ex.is_good = 0) "
                     f"AND {exclude_where_sql}"
                     f")"
                 )
@@ -3120,7 +3120,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                             f"path={cropped_cache_file} shape={getattr(cropped_image, 'shape', None)}"
                         )
                 elif cropped_cache_file and used_cached_cropped:
-                    print(f"[timing] cache-hit skip cache rewrite path={cropped_cache_file}")
+                    print(f"[timing] cache file already exists path={cropped_cache_file}")
                 else:
                     print("skipping cropped cache save; could not resolve cache path for row")
 
