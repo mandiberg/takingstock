@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 1
+MODE_CHOICE = 2
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False

@@ -72,7 +72,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -4079,7 +4079,7 @@ def _mode1_filter_excluded_images(db_session, df, dedupe_cluster_id, dedupe_pose
 
     rows_before = int(len(df.index))
     lookup_start = time.perf_counter()
-    base_pair_filter = (Exclude.c_id == dedupe_cluster_id) & (Exclude.p_id == dedupe_pose_id)
+    base_pair_filter = (Exclude.c_id == dedupe_cluster_id) & (Exclude.p_id == dedupe_pose_id) & (Exclude.is_good.is_(None) | (Exclude.is_good != 1))
     if INSTALLATION_VIDEO:
         exclude_filter = base_pair_filter & (
             (Exclude.looping_only.is_(None)) | (Exclude.looping_only != 1)
