@@ -27,9 +27,13 @@ def parse_folder(folderpath, exclude=False):
     for filename in os.listdir(folderpath):
         if filename.endswith(".jpg"):
             if exclude:
-                print(f"Parsing filename for exclude: {filename}")
-                cluster_id = filename.split("_cc")[1].split("_")[0]
-                p_id = filename.split("_p")[1].split("_")[0]
+                try:
+                    print(f"Parsing filename for exclude: {filename}")
+                    cluster_id = filename.split("_cc")[1].split("_")[0]
+                    p_id = filename.split("_p")[1].split("_")[0]
+                except Exception as e:
+                    print(f"Error parsing filename {filename} for exclude: {e}")
+                    cluster_id = p_id = None
             parts = filename.split("_")
             image_id_with_ext = parts[-1]
             image_id = image_id_with_ext.split(".")[0]

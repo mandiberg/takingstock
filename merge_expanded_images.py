@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 1
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
@@ -32,7 +32,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_small_sig_itter100"
+FOLDER_NAME = "output_folder/_3800plus_select3"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"

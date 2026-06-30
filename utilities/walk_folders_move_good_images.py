@@ -8,8 +8,8 @@ so you only are cleaning *new* images.
 This will walk the folder and move for all subfolders
 '''
 
-FOLDER = "/Volumes/LaCie/output_folder/_small_sig_itter100/"
-GOOD_IMAGES = "/Volumes/LaCie/output_folder/_current_good_images"
+FOLDER = "/Volumes/LaCie/output_folder/_3800plus_select2/"
+GOOD_IMAGES = "/Volumes/LaCie/output_folder/_excludes/_current_good_images"
 
 
 

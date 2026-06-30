@@ -52,6 +52,7 @@ elif MODE == "ArmsPoses3D":
     MODE_ID = "cluster_id"
     CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
 elif MODE == "ObjectSignatures": 
+    # produces the dense massive armsposes x objectsignature required by make_video
     MODE_ID =  "cluster_id"
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion" # key to CLUSTER_DATA dict
     # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
