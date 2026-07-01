@@ -103,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_3800plus_firstselect_unified/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_hsv_testing/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -295,7 +295,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     # main switches
     INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
-    HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
+    HAND_POSE_GESTURE_FUSION = True # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "object" # "background" or "object" or "both"
@@ -332,8 +332,9 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     if HAND_POSE_GESTURE_FUSION:
         # SELECT ON HAND LOCATION + OBJECT SIGNATURE
+        # will cycle through the entire FUSION_PAIR_DICT and all the signature keys
         CLUSTER_TYPE = "planar_hands_ObjectFusion"
-        OBJECT_SIG = 2341 # I'm not sure this is connected to anything
+        OBJECT_SIG = 258 # this is not connected to anything
         # image_edge_multiplier = [1.3,1.85,2.4,1.85] # tighter square crop for paris photo videos < Oct 29 FINAL VERSION NOV 2024 DO NOT CHANGE
         image_edge_multiplier = [1.6,2.35,2.9,2.35] #18 using as default for money/phones for testing
         USE_PAINTED = False
@@ -391,8 +392,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
 
-    CLUSTER_MIN_HSV_FACEANGLE = CLUSTER_MIN_HSV_BG = 1200
-    CLUSTER_MIN_HSV_OBJ = 1200 # set this low when you are trying to force obj HSV om clusters
+    CLUSTER_MIN_HSV_FACEANGLE = CLUSTER_MIN_HSV_BG = 1000
+    CLUSTER_MIN_HSV_OBJ = 1000 # 1000 triggers hsv for hand-gestures. generally, set this low when you are trying to force obj HSV om clusters
     OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 1000 # for DO_SMALL_CLUSTER_FUSION_BUCKET
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
@@ -439,7 +440,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         GENERATE_FUSION_PAIRS = False # 
         MULTIPOLICY = True # 
         OBJ_CLUSTER_COLUMN_MIN_FOR_FUSION_SORT = 13000 # override defaults to grab as much as we can
-        # after you do a bulk run of all suitable clusters, put the ones you want in this list, and it will only run those:
+        # after you do a bulk run of all suitable clusters, put the ones you want in this list, and it will only run those. 
+        # but once you have them finalized, move them to the constants file
         OBJECT_KEEP_CLUSTERS = [21, 2883, 2996, 3096, 3131, 3150, 321, 3234, 3252, 3276, 3408, 3546, 3634, 3682]
         OBJECT_KEEP_CLUSTERS = [2230]
         # use an empty list for the first run, to test everything
@@ -459,7 +461,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     PURGING_DUPES = False # skips build/save, just compares dupes
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 2400 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    FORCE_TARGET_COUNT = 1000 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
