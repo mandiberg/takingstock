@@ -1254,11 +1254,18 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
             if step["size"] != 1:
                 return
             promoted_size = min(2, step["end_idx"] - current_pos)
-            if promoted_size <= 1:
+            if promoted_size > 1:
+                step["size"] = promoted_size
+                new_start = step["end_idx"] - promoted_size
+                step["start_idx"] = max(current_pos, new_start)
                 return
-            step["size"] = promoted_size
-            new_start = step["end_idx"] - promoted_size
-            step["start_idx"] = max(current_pos, new_start)
+
+            # At the cycle start, backward promotion can be impossible (end_idx-current_pos == 1).
+            # In that case, expand forward by one frame when available so we still get a 2-image blend.
+            if step["end_idx"] < total_images:
+                step["size"] = 2
+                step["start_idx"] = step["end_idx"] - 1
+                step["end_idx"] = step["end_idx"] + 1
 
         # Non-final cycles keep the leading singleton so the next cycle can begin cleanly.
         # The final cycle keeps the trailing singleton and we later replace that frame
