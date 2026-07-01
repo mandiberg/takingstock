@@ -525,23 +525,40 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 #     733: [[14, 21], [14, 92], ],
 #     58: [[23, 21], [23, 67], ],
 
-    # third round, BER airplane
-    # missing fan of money in each hand
-    # TKmoney, right  
-    # 2341: [[14, 114], [15, 111], [15, 25], [15, 89], [16, 114], [1, 119], [1, 65], [25, 119], [25, 65], [30, 111], [30, 114], [30, 89], [30, 92], [3, 114],],
+    # # third round, BER airplane
+    # # missing fan of money in each hand
+    # # TKmoney, right  
+    # # 2341: [[14, 114], [15, 111], [15, 25], [15, 89], [16, 114], [1, 119], [1, 65], [25, 119], [25, 65], [30, 111], [30, 114], [30, 89], [30, 92], [3, 114],],
+    # 2341: [[1, 119], [3, 114], [28,100], [30,111], [30,114], ],
+    # # TKmoney, enter 
+    # # 1685: [[16, 100], [16, 21], [16, 92], [2, 100], [23, 21], [15, 65], [30, 92], ],
+    # 1685: [[16, 21], [23, 21], [16,28], [2,100], [2,41], [15,92]],  # collapse 2263 into 
+    # # TKmoney, enter COLLAPSE
+    # 2263: [[23, 21], ],
+    # 2341: [[23, 21], [8, 57], ],
+    # # TKcard
+    # 258: [ [16, 28], [16, 34], ],
+    # 734: [[30, 114], [3, 114], [18, 4], [1, 4], ],
+    # # TKmisc, andsort
+    # 733: [[28, 100], [14, 21], [14, 92], ],
+    # 58: [[23, 21], [23, 67], ],
+
+
+    # Final round, June 30
     2341: [[1, 119], [3, 114], [28,100], [30,111], [30,114], ],
     # TKmoney, enter 
     # 1685: [[16, 100], [16, 21], [16, 92], [2, 100], [23, 21], [15, 65], [30, 92], ],
-    1685: [[16, 21], [23, 21], [16,28]], # collapse 2263 into 
-    # TKmoney, enter COLLAPSE
-    2263: [[23, 21], ],
-    2341: [[23, 21], [8, 57], ],
+    1685: [[16, 21], [23, 21], [16,28], [2,100], [2,41], [15,92]],  # collapse 2263 into 
+   
+    2341: [[8, 57], ],
     # TKcard
-    258: [ [16, 28], [16, 34], ],
-    734: [[30, 114], [3, 114], [18, 4], [1, 4], ],
+    258: [ [16, 28], ],
+    734: [[3, 114], [18, 4], ],
     # TKmisc, andsort
-    733: [[28, 100], [14, 21], [14, 92], ],
-    58: [[23, 21], [23, 67], ],
+    733: [[28, 100], ], # try this with no HSV
+    58: [[23, 21], [16,21], [23, 67], ],
+
+
 }
 
 
@@ -740,6 +757,35 @@ ALL_FUSION_PAIRS_DICTS = {
     "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512,
     "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE": FUSION_PAIR_DICT_DETECTIONS_THEOFFICE
     }
+
+# Optional edge-case overrides for HAND_POSE_GESTURE_FUSION SQL predicate expansion.
+# Each rule matches a requested (hands_position, hands_gesture, object_signature)
+# and can expand either hands_gesture_ids and/or object_signature_ids for the query.
+USE_FUSION_EDGECASE_RULES = True
+FUSION_EDGECASE_RULES = [
+    {
+        "name": "credit_card_both_hands_gesture_union",
+        "match": {
+            "hands_position_ids": [16],
+            "hands_gesture_ids": [28, 34],
+            "object_signature_ids": [258],
+        },
+        "expand": {
+            "hands_gesture_ids": [28, 34],
+        },
+    },
+    {
+        "name": "money_heart_center_signature_union",
+        "match": {
+            "hands_position_ids": [23],
+            "hands_gesture_ids": [21],
+            "object_signature_ids": [1685, 2263, 2341],
+        },
+        "expand": {
+            "object_signature_ids": [1685, 2263, 2341],
+        },
+    },
+]
 
 # Contract-driven fusion selection settings.
 FUSION_MANIFEST_FILE = "fusion_manifest.json"

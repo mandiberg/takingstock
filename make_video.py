@@ -103,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_hsv_testing/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_hsv_testing_1000s/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -1385,6 +1385,63 @@ if not io.IS_TENCH:
             if detection_fields.strip() not in local_select:
                 local_select += detection_fields
 
+        def normalize_edgecase_ids(values):
+            if values is None:
+                return []
+            normalized = []
+            for value in values:
+                normalized_value = normalize_exclude_token(value)
+                if normalized_value is not None:
+                    normalized.append(normalized_value)
+            return sorted(set(normalized))
+
+        def resolve_fusion_edgecase_expansions(requested_cluster_no, requested_topic_no):
+            expanded_topic_no = requested_topic_no
+            expanded_gesture_ids = None
+
+            if not (USE_FUSION_EDGECASE_RULES and HAND_POSE_GESTURE_FUSION and N_TOPICS == 100):
+                return expanded_topic_no, expanded_gesture_ids
+            if not isinstance(requested_cluster_no, list) or len(requested_cluster_no) < 2:
+                return expanded_topic_no, expanded_gesture_ids
+
+            requested_hands_position_id = normalize_exclude_token(requested_cluster_no[0])
+            requested_hands_gesture_id = normalize_exclude_token(requested_cluster_no[1])
+            requested_object_signature_id = normalize_exclude_token(requested_topic_no)
+            if (
+                requested_hands_position_id is None
+                or requested_hands_gesture_id is None
+                or requested_object_signature_id is None
+            ):
+                return expanded_topic_no, expanded_gesture_ids
+
+            merged_gesture_ids = [requested_hands_gesture_id]
+            merged_object_signature_ids = [requested_object_signature_id]
+
+            for rule in FUSION_EDGECASE_RULES:
+                match = rule.get("match", {})
+                match_hands_position_ids = normalize_edgecase_ids(match.get("hands_position_ids"))
+                match_hands_gesture_ids = normalize_edgecase_ids(match.get("hands_gesture_ids"))
+                match_object_signature_ids = normalize_edgecase_ids(match.get("object_signature_ids"))
+
+                if match_hands_position_ids and requested_hands_position_id not in match_hands_position_ids:
+                    continue
+                if match_hands_gesture_ids and requested_hands_gesture_id not in match_hands_gesture_ids:
+                    continue
+                if match_object_signature_ids and requested_object_signature_id not in match_object_signature_ids:
+                    continue
+
+                expand = rule.get("expand", {})
+                merged_gesture_ids += normalize_edgecase_ids(expand.get("hands_gesture_ids"))
+                merged_object_signature_ids += normalize_edgecase_ids(expand.get("object_signature_ids"))
+
+            merged_gesture_ids = sorted(set(merged_gesture_ids))
+            merged_object_signature_ids = sorted(set(merged_object_signature_ids))
+            if len(merged_gesture_ids) > 1:
+                expanded_gesture_ids = merged_gesture_ids
+            if len(merged_object_signature_ids) > 1:
+                expanded_topic_no = merged_object_signature_ids
+            return expanded_topic_no, expanded_gesture_ids
+
         cluster = " " #declare as empty string
         print(
             f"[selectSQL] cluster_no {cluster_no} and topic_no {topic_no} and "
@@ -1401,6 +1458,18 @@ if not io.IS_TENCH:
                 dedupe_cluster_id = normalize_exclude_token(cluster_no[0])
             if len(cluster_no) >= 2:
                 dedupe_pose_id = normalize_exclude_token(cluster_no[1])
+
+        topic_no_for_sql, expanded_gesture_ids = resolve_fusion_edgecase_expansions(cluster_no, topic_no)
+        if expanded_gesture_ids is not None:
+            print(
+                "[selectSQL edgecase] expanded HandsGestures cluster filter "
+                f"from {cluster_no[1]} to {expanded_gesture_ids}"
+            )
+        if isinstance(topic_no_for_sql, list):
+            print(
+                "[selectSQL edgecase] expanded ObjectSignatures filter "
+                f"from {topic_no} to {topic_no_for_sql}"
+            )
 
         print(f"checking SegmentHelper_name {SegmentHelper_name} for heft keywords and MODES {MODES[MODE_CHOICE]}")
         if SegmentHelper_name == "SegmentHelper_sept2025_heft_keywords" and "heft" in MODES[MODE_CHOICE]:
@@ -1435,24 +1504,27 @@ if not io.IS_TENCH:
                     cluster += f" AND {cluster_target_col} = {str(cluster_no[0])} "
                 if cluster_no[1] is not None:
                     try:
-                        requested_object_cluster_id = int(float(cluster_no[1]))
+                        requested_ih_cluster_id = int(float(cluster_no[1]))
                     except (TypeError, ValueError):
-                        print(f"invalid object cluster id in pair {cluster_no}; skipping")
+                        print(f"invalid ih.cluster_id in pair {cluster_no}; skipping")
                         return []
 
-                    if requested_object_cluster_id in OBJECT_NONE_CLUSTERS and not allow_object_none:
+                    if requested_ih_cluster_id in OBJECT_NONE_CLUSTERS and not allow_object_none:
                         print(
-                            f"skipping pair because ih.cluster_id {requested_object_cluster_id} is in OBJECT_NONE_CLUSTERS"
+                            f"skipping pair because ih.cluster_id {requested_ih_cluster_id} is in OBJECT_NONE_CLUSTERS"
                         )
                         return []
 
-                    object_cluster_sql_id = requested_object_cluster_id
-                    _extra_sources = _collapse_targets_to_sources.get(object_cluster_sql_id, [])
-                    if DO_OBJECT_COLLAPSE and _extra_sources:
-                        _all_ids = [object_cluster_sql_id] + _extra_sources
-                        cluster += f" AND ih.cluster_id IN ({', '.join(str(i) for i in _all_ids)}) "
+                    if expanded_gesture_ids is not None:
+                        cluster += f" AND ih.cluster_id IN ({', '.join(str(i) for i in expanded_gesture_ids)}) "
                     else:
-                        cluster += f" AND ih.cluster_id = {str(object_cluster_sql_id)} "
+                        ih_cluster_sql_id = requested_ih_cluster_id
+                        _extra_sources = _collapse_targets_to_sources.get(ih_cluster_sql_id, [])
+                        if DO_OBJECT_COLLAPSE and _extra_sources:
+                            _all_ids = [ih_cluster_sql_id] + _extra_sources
+                            cluster += f" AND ih.cluster_id IN ({', '.join(str(i) for i in _all_ids)}) "
+                        else:
+                            cluster += f" AND ih.cluster_id = {str(ih_cluster_sql_id)} "
             else:
                 print("cluster_no is a single value", cluster_no)
                 # set target column based on CLUSTER_TYPE, ArmsPoses3D means we have a meta_cluster_id
@@ -1482,8 +1554,9 @@ if not io.IS_TENCH:
                 if HAND_POSE_GESTURE_FUSION:
                     print("handling topic_no with potential keyword logic for object cluster type")
                     local_from += f" JOIN ImagesObjectSignatures ios ON s.image_id = ios.image_id "
-                    local_where += f" AND ios.cluster_id = {str(topic_no)} "
-                    print(f"after joining to ImagesObjectSignatures for topic_no {topic_no}, local_from is {local_from} and local_where is {local_where}")
+                    signature_filter_sql = is_query_list_string(topic_no_for_sql)
+                    local_where += f" AND ios.cluster_id {signature_filter_sql} "
+                    print(f"after joining to ImagesObjectSignatures for topic_no {topic_no_for_sql}, local_from is {local_from} and local_where is {local_where}")
                 else: 
                     # check if the topic_no has related keywords in the KEYWORD_DICT
                     # if it doesn't, it just returns the same topic_no
