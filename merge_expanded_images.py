@@ -32,14 +32,14 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_hsv_bg_2tier_1000_2341test"
+FOLDER_NAME = "output_folder/_hsv_bg_2tier_1000"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None
@@ -1312,8 +1312,8 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
                     continue
 
         images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
-        if is_final_cycle and step["size"] == 1 and first_image_written is not None and step_i == max(keep_idx_set) if 'keep_idx_set' in locals() and keep_idx_set else False:
-            images_to_return = first_image_written.copy()
+        # if is_final_cycle and step["size"] == 1 and first_image_written is not None and step_i == max(keep_idx_set) if 'keep_idx_set' in locals() and keep_idx_set else False:
+        #     images_to_return = first_image_written.copy()
         debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle)
         phase = "merging_up" if step_i < first_non_singleton else ("merging_down" if step_i > last_non_singleton else ("holding" if step["size"] == max(schedule_sizes) else "transition"))
         debug_meta = {
@@ -1436,7 +1436,8 @@ def write_video(img_array, subfolder_path=None):
     elif len(img_array) < PERIOD/2:
         print(f"not enough images to fill half a period ({PERIOD/2}), skipping this folder")
         return
-    if IS_VIDEO_MERGE and not STRICT_UNIQUE_IMAGE_PLACEMENT:
+    if IS_VIDEO_MERGE:
+        # this had a "and not STRICT_UNIQUE_IMAGE_PLACEMENT" condition but I think it needs to be removed July 1 2026
         img_array.append(img_array[0]) # add the first image to the end to make a loop
     images_to_build = load_images(img_array, subfolder_path)
     # print("img_array", img_array)
@@ -1562,8 +1563,11 @@ def write_video(img_array, subfolder_path=None):
                         # Coda: bridge last rendered frame back toward first rendered frame.
                         # Excludes endpoints, so this adds only in-between blend frames.
                         if STRICT_UNIQUE_IMAGE_PLACEMENT and not STRICT_UNIQUE_SEAM_EXTRA_FRAMES:
+                            print("strict unique seam extra frames disabled, skipping seam blend")
                             seam_blend_steps = 0
                         else:
+                            print("strict unique seam extra frames enabled, adding seam blend")
+                            print("last_image_written", type(last_image_written), last_image_written.shape if last_image_written is not None else None)
                             seam_blend_steps = 2 if STRICT_UNIQUE_IMAGE_PLACEMENT else LOOP_SEAM_BLEND_STEPS
                         seam_frames = build_loop_seam_transition(
                             last_image_written,
