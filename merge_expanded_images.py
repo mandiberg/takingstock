@@ -24,6 +24,7 @@ MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
+SHOW_BLEND_POSITION = True
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
@@ -914,6 +915,8 @@ def save_images_to_video(images_to_return, video_writer, debug_meta=None):
             run_counter += 1
             if first_image_written is None:
                 first_image_written = img.copy()
+            if SHOW_BLEND_POSITION and debug_meta is not None:
+                img = overlay_position_label(img, debug_meta.get("position_label"), x=30, y=30)
             if DEBUG and debug_meta is not None:
                 debug_lines = [
                     f"frame={run_counter} batch={batch_index + 1}/{len(image_batch)}",
@@ -1171,6 +1174,37 @@ def overlay_debug_lines(frame, debug_lines):
 
     return display_frame
 
+
+def overlay_position_label(frame, label_text, x=30, y=30):
+    """Draw large black blend-position text in the upper-left corner."""
+    if not label_text:
+        return frame
+
+    if frame.dtype != np.uint8:
+        display_frame = np.clip(frame, 0, 255).astype(np.uint8)
+    else:
+        display_frame = frame.copy()
+
+    if len(display_frame.shape) == 2:
+        display_frame = cv2.cvtColor(display_frame, cv2.COLOR_GRAY2BGR)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 1.8
+    thickness = 5
+    baseline_y = y + int(42 * font_scale)
+
+    cv2.putText(
+        display_frame,
+        label_text,
+        (x, baseline_y),
+        font,
+        font_scale,
+        (0, 0, 0),
+        thickness,
+        cv2.LINE_AA,
+    )
+    return display_frame
+
 def process_images_osc(images_to_build, video_writer, total_images, period, current_pos=0, merge_count=MERGE_COUNT, is_final_cycle=False):
     global last_image_written
     global singleton_skip_counts
@@ -1253,6 +1287,15 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         if end_idx - start_idx <= 0:
             continue
 
+        visible_indices = list(range(start_idx, end_idx))
+        if SHOW_BLEND_POSITION:
+            print(
+                "[BLEND POSITION]",
+                f"current_pos={current_pos}",
+                f"cycle_step={step_i}",
+                f"image_array_indices={visible_indices}",
+            )
+
         is_leading_boundary_singleton = step["size"] == 1 and step_i < first_non_singleton
         is_trailing_boundary_singleton = step["size"] == 1 and step_i > last_non_singleton
 
@@ -1323,6 +1366,7 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
             "size": step["size"],
             "start_idx": start_idx,
             "end_idx": end_idx,
+            "position_label": f"idx {start_idx}:{end_idx - 1}",
             "current_pos": current_pos,
             "period": period,
             "this_period": this_period,
@@ -1528,6 +1572,7 @@ def write_video(img_array, subfolder_path=None):
                 
             if STRICT_UNIQUE_IMAGE_PLACEMENT:
                 cycle_advance = max(1, int(period))
+                cycle_overlap_step = max(1, cycle_advance - 1)
             else:
                 cycle_advance = max(1, merge_count - START_MERGE)
 
@@ -1535,7 +1580,10 @@ def write_video(img_array, subfolder_path=None):
             if total_images >= max(merge_count, START_MERGE):
                 
                 while current_pos < total_images:
-                    next_pos = current_pos + cycle_advance
+                    if STRICT_UNIQUE_IMAGE_PLACEMENT:
+                        next_pos = current_pos + cycle_overlap_step
+                    else:
+                        next_pos = current_pos + cycle_advance
                     is_final_cycle = next_pos >= total_images
                     process_images_osc(
                         images_to_build,
@@ -1546,7 +1594,7 @@ def write_video(img_array, subfolder_path=None):
                         merge_count,
                         is_final_cycle=is_final_cycle,
                     )
-                    # Move to next cycle. In strict mode this is period-sized and non-overlapping.
+                    # Move to next cycle. In strict mode this overlaps one shared boundary frame.
                     current_pos = next_pos
                     print("current_pos", current_pos)
 
