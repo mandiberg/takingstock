@@ -121,25 +121,28 @@ POSE_CROP_DICT = {
     463: "sq_medium", 51: "sq_medium", 541: "sq_medium", 612: "sq_medium", 734: "sq_medium", 752: "sq_medium",
 
     # arms-gesture clusters
-    1: "sq_default_left", 3: "sq_sm_left", 18: "sq_default_left",
-    16: "sq_default",
-    23: "sq_sm", 28: "sq_sm_plus", 30: "sq_sm", 
+    1: "sq_cropto2x3_left", 3: "sq_sm_left", 18: "sq_cropto2x3_left",
+    16: "sq_cropto2x3",
+    15: "9x16_shoulders_lower",
+    23: "sq_default", 28: "sq_cropto2x3_left", 30: "9x16_shoulders_lower", 
 
 }
 MULTIPLIER_DICT = {
     # [top,right,bottom,left]
     "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
-    "sq_default_left": [1.3,1.95,2.4,1.75], # 1 SQ (and legacy 11 placeholder)
     # "sq_default": [1.5,2.5,3.4,2.5], # HACK temp for 1k smaller reprocess
 
     "sq_tight_face": [1,1.1,1.2, 1.1], # 18 slightly bigger SQ
     "sq_tight_face_left": [1,1.3,1.2, 1.0], # 18 slightly bigger SQ
 
+    "sq_cropto2x3": [1.2,1.7,2.4,1.7], # 1 SQ (and legacy 11 placeholder)
+    "sq_cropto2x3_left": [1.1,1.35,2.3,2.05], # 1 SQ (and legacy 11 placeholder)
+
 
     "sq_sm_up": [1.8,2.3,2.8, 2.3], # 18 slightly bigger SQ
     "sq_sm": [1.4,2.3,3.2, 2.3], # 18 slightly bigger SQ
     "sq_sm_lower": [1.3,2.3,3.3, 2.3], # 18 slightly bigger SQ
-    "sq_sm_left": [1.4,1.9,3.2, 2.7], # 18 slightly bigger SQ
+    "sq_sm_left": [1.1,1.7,3.1, 2.7], # 18 slightly bigger SQ
 
     "sq_sm_plus": [1.4,2.5,3.6, 2.5], # 18 slightly bigger SQ
     "sq_plus_left": [1.4,2.3,3.6, 2.7], # 18 slightly bigger SQ
@@ -174,6 +177,7 @@ MULTIPLIER_DICT = {
     "9x16_regular_up": [1.7,4,2.8,4],
     # "9x16_shoulders": [1.54,2.475,1.70843794,2.475],
     "9x16_shoulders": [1.45,3,1.925,3],
+    "9x16_shoulders_lower": [1.25,3,2.125,3],
     "9x16_face": [1.0,2,1.25,2],
     # "9x16_face": [1.0,2.222222,1.5,2.222222],
     "9x16_regular_left": [1.4,3.1,3.1,4.9],
@@ -543,20 +547,22 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     # 733: [[28, 100], [14, 21], [14, 92], ],
     # 58: [[23, 21], [23, 67], ],
 
-
     # Final round, June 30
-    2341: [[1, 119], [3, 114], [28,100], [30,111], [30,114], ],
+    2341: [[1, 119], [3, 114], [30,111], [30,114], [1, 65],], # 1-119 is just right hand, 3-114 is pointing at money, 30-111 is OK, 30-114 is thumbs up
     # TKmoney, enter 
-    # 1685: [[16, 100], [16, 21], [16, 92], [2, 100], [23, 21], [15, 65], [30, 92], ],
-    1685: [[16, 21], [23, 21], [16,28], [2,100], [2,41], [15,92]],  # collapse 2263 into 
-   
-    2341: [[8, 57], ],
-    # TKcard
-    258: [ [16, 28], ],
-    734: [[3, 114], [18, 4], ],
+    1685: [[16, 21], [23, 21], [16,28], [15,92]],  # # 15-92 is wide arms 
+  
+    # TKcard bg color
+    734: [[3, 114], [18, 4], ], # 18 is the bigger one, 3 has pointing finger
     # TKmisc, andsort
+
+    # # card OBJECT color
+    # 258: [ [16, 28], ],
+    # # phone object color, not really working
+    # 58: [[16,10], [16, 41], ],
+
+    # # disable HSV (or just use 2?)
     733: [[28, 100], ], # try this with no HSV
-    58: [[23, 21], [16,21], [23, 67], ],
 
 
 }
@@ -771,7 +777,7 @@ FUSION_EDGECASE_RULES = [
             "object_signature_ids": [258],
         },
         "expand": {
-            "hands_gesture_ids": [28, 34],
+            "hands_gesture_ids": [28, 34, 110, 84, 73, 72, 81, 100, 41, 96, 21, 74, 92, 115, 5, 89, 107, 101, 116, 114, 125, 55, 6, 16, 18, 86, 77, 102, 122, 14, 65, 47, 78, 44, 35, 26],
         },
     },
     {
@@ -783,9 +789,33 @@ FUSION_EDGECASE_RULES = [
         },
         "expand": {
             "object_signature_ids": [1685, 2263, 2341],
+            "hands_gesture_ids": [21, 110, 100, 65, 41, 28],
         },
     },
-]
+    {
+        "name": "right_hand_up_left_hand_down_gesture_union",
+        "match": {
+            "hands_position_ids": [1],
+            "hands_gesture_ids": [119],
+            "object_signature_ids": [733, 734, 2341],
+        },
+        "expand": {
+            "hands_gesture_ids": [119, 4, 57],
+        },
+    },
+    {
+        "name": "right_hand_up_left_hand_mouth_gesture_union",
+        "match": {
+            "hands_position_ids": [1],
+            "hands_gesture_ids": [65],
+            "object_signature_ids": [733, 734, 2341],
+        },
+        "expand": {
+            "hands_gesture_ids": [65, 125],
+        },
+    },
+
+    ]
 
 # Contract-driven fusion selection settings.
 FUSION_MANIFEST_FILE = "fusion_manifest.json"
@@ -823,29 +853,36 @@ HSV_GROUP_PRESETS = {
     # Cascade order: single bins first, then broader fallback groups.
     "background_default": [
         # Tier 1: each individual bin.
-        [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12], [13], [14], [15], [16], [17], [18], [19], [20], [21], [22]],
-
-        # Tier 2: grouped colors.
-        [[3, 4, 5, 6], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19], [21, 22]],
+        # [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12], [13], [14], [15], [16], [17], [18], [19], [20], [21], [22]],
+        # [[0], [1], [2]],
+        # # Tier 2: grouped colors.
+        # [[3, 4, 5, 6], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19], [21, 22]],
 
         # Tier 3: RYB groups.
-        [[3, 4, 5, 6, 22], [7, 8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]],
+        [[0], [1], [2],[3, 4, 5, 6, 9, 22], [7, 8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]],
 
-        # Tier 4: warms vs cools.
-        [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]],
+        # # Tier 4: warms vs cools.
+        # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]],
 
-        # Tier 5: catch-all fallback.
-        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22]],
+        # # Tier 5: catch-all fallback.
+        [[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]],
     ],
     "background_dedupe": [
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
     ],
     # Initial object-color grouping, can be tuned as object HSV runs mature.
     "object_color_v1": [
-        [0], [1], [2],
+        # For credit cards
+        [0, 1], [2],
         [3, 4, 5, 6, 22],
-        [7], [8, 9, 10, 11], [12, 13],
-        [14], [15, 16, 17, 18, 19], [20], [21],
+        [7, 8, 9, 10, 11, 12, 13],
+        [14], [15, 16, 17, 18, 19,20, 21],
+
+
+        # [0], [1], [2],
+        # [3, 4, 5, 6, 22],
+        # [7], [8, 9, 10, 11], [12, 13],
+        # [14], [15, 16, 17, 18, 19], [20], [21],
         # [0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12], [13], [14], [15], [16], [17], [18], [19], [20], [21], [22],
 
     ],

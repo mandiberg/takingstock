@@ -103,7 +103,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_hsv_testing_1000s/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_hsv_bg_2tier_1000/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -298,7 +298,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     HAND_POSE_GESTURE_FUSION = True # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
-    HSV_SOURCE_MODE = "object" # "background" or "object" or "both"
+    HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
@@ -4959,14 +4959,16 @@ def main():
                 f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
                 f"to Bucket 2 HSV object due to large cell count {cell_count} in object column"
             )
+            bucket2_hsv_source = "object" if HSV_SOURCE_MODE == "object" else "background"
+            bucket2_cycle_stage = "object" if bucket2_hsv_source == "object" else "background"
             return {
                 "bucket": "object_column_large_cell_hsv_object",
-                "hsv_source": "object",
+                "hsv_source": bucket2_hsv_source,
                 "use_hsv": True,
                 "allow_object_none": False,
                 "use_meta_cluster": False,
                 "meta_cluster_id": None,
-                "cycle_stage": "object",
+                "cycle_stage": bucket2_cycle_stage,
                 "cell_count": cell_count,
                 "column_total": column_total,
                 "reason": (

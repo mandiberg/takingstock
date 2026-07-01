@@ -27,7 +27,6 @@ from pick import pick
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
-import os
 import random
 import time
 import pickle
@@ -45,7 +44,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 10000000
+LIMIT = 10
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -89,8 +88,8 @@ else:
 # CLUSTER_TYPE = "BodyPoses"
 # CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
 # CLUSTER_TYPE = "ArmsPoses3D" 
-# CLUSTER_TYPE = "HandsPositions"
-CLUSTER_TYPE = "HandsGestures"
+CLUSTER_TYPE = "HandsPositions"
+# CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 # CLUSTER_TYPE = "HSV" 
 
@@ -568,6 +567,8 @@ def landmarks_to_df_columnar(df, add_list=False, fit_scaler=False):
     elif "hand" in cl.CLUSTER_DATA[cl.CLUSTER_TYPE]["data_column"]:
         numerical_columns = [col for col in df.columns if col.startswith('left_dim_') or col.startswith('right_dim_')]
         prefix_dim = True
+    else:
+        is_numerical = False
     print("lms df columns: ",df.columns)
 
 # OLD LEGACY CODE TO INTEGRATE FOR OLD PATHWAYS
@@ -582,9 +583,10 @@ def landmarks_to_df_columnar(df, add_list=False, fit_scaler=False):
 #     return col_list
 
     # Preserve order while preventing duplicate label amplification downstream.
-    numerical_columns = list(dict.fromkeys(numerical_columns))
+    if is_numerical:
+        numerical_columns = list(dict.fromkeys(numerical_columns))
 
-    if sort.SUBSET_LANDMARKS and (len(numerical_columns)/len(sort.SUBSET_LANDMARKS)) % 1 != 0:
+    if is_numerical and sort.SUBSET_LANDMARKS and (len(numerical_columns)/len(sort.SUBSET_LANDMARKS)) % 1 != 0:
         # only do this if the number of numerical columns is not a multiple of the subset landmarks
         # which is to say: the lms have already been subsetted
         if prefix_dim: subset_columns = [f'dim_{i}' for i in sort.SUBSET_LANDMARKS]
