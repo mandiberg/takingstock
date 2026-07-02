@@ -24,7 +24,7 @@ MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
-SHOW_BLEND_POSITION = True
+SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
@@ -33,14 +33,14 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_hsv_bg_2tier_1000"
+FOLDER_NAME = "output_folder/_hsv_bg_2tier_trim2"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None

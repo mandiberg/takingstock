@@ -177,7 +177,7 @@ MULTIPLIER_DICT = {
     "9x16_regular_up": [1.7,4,2.8,4],
     # "9x16_shoulders": [1.54,2.475,1.70843794,2.475],
     "9x16_shoulders": [1.45,3,1.925,3],
-    "9x16_shoulders_lower": [1.25,3,2.125,3],
+    "9x16_shoulders_lower": [1.1,3,2.275,3],
     "9x16_face": [1.0,2,1.25,2],
     # "9x16_face": [1.0,2.222222,1.5,2.222222],
     "9x16_regular_left": [1.4,3.1,3.1,4.9],
@@ -547,22 +547,29 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     # 733: [[28, 100], [14, 21], [14, 92], ],
     # 58: [[23, 21], [23, 67], ],
 
-    # Final round, June 30
-    2341: [[1, 119], [3, 114], [30,111], [30,114], [1, 65],], # 1-119 is just right hand, 3-114 is pointing at money, 30-111 is OK, 30-114 is thumbs up
-    # TKmoney, enter 
-    1685: [[16, 21], [23, 21], [16,28], [15,92]],  # # 15-92 is wide arms 
+    # RGB
+    1685: [[23, 21]],  # # 15-92 is wide arms 
+    2341: [[1, 119],  [30,114],], 
+
+    # # EVERYTHING ELSE 
+    # # Final round, June 30
+    # # 1-119 is just right hand, 3-114 is pointing at money, 30-111 is OK, 30-114 is thumbs up
+    # 2341: [[30,111], [30,114], [1, 65],], 
+    # # TKmoney, enter 
+    # 1685: [[16,28], [15,92]],  # # 15-92 is wide arms 
   
-    # TKcard bg color
-    734: [[3, 114], [18, 4], ], # 18 is the bigger one, 3 has pointing finger
-    # TKmisc, andsort
+    # # TKcard bg color
+    # 734: [[3, 114], [18, 4], ], # 18 is the bigger one, 3 has pointing finger
+    # # TKmisc, andsort
+
+    # # # disable HSV (or just use 2?)
+    # 733: [[28, 100], ], # try this with no HSV
 
     # # card OBJECT color
     # 258: [ [16, 28], ],
     # # phone object color, not really working
     # 58: [[16,10], [16, 41], ],
 
-    # # disable HSV (or just use 2?)
-    733: [[28, 100], ], # try this with no HSV
 
 
 }
@@ -859,13 +866,13 @@ HSV_GROUP_PRESETS = {
         # [[3, 4, 5, 6], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19], [21, 22]],
 
         # Tier 3: RYB groups.
-        [[0], [1], [2],[3, 4, 5, 6, 9, 22], [7, 8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]],
+        [[3, 4, 5, 6, 9, 22], [7, 8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]],
 
         # # Tier 4: warms vs cools.
         # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]],
 
         # # Tier 5: catch-all fallback.
-        [[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]],
+        # [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]],
     ],
     "background_dedupe": [
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],

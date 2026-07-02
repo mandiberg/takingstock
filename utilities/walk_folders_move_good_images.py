@@ -1,5 +1,7 @@
 import os
 import shutil
+import exiftool
+
 
 '''
 This script is for the cluster cleaning process -- for the looping videos
@@ -8,14 +10,33 @@ so you only are cleaning *new* images.
 This will walk the folder and move for all subfolders
 '''
 
-FOLDER = "/Volumes/LaCie/output_folder/_3800plus_select2/"
+FOLDER = "/Volumes/LaCie/output_folder/_hsv_bg_2tier_trim2/"
 GOOD_IMAGES = "/Volumes/LaCie/output_folder/_excludes/_current_good_images"
 
-
-
-
+# Default is True. If False, it scores good images with exif metadata
+MOVE_GOOD_IMAGES = False
+GOOD_RATING = 4
+if MOVE_GOOD_IMAGES: SUBFOLDER = "good_ids"
+else: SUBFOLDER = "not_good_ids"
+VERBOSE = False
 GOOD_IDS = set()
 # open folder and load files
+
+def score_image(image_path, star_rating=GOOD_RATING):
+    # with exiftool.ExifTool() as et:
+    #     metadata = et.get_metadata(image_path)
+    #     rating = metadata.get('XMP:Rating', 0)
+    #     return rating
+
+    # Force in-place metadata writes so ExifTool does not create backup files.
+    with exiftool.ExifToolHelper(common_args=["-overwrite_original_in_place"]) as et:
+        # Set the standard XMP:Rating tag that Adobe Bridge monitors
+        et.set_tags(
+            files=[image_path],
+            tags={"XMP:Rating": star_rating}
+        )
+
+    print(f"Successfully applied {star_rating} stars to {image_path}")
 
 def load_files_from_folder(folder):
     files = []
@@ -37,17 +58,40 @@ print(f"Loaded {len(GOOD_IDS)} good image IDs from {GOOD_IMAGES}")
 # if folder contains folders, walk through them and do the same thing
 for root, dirs, files in os.walk(FOLDER):
     for dir in dirs:
-        this_new_folder = os.path.join(FOLDER,dir, "good_ids")
+        this_new_folder = os.path.join(FOLDER,dir, SUBFOLDER)
         os.makedirs(this_new_folder, exist_ok=True)
 
         dir_path = os.path.join(root, dir)
         files = load_files_from_folder(dir_path)
         for uid in GOOD_IDS:
+            is_found = False
             for filename in files:
+                new_path = os.path.join(this_new_folder, os.path.basename(filename))
                 if str(uid) in filename:
-                    new_path = os.path.join(this_new_folder, os.path.basename(filename))
-                    print(f"Moving {filename} to {new_path}")
+                    is_found = True
                     try:
-                        os.rename(filename, new_path)
+                        if MOVE_GOOD_IMAGES:
+                            print(f" ✅ Moving {dir}-{uid} to {this_new_folder}")
+                            os.rename(filename, new_path)
+                        else:
+                            print(f"updating metadata for good image {dir}-{uid}")
+                            score_image(filename, star_rating=GOOD_RATING)
                     except OSError as e:
-                        print(f"Error occurred while moving {filename}: {e}")
+                        print(f" ❌ Error occurred while moving {dir}-{uid}: {e}")
+                # this isn't working. It recursively goes through every folder, and eventually moves every file.
+                # elif str(uid) not in filename and not MOVE_GOOD_IMAGES:
+                #     try:
+                #         if MOVE_GOOD_IMAGES:
+                #             print(f"not moving {dir}-{uid} because it does not match any good image ID")
+                #         else:
+                #             # check if filename actually exists before trying to move it
+                #             if os.path.exists(filename):
+                #                 print(f" ☑️ Moving {dir}-{uid} to {this_new_folder}")
+                #                 os.rename(filename, new_path)
+                #                 is_found = True
+                #             elif VERBOSE:
+                #                 print(f" ✖️ File {dir}-{uid} does not exist, skipping move") 
+                #     except OSError as e:
+                #         print(f" ❌❌ Error occurred while moving {dir}-{uid}: {e}")
+                if is_found:
+                    break
