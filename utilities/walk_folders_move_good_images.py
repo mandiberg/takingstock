@@ -10,11 +10,11 @@ so you only are cleaning *new* images.
 This will walk the folder and move for all subfolders
 '''
 
-FOLDER = "/Volumes/LaCie/output_folder/_hsv_bg_2tier_trim2/"
+FOLDER = "/Volumes/LaCie/output_folder/_2230_calc_100/"
 GOOD_IMAGES = "/Volumes/LaCie/output_folder/_excludes/_current_good_images"
 
 # Default is True. If False, it scores good images with exif metadata
-MOVE_GOOD_IMAGES = False
+MOVE_GOOD_IMAGES = False 
 GOOD_RATING = 4
 if MOVE_GOOD_IMAGES: SUBFOLDER = "good_ids"
 else: SUBFOLDER = "not_good_ids"

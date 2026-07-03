@@ -44,7 +44,7 @@ IS_SSD =True  # if True it will use the SSD path, if False it will use the RAID 
 VERBOSE = False  
 # set origin before constructing io
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
-ORIGIN_SSD = "/Volumes/OWC5 1/segment_images"
+# ORIGIN_SSD = "/Volumes/OWC5 1/segment_images"
 # ORIGIN_SSD = "/Volumes/OWC5/segment_images_92_headphones"
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
 # ORIGIN_SSD = "/Volumes/LaCie/segment_images_94_piggybank"

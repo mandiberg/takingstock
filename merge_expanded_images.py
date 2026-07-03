@@ -33,7 +33,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_hsv_bg_2tier_trim2"
+FOLDER_NAME = "output_folder/_2230_calc_100"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -46,6 +46,7 @@ PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with mu
 CROP_AFTER_COUNT = None
 
 LOOPING = False # defaults
+REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
 BLEND_END_TO_FIRST = True
 OFFSET_ON_BUILD = True
@@ -118,7 +119,7 @@ elif "make_video" in CURRENT_MODE:
         MERGE_COUNT = 8 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
         MERGE_PERIOD = 2  # set to 2 to double ramp duration
-        FULL_MERGE_PERIOD = 0  # set >0 to hold at MERGE_COUNT for N frames
+        FULL_MERGE_PERIOD = 10  # set >0 to hold at MERGE_COUNT for N frames
         AUTO_DISTRIBUTE_CYCLE_PERIOD = True
         SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe. 2 is standard (3 frames per image/10 img per second). I slowed it down with 3 (4 frames per image)
 
@@ -684,6 +685,8 @@ def save_merge(merged_image, count, cluster_no, handpose_no, background_hsv_no, 
             savename_parts.append(f"h{background_hsv_no}")
         if object_hsv_no is not None:
             savename_parts.append(f"om{object_hsv_no}")
+        if REPEAT > 1:
+            savename_parts.append(f"x{REPEAT}")
         savename_parts.append(str(count * 2))
         savename = "_".join(savename_parts) + '.jpg'
     else:
@@ -1497,6 +1500,7 @@ def write_video(img_array, subfolder_path=None):
         period = calculate_period(images_to_build)
     else:
         period = PERIOD
+    print("using period of", period)
 
     if LOWEST_DIMS:
         # run crop/scale on all images to ensure they are the same dimensions
@@ -1506,7 +1510,6 @@ def write_video(img_array, subfolder_path=None):
             else:
                 images_to_build[i] = crop_scale_giga(images_to_build[i])
 
-    print("using period of", period)
     # Get the dimensions of the first image in the array
     cluster_no, image_path = get_path(subfolder_path, img_array)
     # img = cv2.imread(image_path)
@@ -2039,6 +2042,8 @@ def _video_worker(subfolder_path: str) -> dict:
     """Pool worker: build one video from one subfolder."""
     try:
         all_img_path_list = get_cluster_input_paths(subfolder_path, FORCE_LS)
+        if REPEAT > 1:
+            all_img_path_list = all_img_path_list * REPEAT
         write_video(all_img_path_list, subfolder_path)
         return {"subfolder": subfolder_path, "success": True, "error": None}
     except Exception as exc:

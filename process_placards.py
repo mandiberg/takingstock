@@ -76,7 +76,7 @@ engine = create_engine(
 Session = sessionmaker(bind=engine)
 session = Session()
 
-HelperTable_name = "SegmentHelper_TheOffice" # if you set to None, comment out the helpertable join in the query
+HelperTable_name = "SegmentHelperObject_67_phone" # if you set to None, comment out the helpertable join in the query
 class HelperTable(Base):
     __tablename__ = HelperTable_name
     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
@@ -170,8 +170,8 @@ if WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE:
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-FILE_FOLDER = "/Volumes/LaCie/segment_images" #halfway through
-# FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl" 
+# FILE_FOLDER = "/Volumes/LaCie/segment_images" #halfway through
+FILE_FOLDER = "/Volumes/SSD4_Green/segment_images_detected_63_67" 
 # FILE_FOLDER ="/Volumes/OWC54/segment_images"
 # FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
@@ -1146,8 +1146,8 @@ def salvage_hsv_detection_ids(apply_updates=False):
             )
             .join(Images, Images.image_id == Detections.image_id)
             .join(HelperTable, HelperTable.image_id == Detections.image_id)
-            .join(ImagesObjectSignatures, ImagesObjectSignatures.image_id == Detections.image_id)
-            .join(ImagesArmsPoses3D, ImagesArmsPoses3D.image_id == Detections.image_id)
+            # .join(ImagesObjectSignatures, ImagesObjectSignatures.image_id == Detections.image_id)
+            # .join(ImagesArmsPoses3D, ImagesArmsPoses3D.image_id == Detections.image_id)
             .filter(Detections.hsv_redone.is_(None))
             .filter(Detections.detection_id > last_detection_id)
             .filter(Detections.bbox.isnot(None))
@@ -1161,6 +1161,8 @@ def salvage_hsv_detection_ids(apply_updates=False):
             rows_query = rows_query.filter(
                 sqlalchemy.or_(Detections.hsv_redone.is_(None), Detections.hsv_redone == False)
             )
+        # print the query as SQL string for debugging
+        print(f"[SALVAGE {mode_label}] executing query: {str(rows_query)}")
 
         rows_query = rows_query.limit(SALVAGE_QUERY_BATCH)
 

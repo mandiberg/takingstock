@@ -547,9 +547,9 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
     # 733: [[28, 100], [14, 21], [14, 92], ],
     # 58: [[23, 21], [23, 67], ],
 
-    # RGB
-    1685: [[23, 21]],  # # 15-92 is wide arms 
-    2341: [[1, 119],  [30,114],], 
+    # # RGB
+    # 1685: [[23, 21]],  # # 15-92 is wide arms 
+    # 2341: [[1, 119],  [30,114],], 
 
     # # EVERYTHING ELSE 
     # # Final round, June 30
@@ -564,6 +564,11 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 
     # # # disable HSV (or just use 2?)
     # 733: [[28, 100], ], # try this with no HSV
+
+    # piggybank and calculator
+    2230: [[8, 90], ],
+    4216: [[3, 94], ],
+ 
 
     # # card OBJECT color
     # 258: [ [16, 28], ],
@@ -821,6 +826,33 @@ FUSION_EDGECASE_RULES = [
             "hands_gesture_ids": [65, 125],
         },
     },
+    {
+        "name": "right_calculator_sig_gesture_union",
+        "match": {
+            "hands_position_ids": [3],
+            "hands_gesture_ids": [94],
+            "object_signature_ids": [4216],
+        },
+        "expand": {
+            "hands_position_ids": [3, 30],
+            "hands_gesture_ids": [94, 88, 7],
+            "object_signature_ids": [4216, 4214],
+        },
+    },
+    {
+        "name": "piggybank_gesture_union",
+        "match": {
+            "hands_position_ids": [8],
+            "hands_gesture_ids": [90],
+            "object_signature_ids": [2230],
+        },
+        "expand": {
+            "hands_position_ids": [8, 22],
+            "hands_gesture_ids": [90, 20, 23, 63, 105, 41, 57, 120],
+        },
+    },
+
+
 
     ]
 
@@ -866,13 +898,17 @@ HSV_GROUP_PRESETS = {
         # [[3, 4, 5, 6], [8, 9, 10, 11], [12, 13], [15, 16], [17, 18, 19], [21, 22]],
 
         # Tier 3: RYB groups.
-        [[3, 4, 5, 6, 9, 22], [7, 8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]],
+        # [[3, 4, 5, 6, 9, 22], [7, 8, 9, 10, 11, 12, 13], [15, 16, 17, 18, 19, 20, 21]],
 
         # # Tier 4: warms vs cools.
         # [[3, 4, 5, 6, 22, 7, 8, 9, 10, 11, 12, 13], [14, 15, 16, 17, 18, 19, 20, 21]],
 
         # # Tier 5: catch-all fallback.
         # [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]],
+
+        # TURN OFF by selecting all
+        [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]],
+
     ],
     "background_dedupe": [
         [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
