@@ -1148,7 +1148,7 @@ def salvage_hsv_detection_ids(apply_updates=False):
             .join(HelperTable, HelperTable.image_id == Detections.image_id)
             # .join(ImagesObjectSignatures, ImagesObjectSignatures.image_id == Detections.image_id)
             # .join(ImagesArmsPoses3D, ImagesArmsPoses3D.image_id == Detections.image_id)
-            .filter(Detections.hsv_redone.is_(None))
+            # .filter(Detections.hsv_redone.is_(None))
             .filter(Detections.detection_id > last_detection_id)
             .filter(Detections.bbox.isnot(None))
             # .filter(Detections.class_id == salvage_class_id)
@@ -1162,7 +1162,7 @@ def salvage_hsv_detection_ids(apply_updates=False):
                 sqlalchemy.or_(Detections.hsv_redone.is_(None), Detections.hsv_redone == False)
             )
         # print the query as SQL string for debugging
-        print(f"[SALVAGE {mode_label}] executing query: {str(rows_query)}")
+        # print(f"[SALVAGE {mode_label}] executing query: {str(rows_query)}")
 
         rows_query = rows_query.limit(SALVAGE_QUERY_BATCH)
 
