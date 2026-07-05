@@ -1,4 +1,11 @@
 import os
+import sys
+from pathlib import Path
+
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
+# caution: path[0] is reserved for script path (or '' in REPL)
+sys.path.insert(1, ROOT_GITHUB)
+from mp_db_io import DataIO
 
 '''
 This script counts files in subfolders based on fusion cluster. 
@@ -9,30 +16,6 @@ And for comparing one run to an other to see if any need further pruning
 
 FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_looping_june22_BER"
 FOLDER = "/Volumes/LaCie/output_folder/_looping_june22_BK_trimmed"
-
-def extract_fustion_cluster(name):
-    name = name.replace("_ct", "_")
-    folder_arms_pose = folder_signature = folder_hsv = None
-    # print(f"extracting fusion cluster from name {name}")
-    if "wav" in name:
-        # handle audio file format: multitrack_mixdown_offset_cc183_p1_t0_1781177644.763904.wav
-        folder_arms_pose = name.split("cc")[1].split("_")[0]
-        folder_signature = name.split("p")[1].split("_")[0]
-    elif "cc" in name:
-        folder_arms_pose = name.split("cc")[1].split("_")[0]
-    elif "_cluster" in name:
-        folder_arms_pose = name.split("_cluster")[1].split("_")[0]
-    elif "_c" in name:    
-        folder_arms_pose = name.split("_c")[1].split("_")[0]
-    if "_p" in name:
-        folder_signature = name.split("_p")[1].split("_")[0]
-    if "_om" in name:
-        folder_hsv = name.split("_om")[1].split("_")[0]
-    if folder_arms_pose is not None and folder_signature is not None:
-        # print(f"extracted fusion cluster {folder_arms_pose} and {folder_signature} from name {name}")
-        folder_arms_pose = int(folder_arms_pose)
-        folder_signature = int(folder_signature)
-    return folder_arms_pose, folder_signature, folder_hsv
 
 def get_list(folderpath):
     image_list = []
@@ -62,7 +45,7 @@ def main():
         if "DS_Store" in folder: continue
         folderpath = os.path.join(FOLDER,folder)
         # print(f"Processing file: {folderpath}")
-        this_arms_pose, this_signature, this_hsv = extract_fustion_cluster(folder)
+        this_arms_pose, this_signature, this_hsv = DataIO.extract_fusion_cluster(folder)
         image_list, folder_list = get_list(folderpath)
         print(this_arms_pose, this_signature, len(image_list))
 

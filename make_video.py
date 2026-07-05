@@ -105,7 +105,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_TheOffice_BaselInstall_archival/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
-MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
+MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
 ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
@@ -401,6 +401,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         ONE_SHOT = False # take all files, based off the very first sort order.
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
+        KNN_LARGE_CLUSTERS = True
         if "ObjectFusion" in CLUSTER_TYPE:
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
@@ -4926,7 +4927,7 @@ def main():
         # Object-none override: always route to non-HSV fusion policy.
         # This keeps large OBJECT_NONE_CLUSTERS on the standard non-HSV
         # path (including CHOP_FIRST + iterative sorting behavior).
-        if object_cluster_id in OBJECT_NONE_CLUSTERS:
+        if object_cluster_id in OBJECT_NONE_CLUSTERS or KNN_LARGE_CLUSTERS:
             if cell_count >= int(MIN_VIDEO_FUSION_COUNT):
                 print(
                     f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
@@ -5785,62 +5786,6 @@ def main():
                     return
                 else:
                     print(f"Got {len(resultsjson)} results from selectSQL for cluster {this_cluster}, topic {this_topic}, hsv {hsv_cluster} - proceeding to map_images")
-                    # If a background HSV bucket is too large, split it into object-color groups.
-                    do_object_hsv_subsort = (
-                        resolved_hsv_source == "background"
-                        and cycle_stage == "background"
-                        and bool(SUBSORT_ON_OBJECT_HSV_CUTOFF)
-                        and len(resultsjson) >= SUBSORT_ON_OBJECT_HSV_CUTOFF
-                        and effective_use_hsv
-                        and this_cluster[1] not in OBJECT_NONE_CLUSTERS # this skips the subsort for any cluster-topic combos that have the object-none cluster
-                    )
-                    if do_object_hsv_subsort:
-                        object_hsv_groups = HSV_GROUP_PRESETS.get(OBJECT_HSV_GROUP_PRESET_NAME)
-                        if not object_hsv_groups:
-                            raise ValueError(
-                                f"Missing object HSV preset '{OBJECT_HSV_GROUP_PRESET_NAME}' in HSV_GROUP_PRESETS"
-                            )
-                        print(
-                            f"Subsorting on object HSV: {len(resultsjson)} >= {SUBSORT_ON_OBJECT_HSV_CUTOFF} "
-                            f"using preset {OBJECT_HSV_GROUP_PRESET_NAME}"
-                        )
-
-                        emitted_subcycles = 0
-                        for object_hsv_cluster in object_hsv_groups:
-                            add_mode0_count("select_calls", 1)
-                            object_select_start = time.perf_counter()
-                            object_resultsjson = selectSQL(
-                                this_cluster,
-                                this_topic,
-                                object_hsv_cluster,
-                                hsv_source="object",
-                                use_hsv_override=effective_use_hsv,
-                                allow_object_none=allow_object_none,
-                                use_meta_cluster=use_meta_cluster,
-                                meta_cluster_id=meta_cluster_id,
-                            )
-                            add_mode0_timing("sql_select", time.perf_counter() - object_select_start)
-                            if len(object_resultsjson) < MIN_CYCLE_COUNT:
-                                continue
-
-                            CURRENT_HSV_CYCLE_META = make_hsv_cycle_meta(
-                                this_cluster,
-                                this_topic,
-                                background_hsv=hsv_cluster,
-                                object_hsv=object_hsv_cluster,
-                                cycle_stage="object_subsort",
-                            )
-                            print("CURRENT_HSV_CYCLE_META", CURRENT_HSV_CYCLE_META)
-                            map_dispatch_start = time.perf_counter()
-                            map_images(object_resultsjson, this_cluster, this_topic, CURRENT_HSV_CYCLE_META)
-                            add_mode0_timing("map_dispatch", time.perf_counter() - map_dispatch_start)
-                            emitted_subcycles += 1
-
-                        if emitted_subcycles > 0:
-                            return
-
-                        print("Object HSV subsort produced no eligible subcycles, falling back to background cycle")
-
                     # folder_name = this_topic[0] if this_topic else this_cluster
                     map_dispatch_start = time.perf_counter()
                     map_images(resultsjson, this_cluster, this_topic, CURRENT_HSV_CYCLE_META)

@@ -33,17 +33,21 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_2230_calc_100"
+FOLDER_NAME = "output_folder/_TheOffice_BaselInstall_archival"
+FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None
+
+# if you borked the installation file, turn this on to JUST rebuilt it
+DO_INSTALLATION_ONLY = True
 
 LOOPING = False # defaults
 REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
@@ -142,8 +146,9 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
+VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 # VID_DIMS_TEST = [1746,1746]
-VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+# VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
@@ -2096,7 +2101,12 @@ def main():
         # skip any folder with SKIP_PREFIX in it
         subfolders = [subfolder for subfolder in subfolders if SKIP_PREFIX not in subfolder]
         print("subfolders", subfolders)
-        if IS_VIDEO is True and ALL_ONE_VIDEO is True:
+        if DO_INSTALLATION_ONLY:
+            print("doing installation only")
+            # need it to recreate the installations.csv file
+            # contains: cluster_no,hsv_no,pose_no,width,height,ratio,file_name,duration,object
+            save_installation_metas(subfolders, FOLDER_PATH, "installation.csv")
+        elif IS_VIDEO is True and ALL_ONE_VIDEO is True:
             print("making regular combined video")
             all_img_path_list = get_img_list_subfolders(subfolders)
             write_video(all_img_path_list)

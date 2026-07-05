@@ -228,6 +228,29 @@ class DataIO:
         capitalized_dirname = '/'.join(capitalized_parts)
         return os.path.join(capitalized_dirname, filename)
 
+    @staticmethod
+    def extract_fusion_cluster(name):
+        name = name.replace("_ct", "_")
+        folder_arms_pose = folder_signature = folder_hsv = None
+        if "wav" in name:
+            # handle audio file format: multitrack_mixdown_offset_cc183_p1_t0_1781177644.763904.wav
+            folder_arms_pose = name.split("cc")[1].split("_")[0]
+            folder_signature = name.split("p")[1].split("_")[0]
+        elif "cc" in name:
+            folder_arms_pose = name.split("cc")[1].split("_")[0]
+        elif "_cluster" in name:
+            folder_arms_pose = name.split("_cluster")[1].split("_")[0]
+        elif "_c" in name:
+            folder_arms_pose = name.split("_c")[1].split("_")[0]
+        if "_p" in name:
+            folder_signature = name.split("_p")[1].split("_")[0]
+        if "_om" in name:
+            folder_hsv = name.split("_om")[1].split("_")[0]
+        if folder_arms_pose is not None and folder_signature is not None:
+            folder_arms_pose = int(folder_arms_pose)
+            folder_signature = int(folder_signature)
+        return folder_arms_pose, folder_signature, folder_hsv
+
     def get_counter(self,CSV_COUNTOUT_PATH):
         # read last completed file
         try:
