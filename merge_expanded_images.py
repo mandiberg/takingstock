@@ -143,12 +143,14 @@ FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
 # VID_DIMS_TEST = [1746,1746]
-VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+VID_DIMS_TEST = [2160, 2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
 
-USE_CANONICAL_RATIOS = False
+USE_CANONICAL_RATIOS = True
+ADD_TO_EXISTING_INSTALLATION_CSV = True  # if True, append new rows to existing installation.csv instead of overwriting
+# only checks filename column for duplicates
 
 RATIOS_DICT = {
     1080 : [ {0.665 : [718, 1080]}, 
@@ -1536,7 +1538,8 @@ def write_video(img_array, subfolder_path=None):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}"
     else: merge_info = ""
-    video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+".mp4")
+    scale_info = f"_scale_{VID_DIMS_TEST[0]}" if USE_CANONICAL_RATIOS else ""
+    video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+scale_info+".mp4")
     print("video_path", video_path)
     video_writer = cv2.VideoWriter(video_path, fourcc, FRAMERATE, (width, height))
     if not video_writer.isOpened():
@@ -1941,6 +1944,7 @@ def save_installation_metas(subfolders, output_path, csv_file):
     installation_metas = pd.DataFrame(columns=["cluster_no", "hsv_no", "pose_no"])
     for subfolder_path in subfolders:
         metas_path = os.path.join(subfolder_path, "installation.csv")
+        subfolder_basename = subfolder_path.split("/")[-1]
         if os.path.exists(metas_path):
             installation_metas_raw_df = pd.read_csv(metas_path)
             print(f"  [subfolder] {subfolder_path}")
@@ -1951,6 +1955,8 @@ def save_installation_metas(subfolders, output_path, csv_file):
             if installation_metas_df is None:
                 any_missing = True
                 continue
+            # stamp each row with its unique subfolder so video_dims can key by it later
+            installation_metas_df["_subfolder_basename"] = subfolder_basename
             installation_metas = pd.concat([installation_metas, installation_metas_df], ignore_index=True)
         else:
             print(f"  [subfolder] installation.csv MISSING in: {subfolder_path}")
@@ -1961,27 +1967,18 @@ def save_installation_metas(subfolders, output_path, csv_file):
     output_filename = "missing_installation.csv" if any_missing else csv_file
     print(f"[save_installation_metas] any_missing={any_missing} → output file: {output_filename}")
 
-    # Build a lookup: cluster_no (subfolder basename) -> (width, height, file_name, duration)
+    # Build a lookup: subfolder_basename -> LIST of (width, height, file_name, duration)
+    # Using a list allows one subfolder to produce multiple rows — one per scale variant
+    # (e.g. _scale_1080, _scale_1712, _scale_2160) when multiple runs have been done.
     video_dims = {}
     mp4_files = [f for f in os.listdir(output_path) if f.endswith(".mp4")]
     print(f"\n[save_installation_metas] mp4 files found in output_path: {mp4_files}")
     for subfolder_path in subfolders:
         subfolder_basename = subfolder_path.split("/")[-1]
-        # Use the cluster_no value from the subfolder's installation.csv as the lookup key
-        # so it matches what ends up in the DataFrame — not the raw subfolder basename
-        metas_path = os.path.join(subfolder_path, "installation.csv")
-        if os.path.exists(metas_path):
-            tmp_raw_df = pd.read_csv(metas_path)
-            tmp_df = _normalize_installation_df(tmp_raw_df, metas_path)
-            if tmp_df is not None and not tmp_df.empty:
-                lookup_key = str(tmp_df.iloc[0]["cluster_no"])
-            else:
-                lookup_key = subfolder_basename
-        else:
-            lookup_key = subfolder_basename
-        matched = next((f for f in mp4_files if subfolder_basename in f), None)
-        print(f"  subfolder_basename={subfolder_basename!r}, lookup_key={lookup_key!r} → matched mp4={matched!r}")
-        if matched:
+        all_matched = [f for f in mp4_files if subfolder_basename in f]
+        print(f"  subfolder_basename={subfolder_basename!r} → matched mp4s={all_matched!r}")
+        entries = []
+        for matched in all_matched:
             cap = cv2.VideoCapture(os.path.join(output_path, matched))
             w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -1989,22 +1986,18 @@ def save_installation_metas(subfolders, output_path, csv_file):
             frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
             duration = round(frame_count / fps, 3) if fps > 0 else None
             cap.release()
-            print(f"    w={w}, h={h}, fps={fps}, frame_count={frame_count}, duration={duration}")
-            video_dims[lookup_key] = (w, h, matched, duration)
+            print(f"    {matched}: w={w}, h={h}, fps={fps}, frame_count={frame_count}, duration={duration}")
+            entries.append((w, h, matched, duration))
+        if entries:
+            video_dims[subfolder_basename] = entries
 
     print(f"\n[save_installation_metas] video_dims keys: {list(video_dims.keys())}")
-    print(f"[save_installation_metas] cluster_no values in df: {installation_metas['cluster_no'].tolist()}")
-
-    def _lookup(cluster_no, idx):
-        entry = video_dims.get(str(cluster_no))
-        if entry is None:
-            print(f"    [_lookup] no match for cluster_no={cluster_no!r}")
-        return entry[idx] if entry else None
+    print(f"[save_installation_metas] _subfolder_basename values in df: {installation_metas['_subfolder_basename'].tolist()}")
 
     # Drop rows for subfolders that produced no video (skipped due to too few/no images)
     before_count = len(installation_metas)
     installation_metas = installation_metas[
-        installation_metas["cluster_no"].apply(lambda x: str(x) in video_dims)
+        installation_metas["_subfolder_basename"].apply(lambda x: str(x) in video_dims)
     ].reset_index(drop=True)
     dropped = before_count - len(installation_metas)
     if dropped:
@@ -2012,16 +2005,22 @@ def save_installation_metas(subfolders, output_path, csv_file):
 
     object_signature_registry = _load_object_signature_registry()
 
-    installation_metas["width"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 0))
-    installation_metas["height"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 1))
-    installation_metas["ratio"] = installation_metas.apply(
-        lambda r: round(r["width"] / r["height"], 3)
-        if pd.notna(r.get("width")) and pd.notna(r.get("height")) and r["height"] != 0
-        else None,
-        axis=1,
-    )
-    installation_metas["file_name"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 2))
-    installation_metas["duration"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 3))
+    # Expand each row into N rows — one per matched mp4 (scale variant)
+    expanded_rows = []
+    for _, row in installation_metas.iterrows():
+        key = str(row["_subfolder_basename"])
+        for w, h, file_name, duration in video_dims[key]:
+            new_row = row.copy()
+            new_row["width"] = w
+            new_row["height"] = h
+            new_row["ratio"] = round(w / h, 3) if h != 0 else None
+            new_row["file_name"] = file_name
+            new_row["duration"] = duration
+            expanded_rows.append(new_row)
+    installation_metas = pd.DataFrame(expanded_rows).reset_index(drop=True)
+
+    # drop the internal tracking column before saving
+    installation_metas = installation_metas.drop(columns=["_subfolder_basename"])
     installation_metas["object"] = installation_metas["pose_no"].apply(
         lambda x: object_signature_registry.get(_normalize_cluster_token(x), "[]")
     )
@@ -2029,7 +2028,15 @@ def save_installation_metas(subfolders, output_path, csv_file):
     print(f"\n[save_installation_metas] final DataFrame:\n{installation_metas}")
     output_csv_path = os.path.join(output_path, output_filename)
     print(f"[save_installation_metas] saving to: {output_csv_path}")
-    installation_metas.to_csv(output_csv_path, index=False)
+    if ADD_TO_EXISTING_INSTALLATION_CSV and os.path.exists(output_csv_path):
+        existing_df = pd.read_csv(output_csv_path)
+        new_rows = installation_metas[~installation_metas["file_name"].isin(existing_df["file_name"])]
+        skipped = len(installation_metas) - len(new_rows)
+        print(f"[save_installation_metas] append mode: {len(new_rows)} new row(s), {skipped} duplicate(s) skipped")
+        combined = pd.concat([existing_df, new_rows], ignore_index=True)
+        combined.to_csv(output_csv_path, index=False)
+    else:
+        installation_metas.to_csv(output_csv_path, index=False)
 
 
 ##### GOING TO GET OBJECTS FROM CLUSTER MEDIANS, TBD NOT WORKING YET
