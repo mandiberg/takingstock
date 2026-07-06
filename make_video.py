@@ -57,22 +57,22 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-SegmentHelper_name = 'SegmentHelper_TheOffice'
-# SegmentHelper_name = 'SegmentHelperObject_82_money'
+# SegmentHelper_name = 'SegmentHelper_TheOffice'
+SegmentHelper_name = 'SegmentHelperObject_32_sportsball'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-SSD_PATH = "/Volumes/LaCie/segment_images"
-# SSD_PATH = "/Volumes/OWC52/segment_images"
+# SSD_PATH = "/Volumes/LaCie/segment_images"
+SSD_PATH = "/Volumes/OWC52/segment_images_32_sportsball"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 8  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -86,7 +86,8 @@ db = io.db
 # OWC4 SNAFU WORKAROUND
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
-    io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
+    ### THIS IS WHERE IT WILL SAVE OUTPUT_FOLDER FILES ###
+    io.ROOT_PROD=  "/Volumes/OWC52" ## only on Mac
     # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
@@ -103,7 +104,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_TheOffice_BaselInstall_archival/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheGym_firsttest/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -296,22 +297,21 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # main switches
     INSTALLATION_VIDEO = True # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
-    DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
+    DO_SMALL_CLUSTER_FUSION_BUCKET = True # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
+    # turning off face pair testing, as it was misbehaving
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
 
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEGYM"
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
     if AUTO_EDGE_CROP:
         EXPAND = True
         # FULL_BODY = True # haxxor TK
-
-
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
     class_id = 0  # TEST: match exported ArmsPoses3D_67.csv
@@ -398,16 +398,17 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = False # take all files, based off the very first sort order.
+        ONE_SHOT = True # take all files, based off the very first sort order. (turn on for testing/speed)
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         KNN_LARGE_CLUSTERS = True
         if "ObjectFusion" in CLUSTER_TYPE:
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
-            GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
+            # For production, GENERATE_FUSION_PAIRS = False
+            # for determining the set of pair, set to True
+            GENERATE_FUSION_PAIRS = True 
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
-            # GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
         else:
@@ -461,8 +462,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         N_HSV = 0 # don't do HSV clusters
 
     PURGING_DUPES = False # skips build/save, just compares dupes
+
+    ###### IMPORTANT ######
+    # this is the switch that controls the CSV output count
+    # this is a target goal/cutoff. set to 1M or something to get everythin. 
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 1000000 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    FORCE_TARGET_COUNT = 200 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    ###### IMPORTANT ######
+
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 

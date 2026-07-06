@@ -27,14 +27,15 @@ DEBUG = False
 SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Volumes/LaCie/'
+ROOT_FOLDER_PATH = '/Volumes/OWC52/'
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-# FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_TheOffice_BaselInstall_archival"
-FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
+FOLDER_NAME = "heft_loop_scratch"
+# FOLDER_NAME = "output_folder/_sportsball_firsttest"
+
+# FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
@@ -47,7 +48,7 @@ PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with mul
 CROP_AFTER_COUNT = None
 
 # if you borked the installation file, turn this on to JUST rebuilt it
-DO_INSTALLATION_ONLY = True
+DO_INSTALLATION_ONLY = False
 
 LOOPING = False # defaults
 REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
@@ -146,9 +147,9 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
-VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+# VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 # VID_DIMS_TEST = [1746,1746]
-# VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 

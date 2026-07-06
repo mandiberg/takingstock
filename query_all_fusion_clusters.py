@@ -89,7 +89,7 @@ THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
-else: HELPER_TABLE = 'SegmentHelper_TheOffice'
+else: HELPER_TABLE = 'SegmentHelperObject_32_sportsball'
 # else: HELPER_TABLE = 'SegmentBig_isface'
 
 

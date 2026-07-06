@@ -2,7 +2,7 @@
   "cluster_type": "ArmsPoses3D_ObjectFusion",
   "contract_version": 1,
   "export_options": {
-    "helper_table": "SegmentHelperObject_32_sportsball",
+    "helper_table": "SegmentHelper_TheOffice",
     "kept_cluster_count": 4694,
     "object_cluster_table_name": "ImagesObjectSignatures"
   },

@@ -77,6 +77,7 @@ engine = create_engine(
 Session = sessionmaker(bind=engine)
 session = Session()
 
+### HELPER TABLE IS ONLY FOR SALVAGE_HSV_MODE ###
 HelperTable_name = "SegmentHelperObject_73_book" # if you set to None, comment out the helpertable join in the query
 class HelperTable(Base):
     __tablename__ = HelperTable_name
@@ -88,6 +89,7 @@ class ImagesArmsPoses3D(Base):
     image_id = Column(Integer, primary_key=True)
     cluster_id = Column(Integer)
     cluster_dist = Column(Float)
+### HELPER TABLE IS ONLY FOR SALVAGE_HSV_MODE ###
     
 VERBOSE = True
 yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
@@ -171,7 +173,7 @@ if WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE:
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-FILE_FOLDER = "/Volumes/OWC5/segment_images_book_clock_bowl" #halfway through
+FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4" #halfway through
 # FILE_FOLDER = "/Volumes/SSD4_Green/segment_images_detected_63_67" 
 # FILE_FOLDER ="/Volumes/OWC54/segment_images"
 # FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
@@ -457,6 +459,7 @@ def assign_hsv_detect_results(detect_results, image):
         meta_cluster_id, cluster_id, cluster_dist = bbox_to_cluster_id(image, bbox)
         result_dict['meta_cluster_id'] = meta_cluster_id
         result_dict['cluster_id'] = cluster_id
+        result_dict['hsv_redone'] = True
         # result_dict['cluster_dist'] = cluster_dist
     return detect_results
 
