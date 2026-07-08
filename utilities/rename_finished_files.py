@@ -10,7 +10,9 @@ from sqlalchemy.pool import NullPool
 ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
-from mp_db_io import DataIO
+from mp_db_io import DataIO 
+from my_declarative_base import Base, ImagesObjectSignatures, YoloClasses
+
 import importlib.util
 
 
@@ -62,6 +64,8 @@ engine = create_engine(
 )
 Session = sessionmaker(bind=engine)
 session = Session()
+ImagesArmsPoses3D = io.create_class_from_reflection(engine, "ImagesObjectSignatures", "ImagesArmsPoses3D")
+    # Encodings_Migration = io.create_class_from_reflection(engine, 'encodings', 'encodings_migration')
 
 
 # Specify the precise path to the python file
@@ -84,15 +88,31 @@ object_signature_registry = io.load_object_signature_registry(OBJECT_SIGNATURE_E
 folder_list = io.get_folders(FOLDER)
 # print(f"folder_list: {folder_list}")
 
-def get_modal_signature(folder):
-    img_list = io.get_img_list(folder)
-    signature_list = []
-    for img in img_list:
-        folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv = io.extract_fusion_cluster(img)
-        signature_list.append(folder_signature)
-    # get the most common signature
-    modal_signature = max(set(signature_list), key=signature_list.count)
-    return modal_signature
+def get_modal_cluster_id(main_folder, session):
+    modal_cluster_dict = {}
+    # this looks in a folder that holds other folders, and does a query per folder
+    folders = os.listdir(main_folder)
+    for folder in folders:
+        folder_path = os.path.join(main_folder, folder)
+        if os.path.isdir(folder_path):
+            # img_list = io.get_img_list(folder)
+            image_id_list = io.get_existing_image_ids_from_jpgs(folder_path)
+            # print(f"image_id_list: {image_id_list}")
+            # use session to query ImagesObjectSignatures for each image's signature, and return the most common signature
+            cluster_id_list = []
+            for image_id in image_id_list:
+                cluster_id = session.query(ImagesArmsPoses3D.cluster_id).filter(ImagesArmsPoses3D.image_id == image_id).first()
+                if cluster_id is not None:
+                    cluster_id_list.append(cluster_id[0])
+            if len(cluster_id_list) == 0:
+                return None
+            # get the most common signature
+            # print(f"cluster_id_list: {cluster_id_list}")
+            modal_cluster_id = max(set(cluster_id_list), key=cluster_id_list.count)
+            # print(f"modal_cluster_id for {folder}: {modal_cluster_id}")
+            modal_cluster_dict[folder] = modal_cluster_id
+
+    return modal_cluster_dict
 
 def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv):
 
@@ -128,12 +148,32 @@ def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature
 # construct df for TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv
 df = pd.DataFrame(columns=["new_name", "title", "folder", "img", "folder_arms_pose", "folder_hands_gesture", "folder_signature", "folder_hsv", "obj_str", ])
 for folder in folder_list:
+    # looks in each folder, and acts on the mp4 files in that folder
     img_list = io.get_img_list(folder)
+
+    # go get modal cluster id for everything, just in case
+    folder_modal_signatures = get_modal_cluster_id(folder, session)
+    print(f"modal_signature: {folder_modal_signatures}")
+
+
     # print(f"img_list: {img_list}")
     for img in img_list:
+        # img == the mp4 file
         if MP4_ONLY and not "mp4" in img: continue
         # print(f"img: {img}")
         folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv = io.extract_fusion_cluster(img)
+        if folder_arms_pose == -1:
+            # find the right key from the folder_modal_signatures dict based on folder_signature and folder_hsv
+            for key, value in folder_modal_signatures.items():
+                if str(folder_signature) in key and folder_hsv is None:
+                    folder_arms_pose = value
+                    print(f"folder_arms_pose not found in filename, using modal signature from folder: {folder_arms_pose}")
+                    break
+                elif str(folder_signature) in key and folder_hsv is not None:
+                    print(f" ✖️ key: {key}, value: {value}")
+                    print(f"folder_signature: {folder_signature}, folder_hsv: {folder_hsv}")
+                    print(type(folder_hsv))
+
         # print(f"folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, folder_hsv: {folder_hsv}")
         obj = object_signature_registry.get(io.normalize_cluster_token(folder_signature), None)
         # print(type(obj))

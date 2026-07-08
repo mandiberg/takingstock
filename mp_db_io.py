@@ -334,9 +334,9 @@ class DataIO:
 
     def get_img_list(self, folder, force_ls=False, sort=True):
         json_path = os.path.join(folder, 'img_list.json')
-        print("getting image list from", json_path)
+        # print("getting image list from", json_path)
         if os.path.exists(json_path) and not force_ls:
-            print("Image list exists, loading from", json_path)
+            # print("Image list exists, loading from", json_path)
             with open(json_path, 'r') as f:
                 img_list = json.load(f)
         else:
@@ -349,6 +349,11 @@ class DataIO:
     def get_existing_image_ids_from_wavs(self,folder):
         existing_files = self.get_img_list(folder)
         existing_image_ids = [int(f.split("_")[0]) for f in existing_files if f.endswith(".wav")]
+        return existing_image_ids
+
+    def get_existing_image_ids_from_jpgs(self,folder):
+        existing_files = self.get_img_list(folder)
+        existing_image_ids = [int(f.replace(".jpg", "").replace(".jpeg", "").split("_")[-1]) for f in existing_files if f.endswith(".jpg") or f.endswith(".jpeg")]
         return existing_image_ids
 
 
