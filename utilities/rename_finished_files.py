@@ -13,9 +13,6 @@ sys.path.insert(1, ROOT_GITHUB)
 from mp_db_io import DataIO 
 from my_declarative_base import Base, ImagesObjectSignatures, YoloClasses
 
-import importlib.util
-
-
 '''
 This script reads a folder of finished files and renames them to a new naming convention.
 The finished files have names like:
@@ -67,26 +64,18 @@ session = Session()
 ImagesArmsPoses3D = io.create_class_from_reflection(engine, "ImagesObjectSignatures", "ImagesArmsPoses3D")
     # Encodings_Migration = io.create_class_from_reflection(engine, 'encodings', 'encodings_migration')
 
-
-# Specify the precise path to the python file
-file_path = "/Users/michaelmandiberg/Documents/GitHub/taking-stock-yolo/class_map_utils.py"
-class_map_json = "/Users/michaelmandiberg/Documents/GitHub/taking-stock-yolo/config/custom_class_map.json"
-module_name = "class_map" # The name you want to assign to the module
-
-# Load the file location specification
-spec = importlib.util.spec_from_file_location(module_name, file_path)
-class_map = importlib.util.module_from_spec(spec)
-
-# Execute the module to make its functions available
-spec.loader.exec_module(class_map)
-
-# Use the imported module
-CLASS_MAP = class_map.get_id_to_name(class_map_json)
-
 object_signature_registry = io.load_object_signature_registry(OBJECT_SIGNATURE_EXPORT_PATH)
 # print(f"object_signature_registry: {object_signature_registry}")
 folder_list = io.get_folders(FOLDER)
 # print(f"folder_list: {folder_list}")
+
+def load_yolo_classes(session):
+    yolo_classes = session.query(YoloClasses).all()
+    class_map = {yolo_class.class_id: yolo_class.class_name for yolo_class in yolo_classes}
+    return class_map
+
+CLASS_MAP = load_yolo_classes(session)
+print(f"CLASS_MAP: {CLASS_MAP}")
 
 def get_modal_cluster_id(main_folder, session):
     modal_cluster_dict = {}
@@ -115,7 +104,6 @@ def get_modal_cluster_id(main_folder, session):
     return modal_cluster_dict
 
 def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv):
-
     title = "Taking Stock "
     if topic is not None:
         title += f"Topic {topic}, "
