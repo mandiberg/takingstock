@@ -503,12 +503,6 @@ KEYWORD_DICT = {
 }
 
 
-SIG_OBJECT_DICT = {
-    15:27
-    
-
-}
-
 # FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 #     # object fusion with hand position/gesture clusters. for money, cards, phones, etc. 
 
