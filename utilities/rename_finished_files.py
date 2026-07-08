@@ -48,6 +48,7 @@ HSV_DICT = {
     "0": "Black",
     "1": "Grey",
     "2": "White",
+    "0-22": "None",
 }
 
 # load custom class map from yolo repo:
@@ -72,6 +73,8 @@ folder_list = io.get_folders(FOLDER)
 def load_yolo_classes(session):
     yolo_classes = session.query(YoloClasses).all()
     class_map = {yolo_class.class_id: yolo_class.class_name for yolo_class in yolo_classes}
+    # capitalize the first letter of each word in class name (including values with multiple words, eg Baseball Bat)
+    class_map = {k: v.title() for k, v in class_map.items()}
     return class_map
 
 CLASS_MAP = load_yolo_classes(session)
@@ -125,7 +128,8 @@ def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature
             title += f"Object {obj_id_and_name}, "
     if folder_hsv is not None:
         hsv_name = HSV_DICT.get(folder_hsv, "")
-        title += f"HSV {folder_hsv} ({hsv_name}) "
+        if hsv_name != "None" and hsv_name is not None:
+            title += f"HSV {folder_hsv} ({hsv_name}) "
 
     # chomp any trailing comma and space
     title = title.rstrip(", ")
@@ -137,14 +141,14 @@ def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature
 df = pd.DataFrame(columns=["new_name", "title", "folder", "img", "folder_arms_pose", "folder_hands_gesture", "folder_signature", "folder_hsv", "obj_str", ])
 for folder in folder_list:
     # looks in each folder, and acts on the mp4 files in that folder
-    img_list = io.get_img_list(folder)
+    img_list = io.get_img_list(folder, force_ls=True)
 
     # go get modal cluster id for everything, just in case
     folder_modal_signatures = get_modal_cluster_id(folder, session)
     print(f"modal_signature: {folder_modal_signatures}")
 
 
-    # print(f"img_list: {img_list}")
+    print(f"img_list: {img_list}")
     for img in img_list:
         # img == the mp4 file
         if MP4_ONLY and not "mp4" in img: continue
@@ -191,5 +195,13 @@ for folder in folder_list:
 
         df = pd.concat([df, pd.DataFrame([this_dict])], ignore_index=True)
 
-        print(f"new_name: {new_name}")
-        print(f"title: {title}")
+        # rename the file
+        try:
+            os.rename(os.path.join(folder, img), os.path.join(folder, new_name))
+            print(f"Renamed {img} to {new_name} in folder {folder}")
+        except OSError as e:
+            print(f"Error occurred while renaming {img}: {e}")
+        # print(f"new_name: {new_name}")
+        # print(f"title: {title}")
+print(f"df: {df}")
+df.to_csv(os.path.join(FOLDER, "renamed_files.csv"), index=False)
