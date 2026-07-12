@@ -3819,6 +3819,15 @@ class SortPose:
         print(f"start_img is {start_img}, first row of df_enc {df_enc.iloc[0]}")
         enc1 = None
         sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
+        # body3D KNN consumes flattened numeric vectors from body_landmarks_array.
+        # Keep global mapping behavior intact and only redirect the seed column here.
+        if self.SORT_TYPE in ("body3D", "ArmsPoses3D") and "body_landmarks_array" in df_enc.columns:
+            if sort_column != "body_landmarks_array":
+                print(
+                    f"get_start_enc_NN body3D seed override: "
+                    f"using 'body_landmarks_array' instead of '{sort_column}'"
+                )
+            sort_column = "body_landmarks_array"
         print("sort_column", sort_column)
         if sort_column not in df_enc.columns:
             fallback_columns = []
@@ -3826,6 +3835,8 @@ class SortPose:
                 fallback_columns = ["obj_bbox_list", "obj_bbox_fusion_list", "bbox_norm"]
             elif "fusion" in self.SORT_TYPE.lower():
                 fallback_columns = ["obj_bbox_fusion_list", "obj_bbox_list"]
+            elif self.SORT_TYPE in ("body3D", "ArmsPoses3D"):
+                fallback_columns = ["body_landmarks_array", "body_landmarks_3D"]
 
             resolved_column = next((col for col in fallback_columns if col in df_enc.columns), None)
             if resolved_column is None:
