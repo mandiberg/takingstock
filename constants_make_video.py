@@ -503,11 +503,6 @@ KEYWORD_DICT = {
 }
 
 
-SIG_OBJECT_DICT = {
-    15:27
-    
-
-}
 
 # FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 #     # object fusion with hand position/gesture clusters. for money, cards, phones, etc. 
@@ -680,7 +675,11 @@ FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
 FUSION_PAIR_DICT_DETECTIONS_THEGYM = {
     0: [
         # testing small clusters
-        [-1, 565], [-1, 46], [-1, 633], [-1, 631], [-1, 166], [-1, 673], [-1, 621], [-1, 408], [-1, 680], [-1, 465], [-1, 721], [-1, 460], [-1, 336], [-1, 194], [-1, 424], [-1, 188], [-1, 470], [-1, 8], [-1, 744], [-1, 2], [-1, 763], [-1, 78], [-1, 160], [-1, 718], [-1, 90], [-1, 85], [-1, 274], [-1, 257], [-1, 139], [-1, 401], [-1, 273], [-1, 122], [-1, 664], [-1, 632], [-1, 463], [-1, 695], [-1, 745], [-1, 81], [-1, 604], [-1, 246], [-1, 342], [-1, 28], [-1, 284], [-1, 583], [-1, 375], [-1, 694], [-1, 92], [-1, 253], [-1, 94], [-1, 124], [-1, 591], [-1, 473], [-1, 110], [-1, 661], [-1, 618], [-1, 490],
+        # [-1, 565], [-1, 46], [-1, 633], [-1, 631], [-1, 166], [-1, 673], [-1, 621], [-1, 408], [-1, 680], [-1, 465], [-1, 721], [-1, 460], [-1, 336], [-1, 194], [-1, 424], [-1, 188], [-1, 470], [-1, 8], [-1, 744], [-1, 2], [-1, 763], [-1, 78], [-1, 160], [-1, 718], [-1, 90], [-1, 85], [-1, 274], [-1, 257], [-1, 139], [-1, 401], [-1, 273], [-1, 122], [-1, 664], [-1, 632], [-1, 463], [-1, 695], [-1, 745], [-1, 81], [-1, 604], [-1, 246], [-1, 342], [-1, 28], [-1, 284], [-1, 583], [-1, 375], [-1, 694], [-1, 92], [-1, 253], [-1, 94], [-1, 124], [-1, 591], [-1, 473], [-1, 110], [-1, 661], [-1, 618], [-1, 490],
+        
+        # seated lotus
+        [593, 0], [593, 1], [593, 7], [593, 15], 
+
     ]
 }
 
@@ -932,7 +931,7 @@ EXPAND = ONE_SHOT = JUMP_SHOT = USE_ALL = CHOP_FIRST = TSP_SORT = USE_HEAD_POSE 
 USE_PAINTED = OUTPAINT = INPAINT= META = USE_HSV = PURGING_DUPES = DO_HSV_KNN = CHOP_ITTER_TSP_SORT = False
 FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = KEYWORD_OBJECT = KEYWORD_ORIENTATION = OBJECT_SIG = SegmentFolder = None
 SSD_PATH = None
-FORCE_TOPIC_FIT_SCORE = KEYWORD_EXCLUDE = KNN_LARGE_CLUSTERS =False
+FORCE_TOPIC_FIT_SCORE = KEYWORD_EXCLUDE = KNN_LARGE_CLUSTERS = HAND_POSE_GESTURE_FUSION = False
 
 OBJ_DONT_SUBSELECT = TRUST_FACE_PAIR_CACHE = True
 MIN_CYCLE_COUNT = 1

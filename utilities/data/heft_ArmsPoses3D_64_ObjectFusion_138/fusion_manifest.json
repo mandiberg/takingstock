@@ -1,10 +1,10 @@
 {
-  "cluster_type": "Topics_ObjectFusion",
+  "cluster_type": "Topics_Objects",
   "contract_version": 1,
   "export_options": {
     "helper_table": "SegmentBig_isface",
-    "kept_cluster_count": 4694,
-    "object_cluster_table_name": "ImagesObjectSignatures"
+    "kept_cluster_count": 138,
+    "object_cluster_table_name": "Detections"
   },
   "files": {
     "ArmsPoses3D_all.csv": {
@@ -17,6 +17,6 @@
     }
   },
   "generator": "query_all_fusion_clusters.py",
-  "mode": "TopicsObjectSignatures",
-  "mode_id": "cluster_id"
+  "mode": "TopicsObjects",
+  "mode_id": "topic_id"
 }

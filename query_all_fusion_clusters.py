@@ -37,10 +37,10 @@ OBJECT_HSV_EXPORT_CLASS_IDS = []
 ARMS_OBJECT_FOCUS_CLUSTER_IDS = []
 ARMS_CLUSTER_COUNT = 768 # default value
 OBJECTFUSION_CLUSTER_COUNT = None
-
+COLUMN_NAME = "topic_id"
 HACK_LIST_SKIP_DETECTIONS = []
 CLUSTER_COUNT = 768
-MODE = "TopicsObjectSignatures" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D or ObjectSignatures to 
+MODE = "ObjectSignatures" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D or ObjectSignatures to 
 if MODE == "Topics": 
     MODE_ID = "topic_id" 
     CLUSTER_TYPE = "TK" # needs to be reworked next time it is used
@@ -52,19 +52,26 @@ elif "ObjectFusion_DetectionsOnly" in MODE:
     OBJECT_HSV_EXPORT_CLASS_IDS = [i for i in range(128) if i not in HACK_LIST_SKIP_DETECTIONS] # for testing, export all but the ones in the hack list
     CLUSTER_COUNT = 96 # or is this 23? 
 elif MODE == "ArmsPoses3D": 
-    MODE_ID = "cluster_id"
+    MODE_ID = COLUMN_NAME = "cluster_id"
     CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
     CLUSTER_COUNT = 768
 elif MODE == "ObjectSignatures": 
     # produces the dense massive armsposes x objectsignature required by make_video
-    MODE_ID =  "cluster_id"
+    MODE_ID = COLUMN_NAME = "cluster_id"
     CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion" # key to CLUSTER_DATA dict
     CLUSTER_COUNT = 768
     # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 elif MODE == "TopicsObjectSignatures": 
     # produces topics x objectsignature 
-    MODE_ID =  "topic_id"
+    MODE_ID = COLUMN_NAME = "cluster_id"
     CLUSTER_TYPE = "Topics_ObjectFusion" # key to CLUSTER_DATA dict
+    CLUSTER_COUNT = 64
+    ARMS_CLUSTER_COUNT = 64 # redefining default value
+elif MODE == "TopicsObjects": 
+    # produces topics x objectsignature 
+    MODE_ID =  "topic_id"
+    COLUMN_NAME = "class_id"
+    CLUSTER_TYPE = "Topics_Objects" # key to CLUSTER_DATA dict
     CLUSTER_COUNT = 64
     ARMS_CLUSTER_COUNT = 64 # redefining default value
 else:
@@ -100,14 +107,22 @@ CLUSTER_DATA = {
         "cluster_count": ARMS_CLUSTER_COUNT,
         # folder_name to be set dynamically based on the resolved OBJECTFUSION_CLUSTER_COUNT
     },
+        "Topics_Objects": {
+        "sql_template": None,
+        "cluster_table_name": "ImagesTopics",
+        "object_cluster_table_name": "Detections",
+        "hsv_type": None,
+        "cluster_count": ARMS_CLUSTER_COUNT,
+        # folder_name to be set dynamically based on the resolved OBJECTFUSION_CLUSTER_COUNT
+    },
 }
-ROOT_FOLDER_PATH = os.path.join(ROOT_DATA_PATH, CLUSTER_DATA[CLUSTER_TYPE]["folder_name"])
+# ROOT_FOLDER_PATH = os.path.join(ROOT_DATA_PATH, CLUSTER_DATA[CLUSTER_TYPE]["folder_name"])
 
 THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
-else: HELPER_TABLE = 'SegmentHelperObject_32_sportsball'
+else: HELPER_TABLE = 'SegmentHelper_T0_sport'
 # else: HELPER_TABLE = 'SegmentBig_isface'
 
 
@@ -129,16 +144,19 @@ def resolve_dense_cluster_count(table_name, id_column="cluster_id"):
 
 
 def resolve_object_cluster_table_name(mode, cluster_type):
+    id_column = "cluster_id"  # default
     if cluster_type == "ArmsPoses3D_ObjectFusion" and mode == "ObjectSignatures":
-        return "ImagesObjectSignatures"
+        return "ImagesObjectSignatures", id_column
     if cluster_type == "ArmsPoses3D_ObjectFusion":
-        return "ImagesObjectFusion"
-    return CLUSTER_DATA.get(cluster_type, {}).get("object_cluster_table_name", "ImagesObjectFusion")
+        return "ImagesObjectFusion", id_column
+    if cluster_type == "Topics_Objects":
+        return "Detections", "class_id"
+    return CLUSTER_DATA.get(cluster_type, {}).get("object_cluster_table_name", "ImagesObjectFusion"), id_column
 
 
-if "ObjectFusion" in CLUSTER_TYPE:
-    object_cluster_table_name = resolve_object_cluster_table_name(MODE, CLUSTER_TYPE)
-    OBJECTFUSION_CLUSTER_COUNT = resolve_dense_cluster_count(object_cluster_table_name)
+if "ObjectFusion" in CLUSTER_TYPE or "Topics_Objects" in CLUSTER_TYPE:
+    object_cluster_table_name, id_column = resolve_object_cluster_table_name(MODE, CLUSTER_TYPE)
+    OBJECTFUSION_CLUSTER_COUNT = resolve_dense_cluster_count(object_cluster_table_name, id_column)
     CLUSTER_DATA[CLUSTER_TYPE]["object_cluster_table_name"] = object_cluster_table_name
     CLUSTER_DATA[CLUSTER_TYPE]["folder_name"] = (
         f"heft_ArmsPoses3D_{ARMS_CLUSTER_COUNT}_ObjectFusion_{OBJECTFUSION_CLUSTER_COUNT}"
@@ -148,7 +166,6 @@ if "ObjectFusion" in CLUSTER_TYPE:
         f"Resolved {object_cluster_table_name} dense cluster count: "
         f"OBJECTFUSION_CLUSTER_COUNT={OBJECTFUSION_CLUSTER_COUNT}"
     )
-
 # first 87
 # KEYWORDS = [22137,184,502,135,22411,1991,11801,273,220,2150,22269,22233,5271,22040,133,22324,23100,827,22499,278,1070,13057,22412,5728,404,23084,22333,2472,22665,22042,420,553,1227,22228,665,23403,671,272,437,293,2514,22222,22961,27381,2467,5279,4265,1127,407,790,3856,133680,1204,703,1224,729,737,6286,2151,807,1585,699,1644,2756,786,698,730,133819,22692,2188,1223,1807,10765,24705,22247,133705,5310]
 
@@ -786,7 +803,7 @@ def export_armsposes3d_objectfusion_csvs(
     object_cluster_table_name="ImagesObjectFusion",
     cluster_table_name="ImagesArmsPoses3D",
     row_mode_id=MODE_ID,
-    col_mode_id="cluster_id"
+    col_mode_id=COLUMN_NAME
 ):
     """
     Export a helper-scoped ArmsPoses3D x ObjectFusion count matrix.
@@ -815,6 +832,8 @@ def export_armsposes3d_objectfusion_csvs(
     GROUP BY ia.{row_mode_id}, io.{col_mode_id}
     ORDER BY ia.{row_mode_id}, io.{col_mode_id}
     """
+    # print full query for debugging
+    print(f"Matrix query:\n{matrix_query}")
 
     df_long = pd.read_sql(matrix_query, engine)
     if df_long.empty:
@@ -953,7 +972,7 @@ def export_objectfusion_object_hsv_csvs(root_folder_path, class_ids, focus_clust
 
 
 # Adjust the query template based on MODE
-if "ObjectFusion" in CLUSTER_TYPE:
+if "ObjectFusion" in CLUSTER_TYPE or "Topics_Objects" in CLUSTER_TYPE:
     print("Running ArmsPoses3D/ObjectFusion matrix CSV exports...")
     export_armsposes3d_objectfusion_csvs(
         root_base_folder=os.path.join(os.path.dirname(__file__), "utilities", "data"),

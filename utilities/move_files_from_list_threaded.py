@@ -43,11 +43,12 @@ IS_SSD =False  # if True it will use the SSD path, if False it will use the RAID
 
 VERBOSE = False  
 # set origin before constructing io
-# ORIGIN_SSD = "/Volumes/OWC5/segment_images_92_headphones"
+# ORIGIN_SSD = "/Volumes/OWC5/segment_images_book_clock_bowl"
 # ORIGIN_SSD = "/Volumes/OWC52/segment_images_OWC4"
-ORIGIN_SSD = "/Volumes/SanDiskBlack/segment_images_83_bag"
+# ORIGIN_SSD = "/Volumes/SanDiskBlack/segment_images_COCO"
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
-# ORIGIN_SSD = "/Volumes/LaCie/segment_images_94_piggybank"
+ORIGIN_SSD = "/Volumes/LaCie/segment_images_45_nature"
+if not IS_SSD: ORIGIN_SSD = None
 io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
@@ -63,7 +64,7 @@ if FROM_SSD_TO_SSD == False: MOVE_ORIGINAL_FILE = False  # FORCE only allow movi
 ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
-DEST = "/Volumes/LaCie/segment_images"
+DEST = "/Volumes/LaCie/segment_images_55_dog" 
 # DEST = "/Volumes/SSD4_Green/segment_images_detected_63_67"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:

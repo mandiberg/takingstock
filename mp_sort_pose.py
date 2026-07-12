@@ -135,7 +135,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 20000 # DOES factor if ONE_SHOT and TSP_SORT
+        self.CUTOFF = 100 # DOES factor if ONE_SHOT and TSP_SORT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -275,7 +275,7 @@ class SortPose:
         else:
             self.CLUSTER_TYPE = "BodyPoses" # defaults
             self.SUBSET_LANDMARKS = self.BODY_LMS
-            print("using BodyPoses cluster type, ", self.SUBSET_LANDMARKS)
+            print("using BodyPoses 3D cluster type, ", self.SUBSET_LANDMARKS)
             # TBD for DEFAULT LMS SUBSET
 
         # print("final set of subset landmarks", self.SUBSET_LANDMARKS)
@@ -3769,7 +3769,7 @@ class SortPose:
     def get_median_value(self, df_enc, sort_column):
         # Get list of bbox rows and filter out invalid entries (None, wrong length, non-numeric)
         flattened_array = df_enc[sort_column].tolist()
-        # if self.VERBOSE: print("first item in flattened_array", flattened_array[0])
+        if self.VERBOSE: print("first item in flattened_array", flattened_array[0])
 
         clean_rows = []
         for row in flattened_array:
@@ -3815,8 +3815,8 @@ class SortPose:
         return enc1, round_down
 
     def get_start_enc_NN(self, start_img, df_enc):
-        print("get_start_enc, for self.SORT_TYPE", self.SORT_TYPE)
-        print("first row of df_enc", df_enc.iloc[0])
+        print(f"get_start_enc, for self.SORT_TYPE {self.SORT_TYPE}")
+        print(f"start_img is {start_img}, first row of df_enc {df_enc.iloc[0]}")
         enc1 = None
         sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
         print("sort_column", sort_column)
@@ -3842,7 +3842,7 @@ class SortPose:
         # print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
         if start_img == "median" or start_img == "start_bbox":
             # when I want to start from start_bbox, I pass it a median 128d enc
-            print("in median")
+            print(f"in median, with sort_column {sort_column}")
             # print("df_enc", df_enc)
 
             # get the median value from the sort_column

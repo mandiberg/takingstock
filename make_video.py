@@ -58,21 +58,21 @@ else:
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_TheOffice'
-SegmentHelper_name = 'SegmentHelperObject_32_sportsball'
+SegmentHelper_name = 'SegmentHelper_T0_sport'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-# SSD_PATH = "/Volumes/LaCie/segment_images"
-SSD_PATH = "/Volumes/OWC52/segment_images_32_sportsball"
+SSD_PATH = "/Volumes/LaCie/segment_images"
+# SSD_PATH = "/Volumes/OWC52/segment_images_32_sportsball"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
 START_CLUSTER = 0
-PARALLEL_WORKERS = 8  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -104,7 +104,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheGym_firsttest/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheGym_3Dbodies_test/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -190,7 +190,7 @@ MULTIPOLICY = False
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 6
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
@@ -297,7 +297,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # main switches
     INSTALLATION_VIDEO = True # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
-    DO_SMALL_CLUSTER_FUSION_BUCKET = True # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
+    DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
@@ -406,7 +406,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
-            GENERATE_FUSION_PAIRS = True 
+            GENERATE_FUSION_PAIRS = False 
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
@@ -3691,7 +3691,8 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
         df_enc = prep_encodings_NN(df_segment, effective_sort_type=active_sort_type)
         record_mode0_timing("prep_encodings", time.perf_counter() - prep_start)
         segment_count = df_enc.shape[0]
-        if VERBOSE: print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
+        # print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
+        # print(f"prep_encodings_NN returned {segment_count} rows for sort_type={active_sort_type}")
 
         # if results in df_enc, then sort by face distance
         if not df_enc.empty:
@@ -3700,7 +3701,7 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
             df_sorted = sort_by_face_dist_NN(df_enc)
             record_mode0_timing("process_sort", time.perf_counter() - sort_start)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
-
+            print("df_sorted after sort_by_face_dist_NN", df_sorted.shape[0])
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
             write_start = time.perf_counter()
@@ -5850,7 +5851,8 @@ def main():
                 use_meta_cluster = bool(route_policy.get("use_meta_cluster", False))
                 meta_cluster_id = route_policy.get("meta_cluster_id")
                 print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
-                print(f"cluster_topic_no[0]: {cluster_topic_no[0]}, START_CLUSTER: {START_CLUSTER} IS_CLUSTER: {IS_CLUSTER}")
+                if isinstance(cluster_topic_no, list):
+                    print(f"cluster_topic_no[0]: {cluster_topic_no[0]}, START_CLUSTER: {START_CLUSTER} IS_CLUSTER: {IS_CLUSTER}")
                 if IS_CLUSTER and cluster_topic_no < START_CLUSTER: 
                     print(f"skipping cluster_topic_no {cluster_topic_no} because it is less than START_CLUSTER {START_CLUSTER}")
                     return

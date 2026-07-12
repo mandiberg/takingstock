@@ -44,7 +44,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 10
+LIMIT = 10000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -86,9 +86,9 @@ else:
 # MODE = 1
 # CLUSTER_TYPE = "Clusters"
 # CLUSTER_TYPE = "BodyPoses"
-# CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
+CLUSTER_TYPE = "BodyPoses3D" # use this for META 3D body clusters, Arms will start build but messed up because of subset landmarks
 # CLUSTER_TYPE = "ArmsPoses3D" 
-CLUSTER_TYPE = "HandsPositions"
+# CLUSTER_TYPE = "HandsPositions"
 # CLUSTER_TYPE = "HandsGestures"
 # CLUSTER_TYPE = "FingertipsPositions"
 # CLUSTER_TYPE = "HSV" 
@@ -158,7 +158,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'SegmentHelper_sept2025_heft_keywords'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
-SegmentHelper_name = 'SegmentHelper_TheOffice'
+SegmentHelper_name = 'SegmentHelper_T0_sport'
 # SegmentHelper_name = 'SegmentHelper_may26_deleteme_missingArms3D' # this is a temporary helper table that is just a subset of the full SegmentHelperMar23_headon, which is too large to join to for clustering, but has the same structure and can be used for testing and for MODE 2 cluster assignment based on the subset of data it contains. It is missing the ArmsPoses3D data, so it is only useful for testing BodyPoses3D and ObjectFusion clustering and assignment, not ArmsPoses3D clustering and assignment, but it is useful for testing the overall pipeline with a smaller dataset. It has 1.1M rows, which is still large but more manageable than the full 3.8M rows in SegmentHelperMar23_headon.
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
@@ -557,6 +557,7 @@ def landmarks_to_df_columnar(df, add_list=False, fit_scaler=False):
         return df_columnar
     
     # if the first column is an int, then the columns are integers
+    is_numerical = True
     if isinstance(first_col, int):
         numerical_columns = [col for col in df.columns if isinstance(col, int)]
         prefix_dim = False
@@ -1512,6 +1513,7 @@ def fetch_mongo_for_batch(batch_df):
     for idx, row in batch_df.iterrows():
         image_id = int(row['image_id'])
         try:
+            # print(f"Fetching MongoDB encodings for image_id {image_id}...")
             result = io.get_encodings_mongo(image_id)
             # print(f"Fetched MongoDB encodings for image_id {image_id}: {result}")
             # result is a pd.Series with 6 values
