@@ -68,11 +68,12 @@ IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
 # SSD_PATH = "/Volumes/OWC52/segment_images_32_sportsball"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
-SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
+SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -87,7 +88,7 @@ db = io.db
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     ### THIS IS WHERE IT WILL SAVE OUTPUT_FOLDER FILES ###
-    io.ROOT_PROD=  "/Volumes/OWC52" ## only on Mac
+    io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
     # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
@@ -236,6 +237,12 @@ if "paris" in CURRENT_MODE:
         TOPIC_NO = [63] # if doing an affect topic fusion, this is the wrapper topic
 elif "3D" in CURRENT_MODE:
     AUTO_EDGE_CROP = True
+    CHOP_FIRST = True
+    ONE_SHOT = True # take all files, based off the very first sort order.
+    USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
+    SegmentTable_name = 'SegmentBig_isface'
+    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
+
     # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
     # FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
     if "bod" in CURRENT_MODE:
@@ -255,18 +262,16 @@ elif "3D" in CURRENT_MODE:
         else:
             image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 
-    SegmentTable_name = 'SegmentBig_isface'
     ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
     USE_POSE_CROP_DICT = False
     # GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
     USE_FUSION_PAIR_DICT = True
     FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_TOPICS_64"
 
-    CHOP_FIRST = True
-    ONE_SHOT = True # take all files, based off the very first sort order.
-    USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
-
-    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
+    # this is an attempt to activate the FOCUS_CLUSTER_HACK_LIST via FOCUS_CLUSTER_DICT
+    # it may conflict with the USE_POSE_CROP_DICT/USE_FUSION_PAIR_DICT above, or the IS_CLUSTER below, dunno
+    TOPIC_NO = [0]
+    IS_ONE_TOPIC = True
 
     IS_CLUSTER = True
     # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
@@ -663,7 +668,7 @@ IS_ANGLE_SORT = False
 
 
 # gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER1 and TOPIC_NO (which is a list of one keyword)
-if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION and not PURGING_DUPES:
+if TOPIC_NO is not None and IS_ONE_TOPIC and (IS_HAND_POSE_FUSION or USE_FUSION_PAIR_DICT) and not PURGING_DUPES:
     print("setting FOCUS_CLUSTER_HACK_LIST for TOPIC_NO", TOPIC_NO, "with CLUSTER1", CLUSTER1)
     # FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
     FOCUS_CLUSTER_HACK_DICT = FOCUS_CLUSTER_DICT.get(CLUSTER1, {})
@@ -2708,7 +2713,8 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                             current_image_id,
                         )
                     else:
-                        print("failed is_face test")
+                        print("skipping is_face test")
+                        is_face = True
                 else:
                     print("first round, skipping the pair test")
             except Exception:
