@@ -69,8 +69,6 @@ class SortPose:
         if not hasattr(self, 'MAX_DYNAMIC_IQR_SCALE'):
             self.MAX_DYNAMIC_IQR_SCALE = 3.0
 
-        if image_edge_multiplier is None:
-            image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
 
         # After applying config overrides, ensure required core params are present
         if motion is None or face_height_output is None:
@@ -154,7 +152,12 @@ class SortPose:
         self.SORT_TYPE = SORT_TYPE
         self.TSP_SORT = TSP_SORT
         self.MIN_COL_SUM_MULTIPLIER = 50 # this determines which columns are "small" under MULTIPOLICY
-
+        if image_edge_multiplier is None:
+            if "body3D" in self.SORT_TYPE:
+                image_edge_multiplier = [4, 8, 12, 8]  # default values for body/hand sorting
+            else:
+                image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
+                
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
             self.MAXD = self.MAXFACEDIST * 1.3

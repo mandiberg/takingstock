@@ -68,9 +68,10 @@ IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images"
 # SSD_PATH = "/Volumes/OWC52/segment_images_32_sportsball"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
-SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
+SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
 PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
@@ -87,7 +88,7 @@ db = io.db
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     ### THIS IS WHERE IT WILL SAVE OUTPUT_FOLDER FILES ###
-    io.ROOT_PROD=  "/Volumes/OWC52" ## only on Mac
+    io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
     # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
