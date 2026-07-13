@@ -108,7 +108,7 @@ if not SALVAGE_HSV_MODE:
     device = "mps" if torch.backends.mps.is_available() else "cpu"
     print("Using device:", device)
     yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-    # yolo_custom_model = YOLO("models/takingstock_test_balls_yolo26x/weights/best.pt").to(device)
+    # yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
     yolo_custom_model = YOLO("models/takingstock_c45_h200_4x_yolo26x/weights/best.pt").to(device)
     ocr = OCRTools(DEBUGGING=True)
 else:
@@ -173,9 +173,9 @@ if WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE:
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-# FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4" #halfway through
-# FILE_FOLDER = "/Volumes/OWC52/segment_images_32_sportsball" 
-FILE_FOLDER = "/Volumes/LaCie/segment_images_55_dog"
+FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4" #halfway through
+# FILE_FOLDER = "/Volumes/SSD4_Green/segment_images_detected_63_67" 
+# FILE_FOLDER ="/Volumes/OWC54/segment_images"
 # FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
@@ -306,18 +306,8 @@ custom_ids_to_global_dict = {
 
 
 # custom_ids_to_global_dict = {
-#     0: 143,
-#     1: 146,
-#     2: 142,
-#     3: 141,
-#     4: 151,
-#     5: 145,
-#     6: 147,
-#     7: 144,
-#     8: 149,
-#     9: 150,
-#     10: 140,
-#     11: 148,
+#     0: 127,
+#     1: 93,
 # }
 
 

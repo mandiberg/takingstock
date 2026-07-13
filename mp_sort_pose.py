@@ -69,6 +69,9 @@ class SortPose:
         if not hasattr(self, 'MAX_DYNAMIC_IQR_SCALE'):
             self.MAX_DYNAMIC_IQR_SCALE = 3.0
 
+        if image_edge_multiplier is None:
+            image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
+
         # After applying config overrides, ensure required core params are present
         if motion is None or face_height_output is None:
             raise TypeError("SortPose.__init__() requires 'motion' and 'face_height_output' either as positional args or inside the 'config' dict")
@@ -151,11 +154,6 @@ class SortPose:
         self.SORT_TYPE = SORT_TYPE
         self.TSP_SORT = TSP_SORT
         self.MIN_COL_SUM_MULTIPLIER = 50 # this determines which columns are "small" under MULTIPOLICY
-        if image_edge_multiplier is None:
-            if "body3D" in self.SORT_TYPE:
-                image_edge_multiplier = [4, 8, 12, 8]  # default values for body/hand sorting
-            else:
-                image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
 
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
@@ -3821,6 +3819,15 @@ class SortPose:
         print(f"start_img is {start_img}, first row of df_enc {df_enc.iloc[0]}")
         enc1 = None
         sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
+        # body3D KNN consumes flattened numeric vectors from body_landmarks_array.
+        # Keep global mapping behavior intact and only redirect the seed column here.
+        if self.SORT_TYPE in ("body3D", "ArmsPoses3D") and "body_landmarks_array" in df_enc.columns:
+            if sort_column != "body_landmarks_array":
+                print(
+                    f"get_start_enc_NN body3D seed override: "
+                    f"using 'body_landmarks_array' instead of '{sort_column}'"
+                )
+            sort_column = "body_landmarks_array"
         print("sort_column", sort_column)
         if sort_column not in df_enc.columns:
             fallback_columns = []
@@ -3828,6 +3835,8 @@ class SortPose:
                 fallback_columns = ["obj_bbox_list", "obj_bbox_fusion_list", "bbox_norm"]
             elif "fusion" in self.SORT_TYPE.lower():
                 fallback_columns = ["obj_bbox_fusion_list", "obj_bbox_list"]
+            elif self.SORT_TYPE in ("body3D", "ArmsPoses3D"):
+                fallback_columns = ["body_landmarks_array", "body_landmarks_3D"]
 
             resolved_column = next((col for col in fallback_columns if col in df_enc.columns), None)
             if resolved_column is None:

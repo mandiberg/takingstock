@@ -127,12 +127,6 @@ POSE_CROP_DICT = {
     23: "sq_default", 28: "sq_cropto2x3_left", 30: "9x16_shoulders_lower", 
 
 }
-
-POSE_CROP_DICT_FULL_BODY = {
-
-}
-
-
 MULTIPLIER_DICT = {
     # [top,right,bottom,left]
     "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
@@ -486,10 +480,7 @@ FOCUS_CLUSTER_DICT = {
         4222:[160,202]
     },
     "BodyPoses3D":{
-        22411: [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729],
-
-        # Topic 0 Sport
-        0: [117, 120, 151, 163, 183, 189, 202, 207, 229, 241, 252, 260, 275, 277, 290, 391, 403, 437, 445, 449, 454, 455, 458, 472, 499, 516, 550, 60, 61, 624, 64, 644, 65, 653, 702, 715, 716, 73, 743, 745, 753]
+        22411: [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729]
     }
 }
 
@@ -747,11 +738,6 @@ ALL_FUSION_PAIRS_DICTS = {
     "FUSION_PAIR_DICT_3DBODIES_TOPICS_512": FUSION_PAIR_DICT_3DBODIES_TOPICS_512,
     "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE": FUSION_PAIR_DICT_DETECTIONS_THEOFFICE,
     "FUSION_PAIR_DICT_DETECTIONS_THEGYM": FUSION_PAIR_DICT_DETECTIONS_THEGYM,
-    }
-
-ALL_POSE_CROP_DICTS = {
-    "ARMS_3D": POSE_CROP_DICT,
-    "FULL_BODY": POSE_CROP_DICT_FULL_BODY,
     }
 
 # Optional edge-case overrides for HAND_POSE_GESTURE_FUSION SQL predicate expansion.
