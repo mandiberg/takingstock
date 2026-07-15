@@ -57,23 +57,23 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-# SegmentHelper_name = 'SegmentHelper_TheOffice'
-SegmentHelper_name = 'SegmentHelper_T0_sport'
+SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T0_sport'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-SSD_PATH = "/Volumes/LaCie/segment_images"
-# SSD_PATH = "/Volumes/OWC52/segment_images_32_sportsball"
+# SSD_PATH = "/Volumes/LaCie/segment_images"
+SSD_PATH = "/Volumes/LaCie/segment_images_45_nature"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -105,7 +105,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheGym_3Dbodies_test/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheGym_3Dbodies_T45nature_select/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -272,6 +272,9 @@ elif "3D" in CURRENT_MODE:
     # it may conflict with the USE_POSE_CROP_DICT/USE_FUSION_PAIR_DICT above, or the IS_CLUSTER below, dunno
     TOPIC_NO = [0]
     IS_ONE_TOPIC = True
+
+    # only for print production, for file sorting
+    ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
 
     IS_CLUSTER = True
     # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO

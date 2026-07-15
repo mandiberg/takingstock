@@ -27,13 +27,13 @@ DEBUG = False
 SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
-ROOT_FOLDER_PATH = '/Volumes/OWC52/'
+ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "heft_loop_scratch"
-FOLDER_NAME = "output_folder/_yoga_test"
+FOLDER_NAME = "output_folder/_body3D_nature_test"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -42,10 +42,10 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 6  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = None
+CROP_AFTER_COUNT = 80
 
 # if you borked the installation file, turn this on to JUST rebuilt it
 DO_INSTALLATION_ONLY = False

@@ -6,6 +6,10 @@ Extract the image_id from teh filename, which is the number after the last under
 Build a list of all image_ids in the folder.
 join that list into a single string, separated by commas.
 Save that list as a text file in the same folder, called image_ids.txt
+
+when EXCLUDE is True it looks in these folders:
+dupe, exclude, exclude_looping, exclude_good
+
 '''
 
 import os

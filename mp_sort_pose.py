@@ -133,7 +133,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT and TSP_SORT
+        self.CUTOFF = 2000 # DOES factor if ONE_SHOT and TSP_SORT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -146,18 +146,19 @@ class SortPose:
         self.DYN_BBOX_CANONICAL_RATIOS = [(2,1),(3,2), (4,3), (5,4), (7,6), (1,1), (6,7), (4,5), (3,4), (2,3), (1,2)] # these are the canonical ratios that dynamic bboxes will round to if DYN_BBOX_ROUND_CANONICAL is True
 
         self.CHECK_DESC_DIST = 30
-        self.CHECK_RANGE_LATE = 100
-        self.CHECK_RANGE_EARLY = 50
+        self.CHECK_RANGE_LATE = 500
+        self.CHECK_RANGE_EARLY = 400
 
         self.SORT_TYPE = SORT_TYPE
         self.TSP_SORT = TSP_SORT
         self.MIN_COL_SUM_MULTIPLIER = 50 # this determines which columns are "small" under MULTIPOLICY
         if image_edge_multiplier is None:
             if "body3D" in self.SORT_TYPE:
-                image_edge_multiplier = [4, 8, 12, 8]  # default values for body/hand sorting
+                image_edge_multiplier = [5, 9, 13, 9]  # default values for body/hand sorting
+                # image_edge_multiplier = [4, 8, 12, 8]  # when doing initial sort, so I can delete easily
             else:
                 image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
-                
+
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
             self.MAXD = self.MAXFACEDIST * 1.3
