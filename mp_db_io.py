@@ -260,6 +260,14 @@ class DataIO:
             folder_hsv = name.split("_h")[1].split("_")[0]
         elif "_om" in name:
             folder_hsv = name.split("_om")[1].split("_")[0]
+        
+        # eval folder_arms_pose and folder_signature to None if they are string "None" or "nan"
+        if folder_arms_pose is not None and isinstance(folder_arms_pose, str) and folder_arms_pose.lower() in ["none", "nan"]:
+            folder_arms_pose = None
+        if folder_signature is not None and isinstance(folder_signature, str) and folder_signature.lower() in ["none", "nan"]:
+            folder_signature = None
+
+        # now convert to int if not None    
         if folder_arms_pose is not None and folder_signature is not None:
             folder_arms_pose = int(folder_arms_pose)
             folder_signature = int(folder_signature)

@@ -19,16 +19,17 @@ The finished files have names like:
 output_folder__FINISHED_WORK__hsv_bg_2tier_100clustercc1_p119_t2341_h7-13_1782990020.413111_p34_st1_ct8.mp4
 output_folder__FINISHED_WORK__looping_june24_itter100clustercc537_p282_t0_1782312201.079829_p34_st1_ct8.mp4
 output_folder__FINISHED_WORK__looping_clipboardsclustercc172_p3984_t0_1782848710.082335_p37_st1_ct8.mp4
+merged_cluster458_pNone_t63_156.jpg
 
 It will output a new name like:
 TakingStock_T{TOPIC}_p{folder_arms_pose}_s{folder_signature}_obj_{obj}_h{folder_hsv}.mp4
 '''
 
-FOLDER = "/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE"
-MP4_ONLY = True 
+FOLDER = "//Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/finished_exercise_images/gattopardo_press_images"
+MP4_ONLY = False 
 io = DataIO()
 
-TOPIC = 11
+TOPIC = 0
 
 OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -68,7 +69,10 @@ ImagesArmsPoses3D = io.create_class_from_reflection(engine, "ImagesObjectSignatu
 object_signature_registry = io.load_object_signature_registry(OBJECT_SIGNATURE_EXPORT_PATH)
 # print(f"object_signature_registry: {object_signature_registry}")
 folder_list = io.get_folders(FOLDER)
-# print(f"folder_list: {folder_list}")
+print(f"folder_list: {folder_list}")
+if len(folder_list) == 0:
+    print(f" ❌ WARNING: No folders found in {FOLDER}, so setting folder_list to [FOLDER]")
+    folder_list = [FOLDER]
 
 def load_yolo_classes(session):
     yolo_classes = session.query(YoloClasses).all()
@@ -142,6 +146,7 @@ df = pd.DataFrame(columns=["new_name", "title", "folder", "img", "folder_arms_po
 for folder in folder_list:
     # looks in each folder, and acts on the mp4 files in that folder
     img_list = io.get_img_list(folder, force_ls=True)
+    print(f"Processing folder: {folder}, found {len(img_list)} images")
 
     # go get modal cluster id for everything, just in case
     folder_modal_signatures = get_modal_cluster_id(folder, session)
@@ -150,6 +155,8 @@ for folder in folder_list:
 
     print(f"img_list: {img_list}")
     for img in img_list:
+        original_suffix = img.split("_")[-1]
+        folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = obj_str = None
         # img == the mp4 file
         if MP4_ONLY and not "mp4" in img: continue
         # print(f"img: {img}")
@@ -169,15 +176,20 @@ for folder in folder_list:
         # print(f"folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, folder_hsv: {folder_hsv}")
         obj = object_signature_registry.get(io.normalize_cluster_token(folder_signature), None)
         # print(type(obj))
-
-        if obj == "None" or obj is None:
-            print(f" ❌ WARNING: object {folder_signature} not found in object_signature_registry, skipping")
-            continue
+        
+        # (folder_arms_pose is not None or folder_arms_pose is not "None") and
+        if (obj == "None" or obj is None):
+            if folder_signature is None:
+                print(f" X Maybe Concern: no object, but also no folder_signature, so probably a Body3D still image. Proceeding")
+            else:
+            # print(f" cluster info is folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv: {folder_arms_pose}, {folder_hands_gesture}, {folder_signature}, {obj}, {folder_hsv}")
+                print(f" ❌ WARNING: object {folder_signature} not found in object_signature_registry, skipping")
+                continue
         else: 
             obj_str = obj.replace(", ", "-").replace("[", "").replace("]", "")
         # print(f"obj: {obj}, obj_str: {obj_str}")
 
-        new_name = f"TakingStock_T{TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv}.mp4"
+        new_name = f"TakingStock_T{TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv}.{original_suffixc}"
 
         title = format_title(TOPIC, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv)
 
