@@ -36,18 +36,19 @@ sys.path.insert(1, ROOT_GITHUB)
 # import file
 
 from mp_db_io import DataIO
-IS_SSD =True  # if True it will use the SSD path, if False it will use the RAID path
+IS_SSD =False  # if True it will use the SSD path, if False it will use the RAID path
 
 # Define the path to the CSV file
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
 
 VERBOSE = False  
 # set origin before constructing io
+# ORIGIN_SSD = "/Volumes/OWC5/segment_images_book_clock_bowl"
+# ORIGIN_SSD = "/Volumes/OWC52/segment_images_32_sportsball"
+ORIGIN_SSD = "/Volumes/SanDiskBlack/segment_images_84_valentine"
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
-# ORIGIN_SSD = "/Volumes/OWC5 1/segment_images"
-# ORIGIN_SSD = "/Volumes/OWC5/segment_images_92_headphones"
-# ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
-# ORIGIN_SSD = "/Volumes/LaCie/segment_images_94_piggybank"
+# ORIGIN_SSD = "/Volumes/LaCie/segment_images_33_sign"
+if not IS_SSD: ORIGIN_SSD = None
 io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
@@ -63,7 +64,7 @@ if FROM_SSD_TO_SSD == False: MOVE_ORIGINAL_FILE = False  # FORCE only allow movi
 ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
-DEST = "/Volumes/OWC5 1/segment_images_missing"
+DEST = "/Volumes/LaCie/segment_images_15_muscle" 
 # DEST = "/Volumes/SSD4_Green/segment_images_detected_63_67"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
@@ -228,6 +229,10 @@ def move_files_from_csv(csv_file, start=0):
                     f"Interval ({interval_processed} files): moved {interval_moved}, existed {interval_exists}, failed {interval_failed}; "
                     f"time {interval_time:.1f}s; projected 100000 files: {proj_hours}h {proj_minutes}m"
                 )
+                current_total = moved_count + exists_count + failed_count
+                current_thousands = current_total // 1000
+                if current_thousands % 100 == 0:
+                    print(f"\n  {current_thousands*1000} done\n")
                 interval_start_time = time.time()
                 interval_moved = interval_exists = interval_failed = 0
                 interval_processed = 0
@@ -235,6 +240,10 @@ def move_files_from_csv(csv_file, start=0):
     submitted = 0
     futures = []
     with open(csv_file, mode='r', newline='') as file:
+        # print total number of lines in the csv file without consuming it
+        total_lines = sum(1 for _ in file)
+        file.seek(0)  # Reset file pointer to the beginning
+        print(f"Total lines in CSV file: {total_lines}")
         reader = csv.reader(file)
         next(reader)  # Skip the header row
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:

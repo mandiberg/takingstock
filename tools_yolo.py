@@ -107,7 +107,8 @@ class YOLOTools:
                         obj_no=1, # for the moment, with the old way, only kept one object per class
                         bbox = bbox_dict[OBJ_CLS_ID]["bbox"],
                         conf = bbox_dict[OBJ_CLS_ID]["conf"],
-                        bbox_norm = bbox_norm
+                        bbox_norm = bbox_norm,
+                        hsv_redone = bbox_dict.get("hsv_redone", False)
                         )
                     # Upsert using MySQL ON DUPLICATE KEY UPDATE
                     stmt = (
@@ -119,11 +120,13 @@ class YOLOTools:
                             bbox=bbox_dict[OBJ_CLS_ID]["bbox"],
                             conf=bbox_dict[OBJ_CLS_ID]["conf"],
                             bbox_norm=bbox_norm,
+                            hsv_redone=bbox_dict.get("hsv_redone", False)
                         )
                         .on_duplicate_key_update(
                             conf=Detections.conf,
                             bbox=Detections.bbox,
                             bbox_norm=Detections.bbox_norm,
+                            hsv_redone=Detections.hsv_redone
                         )
                     )
                     session.execute(stmt)
@@ -188,6 +191,7 @@ class YOLOTools:
                         bbox=bbox_str,
                         conf=detection.get("conf", None),
                         bbox_norm=bbox_norm_str,
+                        hsv_redone=detection.get("hsv_redone", None)
                     )
                 )
                 try:

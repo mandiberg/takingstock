@@ -57,6 +57,7 @@ python process_placards.py --salvage-hsv --apply
 
 Optional tuning:
 python process_placards.py --salvage-hsv --salvage-batch 8000 --salvage-load-workers 12 --report-class-id 27
+python process_placards.py --salvage-hsv --salvage-batch 1000 --salvage-load-workers 4 --apply
 
 --salvage-include-redone (default behavior is to skip already redone rows).
 
@@ -76,7 +77,8 @@ engine = create_engine(
 Session = sessionmaker(bind=engine)
 session = Session()
 
-HelperTable_name = "SegmentHelperObject_67_phone" # if you set to None, comment out the helpertable join in the query
+### HELPER TABLE IS ONLY FOR SALVAGE_HSV_MODE ###
+HelperTable_name = "SegmentHelperObject_73_book" # if you set to None, comment out the helpertable join in the query
 class HelperTable(Base):
     __tablename__ = HelperTable_name
     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
@@ -87,6 +89,7 @@ class ImagesArmsPoses3D(Base):
     image_id = Column(Integer, primary_key=True)
     cluster_id = Column(Integer)
     cluster_dist = Column(Float)
+### HELPER TABLE IS ONLY FOR SALVAGE_HSV_MODE ###
     
 VERBOSE = True
 yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
@@ -105,7 +108,7 @@ if not SALVAGE_HSV_MODE:
     device = "mps" if torch.backends.mps.is_available() else "cpu"
     print("Using device:", device)
     yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
-    # yolo_custom_model = YOLO("models/takingstock_c36_v1_yolo26x/weights/best.pt").to(device)
+    # yolo_custom_model = YOLO("models/takingstock_test_balls_yolo26x/weights/best.pt").to(device)
     yolo_custom_model = YOLO("models/takingstock_c45_h200_4x_yolo26x/weights/best.pt").to(device)
     ocr = OCRTools(DEBUGGING=True)
 else:
@@ -170,9 +173,9 @@ if WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE:
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
-# FILE_FOLDER = "/Volumes/LaCie/segment_images" #halfway through
-FILE_FOLDER = "/Volumes/SSD4_Green/segment_images_detected_63_67" 
-# FILE_FOLDER ="/Volumes/OWC54/segment_images"
+# FILE_FOLDER = "/Volumes/OWC52/segment_images_OWC4" #halfway through
+# FILE_FOLDER = "/Volumes/OWC52/segment_images_32_sportsball" 
+FILE_FOLDER = "/Volumes/LaCie/segment_images_55_dog"
 # FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
@@ -303,8 +306,18 @@ custom_ids_to_global_dict = {
 
 
 # custom_ids_to_global_dict = {
-#     0: 127,
-#     1: 93,
+#     0: 143,
+#     1: 146,
+#     2: 142,
+#     3: 141,
+#     4: 151,
+#     5: 145,
+#     6: 147,
+#     7: 144,
+#     8: 149,
+#     9: 150,
+#     10: 140,
+#     11: 148,
 # }
 
 
@@ -456,6 +469,7 @@ def assign_hsv_detect_results(detect_results, image):
         meta_cluster_id, cluster_id, cluster_dist = bbox_to_cluster_id(image, bbox)
         result_dict['meta_cluster_id'] = meta_cluster_id
         result_dict['cluster_id'] = cluster_id
+        result_dict['hsv_redone'] = True
         # result_dict['cluster_dist'] = cluster_dist
     return detect_results
 
@@ -1148,7 +1162,7 @@ def salvage_hsv_detection_ids(apply_updates=False):
             .join(HelperTable, HelperTable.image_id == Detections.image_id)
             # .join(ImagesObjectSignatures, ImagesObjectSignatures.image_id == Detections.image_id)
             # .join(ImagesArmsPoses3D, ImagesArmsPoses3D.image_id == Detections.image_id)
-            .filter(Detections.hsv_redone.is_(None))
+            # .filter(Detections.hsv_redone.is_(None))
             .filter(Detections.detection_id > last_detection_id)
             .filter(Detections.bbox.isnot(None))
             # .filter(Detections.class_id == salvage_class_id)
@@ -1162,7 +1176,7 @@ def salvage_hsv_detection_ids(apply_updates=False):
                 sqlalchemy.or_(Detections.hsv_redone.is_(None), Detections.hsv_redone == False)
             )
         # print the query as SQL string for debugging
-        print(f"[SALVAGE {mode_label}] executing query: {str(rows_query)}")
+        # print(f"[SALVAGE {mode_label}] executing query: {str(rows_query)}")
 
         rows_query = rows_query.limit(SALVAGE_QUERY_BATCH)
 

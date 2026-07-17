@@ -38,20 +38,22 @@ NOSE_ID=0
 Base = declarative_base()
 VERBOSE = False
 IS_SSD = False
-SSD_PATH = "/Volumes/SanDiskBlack/segment_images_82_money_cards"
+SSD_PATH = "/Volumes/OWC5/segment_images_book_clock_bowl"
 
+### this code is set up you can only REPROCESS_HANDS OR USE_OBJ in one run ###
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
-USE_OBJ = False # do objet detections?
+USE_OBJ = True # do objet detections?
 SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
                 # or are just redoing hands
-REPROCESS_HANDS = True # do hands
-ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to tru
+REPROCESS_HANDS = False # do hands
+ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to true
 REPROCESSED_BODY = True 
 REPROCESSED_BODY_DIFF_THRESH = -1.0
 IS_SEGMENT_BIG = False # use SegmentBig table. IF False, and IS_SSD is false, it will use Encodings table
 TESTING = False # if true, will not do any DB writes
 DETECTIONS_ONLY = False
-
+if USE_OBJ and REPROCESS_HANDS:
+    raise ValueError("USE_OBJ and REPROCESS_HANDS cannot both be True. Please set one to False.")
 # join on helper to limit scope and use SSD
 INNER_JOIN_HELPER = True
 # if you do this, you need to use the correct THIS_CLASS_ID 
@@ -68,7 +70,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 1000000
+LIMIT= 5000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -92,9 +94,9 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # overrides THIS_CLASS_ID
-    SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
+    SegmentHelper_name = 'SegmentBig_isface'
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
-    SegmentFolder = "/Volumes/LaCie/output_folder"
+    SegmentFolder = SSD_PATH
     # SegmentFolder = None
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
     # INNER_JOIN_TABLE = "SegmentHelperObject_100_tulip"
@@ -119,27 +121,28 @@ mongo_hand_collection = mongo_db["hand_landmarks"]
 # start a timer
 start = time.time()
 
-def ensure_unique_index(collection, field_name):
-    # List existing indexes on the collection
-    indexes = list(collection.list_indexes())
+# these are stable collections, I don't think I need to check every time I run
+# def ensure_unique_index(collection, field_name):
+#     # List existing indexes on the collection
+#     indexes = list(collection.list_indexes())
 
-    # Check if the unique index already exists
-    for index in indexes:
-        if index['key'] == {field_name: 1}:
-            if index.get('unique', False):
-                print(f"Unique index on '{field_name}' already exists.")
-                return
-            else:
-                # Drop the non-unique index if it exists
-                collection.drop_index(index['name'])
-                print(f"Non-unique index on '{field_name}' dropped.")
+#     # Check if the unique index already exists
+#     for index in indexes:
+#         if index['key'] == {field_name: 1}:
+#             if index.get('unique', False):
+#                 print(f"Unique index on '{field_name}' already exists.")
+#                 return
+#             else:
+#                 # Drop the non-unique index if it exists
+#                 collection.drop_index(index['name'])
+#                 print(f"Non-unique index on '{field_name}' dropped.")
 
-                # Create a unique index on the specified field
-                collection.create_index([(field_name, 1)], unique=True)
-                print(f"Unique index on '{field_name}' created successfully.")
+#                 # Create a unique index on the specified field
+#                 collection.create_index([(field_name, 1)], unique=True)
+#                 print(f"Unique index on '{field_name}' created successfully.")
 
-# Ensure unique index on the image_id field
-ensure_unique_index(bboxnormed_collection, 'image_id')
+# # Ensure unique index on the image_id field
+# ensure_unique_index(bboxnormed_collection, 'image_id')
 
 # Create a database engine
 if db['unix_socket']:
@@ -298,7 +301,6 @@ def normalize_obj_bbox(obj_bbox,nose_pos,face_height,shape):
     # n_obj_bbox["left"]=(n_obj_bbox["left"]*width -nose_pos["x"])/face_height
     # n_obj_bbox["top"]=(n_obj_bbox["top"]*height -nose_pos["y"])/face_height
     # n_obj_bbox["bottom"]=(n_obj_bbox["bottom"]*height -nose_pos["y"])/face_height
-    print(" 📦 n_obj_bbox",n_obj_bbox)
 
     return n_obj_bbox
 
@@ -584,9 +586,9 @@ def calc_nlm(image_id_to_shape, batch_updates):
         # Query Mongo directly for existing normalized hands to avoid false
         # negatives when multiple docs exist for the same image_id.
         existing_hand_landmarks_norm = has_existing_hand_landmarks_norm(target_image_id)
-        print("existing_hand_landmarks_norm", existing_hand_landmarks_norm)
+        if VERBOSE: print("existing_hand_landmarks_norm", existing_hand_landmarks_norm)
         if existing_hand_landmarks_norm:
-            print(f" ☑️ ☑️ ☑️ ACCEPTING EXISTING NORMALIZED HAND LANDMARKS for image_id {target_image_id}, updating SQL to reflect that.")
+            if VERBOSE: print(f" ☑️ ☑️ ☑️ ACCEPTING EXISTING NORMALIZED HAND LANDMARKS for image_id {target_image_id}, updating SQL to reflect that.")
             # Collect updates for batching
             batch_updates['Encodings'].append({
                 'image_id': target_image_id,
@@ -878,6 +880,8 @@ def calc_nlm(image_id_to_shape, batch_updates):
                     print("going to normalize obj_bbox",obj_bbox)
                     n_obj_bbox=normalize_obj_bbox(obj_bbox,nose_pixel_pos_body,face_height,[height,width])
                     # temp comment
+                    print(" 📦 n_obj_bbox for detection_id",detection_id, n_obj_bbox)
+
                     insert_detections_norm_bbox(detection_id, n_obj_bbox, batch_updates)
                 else:
                     print("PHONE BBOX NOT FOUND 404", target_image_id)
@@ -1105,14 +1109,14 @@ results = session.execute(distinct_image_ids_query).fetchall()
 print("query executed, results length", len(results))
 # make a dictionary of image_id to shape
 for result in results:
-    if VERBOSE: print("result", result)
+    # if VERBOSE: print("result", result)
     image_id_to_shape = {}
     image_id, height, width, bbox, face_height, nose_pixel_x, nose_pixel_y = result
     image_id_to_shape[image_id] = (height, width, bbox, face_height, nose_pixel_x, nose_pixel_y)
 
     ### temp single thread for debugging
     # calc_nlm(image_id_to_shape, lock=None, session=session)
-    if VERBOSE: print("done with single thread", image_id_to_shape)
+    if VERBOSE: print("image_id_to_shape", image_id_to_shape)
     # print(" ")
     # print(" ")
     work_queue.put(image_id_to_shape)        

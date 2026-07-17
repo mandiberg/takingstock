@@ -57,20 +57,21 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-SegmentHelper_name = 'SegmentHelper_TheOffice'
-# SegmentHelper_name = 'SegmentHelperObject_82_money'
+SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T0_sport'
 # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-SSD_PATH = "/Volumes/LaCie/segment_images"
-# SSD_PATH = "/Volumes/OWC52/segment_images"
+# SSD_PATH = "/Volumes/LaCie/segment_images"
+SSD_PATH = "/Volumes/LaCie/segment_images_45_nature"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
-SKIP_PAIRCHECK = False # True for draft mode, False does paircheck, and caches them 
+SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
 PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
@@ -86,6 +87,7 @@ db = io.db
 # OWC4 SNAFU WORKAROUND
 
 if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
+    ### THIS IS WHERE IT WILL SAVE OUTPUT_FOLDER FILES ###
     io.ROOT_PROD=  "/Volumes/LaCie" ## only on Mac
     # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
@@ -103,9 +105,9 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_2230_calc_100/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheGym_3Dbodies_T45nature_select/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
-MAX_ROWS_PER_OUTPUT_CSV = 1200 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
+MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
 ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
@@ -189,7 +191,7 @@ MULTIPOLICY = False
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 6
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
@@ -235,20 +237,24 @@ if "paris" in CURRENT_MODE:
         TOPIC_NO = [63] # if doing an affect topic fusion, this is the wrapper topic
 elif "3D" in CURRENT_MODE:
     AUTO_EDGE_CROP = True
+    CHOP_FIRST = True
+    ONE_SHOT = True # take all files, based off the very first sort order.
+    USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
+    SegmentTable_name = 'SegmentBig_isface'
+    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
+
     # FOCUS_CLUSTER_HACK_LIST = [24,42,71,93,167,204,294,301,358,398,443,526,532,590,623,658,708,729] #768
     # FOCUS_CLUSTER_HACK_LIST = [239, 299, 443]
     if "bod" in CURRENT_MODE:
         CLUSTER_TYPE = SORT_TYPE = "body3D"
         if "full" in CURRENT_MODE:
-            FULL_BODY = True # this requires is_feet
-        else:
-            FULL_BODY = False
+            FULL_BODY = True # this requires is_feet, defaults to false
         EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
         # META = True
         CLUSTER_TYPE = SORT_TYPE = "ArmsPoses3D"
         # CLUSTER_TYPE = SORT_TYPE = "body3D"
-        FULL_BODY = False 
+        # FULL_BODY = False # defaults to false
         # either AUTO_EDGE_CROP or image_edge_multiplier must be set. Not both
         # AUTO_EDGE_CROP = True # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
         if AUTO_EDGE_CROP:
@@ -256,18 +262,19 @@ elif "3D" in CURRENT_MODE:
         else:
             image_edge_multiplier = [1.3,2,2.9,2] # portrait crop for paris photo images < Aug 30
 
-    SegmentTable_name = 'SegmentBig_isface'
     ONLY_ONE = False # only one cluster, or False for video fusion, this_cluster = [CLUSTER_NO, HAND_POSE_NO]
     USE_POSE_CROP_DICT = False
     # GENERATE_FUSION_PAIRS = True # if true it will query based on MIN_VIDEO_FUSION_COUNT and create pairs
     USE_FUSION_PAIR_DICT = True
     FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_TOPICS_64"
 
-    CHOP_FIRST = True
-    ONE_SHOT = True # take all files, based off the very first sort order.
-    USE_ALL = True # this is for outputting all images from a oneshot, forces ONE_SHOT, skips face comparison
+    # this is an attempt to activate the FOCUS_CLUSTER_HACK_LIST via FOCUS_CLUSTER_DICT
+    # it may conflict with the USE_POSE_CROP_DICT/USE_FUSION_PAIR_DICT above, or the IS_CLUSTER below, dunno
+    TOPIC_NO = [0]
+    IS_ONE_TOPIC = True
 
-    INPAINT_COLOR = "white" # "white" or "black" or None (none means generative inpainting with size limits)
+    # only for print production, for file sorting
+    ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
 
     IS_CLUSTER = True
     # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
@@ -294,24 +301,23 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     '''
 
     # main switches
-    INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
-    HAND_POSE_GESTURE_FUSION = True # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
+    INSTALLATION_VIDEO = True # if false, it will do the animation TSP sort
+    HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     
+    # turning off face pair testing, as it was misbehaving
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
 
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEGYM"
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
     if AUTO_EDGE_CROP:
         EXPAND = True
         # FULL_BODY = True # haxxor TK
-
-
 
     # set to 0 to disable obj helper segment query stuff. this is also for object_fusion
     class_id = 0  # TEST: match exported ArmsPoses3D_67.csv
@@ -398,15 +404,17 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = False # take all files, based off the very first sort order.
+        ONE_SHOT = True # take all files, based off the very first sort order. (turn on for testing/speed)
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
+        KNN_LARGE_CLUSTERS = True
         if "ObjectFusion" in CLUSTER_TYPE:
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
-            GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
+            # For production, GENERATE_FUSION_PAIRS = False
+            # for determining the set of pair, set to True
+            GENERATE_FUSION_PAIRS = False 
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
-            # GENERATE_FUSION_PAIRS = False # April 14 changing this for INSTALLATION_VIDEO
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
         else:
@@ -460,8 +468,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         N_HSV = 0 # don't do HSV clusters
 
     PURGING_DUPES = False # skips build/save, just compares dupes
+
+    ###### IMPORTANT ######
+    # this is the switch that controls the CSV output count
+    # this is a target goal/cutoff. set to 1M or something to get everythin. 
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 1000 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    FORCE_TARGET_COUNT = 200 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    ###### IMPORTANT ######
+
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
     # if TESTING: IS_HAND_POSE_FUSION = GENERATE_FUSION_PAIRS = False
 
@@ -569,6 +583,14 @@ else:
     # SORT_TYPE = "fingertips_positions"
     USE_AFFECT_GROUPS = False
 
+# set POSE_CROP_DICT
+if USE_POSE_CROP_DICT: # I'm not sure if it needs this conditional
+    if FULL_BODY:
+        POSE_CROP_DICT = ALL_POSE_CROP_DICTS.get("FULL_BODY")
+    else:
+        POSE_CROP_DICT = ALL_POSE_CROP_DICTS.get("ARMS_3D")
+
+
 print(f"doing {CURRENT_MODE}: CLUSTER_TYPE {CLUSTER_TYPE}, SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT}")
 
 if USE_AFFECT_GROUPS:
@@ -650,7 +672,7 @@ IS_ANGLE_SORT = False
 
 
 # gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER1 and TOPIC_NO (which is a list of one keyword)
-if TOPIC_NO is not None and IS_ONE_TOPIC and IS_HAND_POSE_FUSION and not PURGING_DUPES:
+if TOPIC_NO is not None and IS_ONE_TOPIC and (IS_HAND_POSE_FUSION or USE_FUSION_PAIR_DICT) and not PURGING_DUPES:
     print("setting FOCUS_CLUSTER_HACK_LIST for TOPIC_NO", TOPIC_NO, "with CLUSTER1", CLUSTER1)
     # FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
     FOCUS_CLUSTER_HACK_DICT = FOCUS_CLUSTER_DICT.get(CLUSTER1, {})
@@ -2695,7 +2717,8 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                             current_image_id,
                         )
                     else:
-                        print("failed is_face test")
+                        print("skipping is_face test")
+                        is_face = True
                 else:
                     print("first round, skipping the pair test")
             except Exception:
@@ -3683,7 +3706,8 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
         df_enc = prep_encodings_NN(df_segment, effective_sort_type=active_sort_type)
         record_mode0_timing("prep_encodings", time.perf_counter() - prep_start)
         segment_count = df_enc.shape[0]
-        if VERBOSE: print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
+        # print("sort.counter_dict after prep_encodings_NN", sort.counter_dict)
+        # print(f"prep_encodings_NN returned {segment_count} rows for sort_type={active_sort_type}")
 
         # if results in df_enc, then sort by face distance
         if not df_enc.empty:
@@ -3692,7 +3716,7 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
             df_sorted = sort_by_face_dist_NN(df_enc)
             record_mode0_timing("process_sort", time.perf_counter() - sort_start)
         # df_sorted = sort_by_face_dist(df_enc, df_128_enc, df_33_lms)
-
+            print("df_sorted after sort_by_face_dist_NN", df_sorted.shape[0])
         # TK this is where i save df_sorted to csv
         # check to see if CSV_FOLDER exists and create if not
             write_start = time.perf_counter()
@@ -4616,9 +4640,10 @@ def main():
         data_dir = os.path.join(os.getcwd(), "utilities", "data")
         arms_dim = globals().get("ARMS_CLUSTER_DIM", "unknown")
         object_dim = globals().get("OBJECT_CLUSTER_DIM", "unknown")
+        cluster = "BodyPoses3D" if FULL_BODY else "ArmsPoses3D"
         if object_dim in (None, ""):
             object_dim = "unknown"
-        filename = f"canonical_multipliers_ArmsPoses3D_{arms_dim}_ObjectFusion_{object_dim}.csv"
+        filename = f"canonical_multipliers_{cluster}_{arms_dim}_ObjectFusion_{object_dim}.csv"
         return os.path.join(data_dir, filename)
 
     def write_canonical_multiplier_registry():
@@ -4926,7 +4951,7 @@ def main():
         # Object-none override: always route to non-HSV fusion policy.
         # This keeps large OBJECT_NONE_CLUSTERS on the standard non-HSV
         # path (including CHOP_FIRST + iterative sorting behavior).
-        if object_cluster_id in OBJECT_NONE_CLUSTERS:
+        if object_cluster_id in OBJECT_NONE_CLUSTERS or KNN_LARGE_CLUSTERS:
             if cell_count >= int(MIN_VIDEO_FUSION_COUNT):
                 print(
                     f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
@@ -5785,62 +5810,6 @@ def main():
                     return
                 else:
                     print(f"Got {len(resultsjson)} results from selectSQL for cluster {this_cluster}, topic {this_topic}, hsv {hsv_cluster} - proceeding to map_images")
-                    # If a background HSV bucket is too large, split it into object-color groups.
-                    do_object_hsv_subsort = (
-                        resolved_hsv_source == "background"
-                        and cycle_stage == "background"
-                        and bool(SUBSORT_ON_OBJECT_HSV_CUTOFF)
-                        and len(resultsjson) >= SUBSORT_ON_OBJECT_HSV_CUTOFF
-                        and effective_use_hsv
-                        and this_cluster[1] not in OBJECT_NONE_CLUSTERS # this skips the subsort for any cluster-topic combos that have the object-none cluster
-                    )
-                    if do_object_hsv_subsort:
-                        object_hsv_groups = HSV_GROUP_PRESETS.get(OBJECT_HSV_GROUP_PRESET_NAME)
-                        if not object_hsv_groups:
-                            raise ValueError(
-                                f"Missing object HSV preset '{OBJECT_HSV_GROUP_PRESET_NAME}' in HSV_GROUP_PRESETS"
-                            )
-                        print(
-                            f"Subsorting on object HSV: {len(resultsjson)} >= {SUBSORT_ON_OBJECT_HSV_CUTOFF} "
-                            f"using preset {OBJECT_HSV_GROUP_PRESET_NAME}"
-                        )
-
-                        emitted_subcycles = 0
-                        for object_hsv_cluster in object_hsv_groups:
-                            add_mode0_count("select_calls", 1)
-                            object_select_start = time.perf_counter()
-                            object_resultsjson = selectSQL(
-                                this_cluster,
-                                this_topic,
-                                object_hsv_cluster,
-                                hsv_source="object",
-                                use_hsv_override=effective_use_hsv,
-                                allow_object_none=allow_object_none,
-                                use_meta_cluster=use_meta_cluster,
-                                meta_cluster_id=meta_cluster_id,
-                            )
-                            add_mode0_timing("sql_select", time.perf_counter() - object_select_start)
-                            if len(object_resultsjson) < MIN_CYCLE_COUNT:
-                                continue
-
-                            CURRENT_HSV_CYCLE_META = make_hsv_cycle_meta(
-                                this_cluster,
-                                this_topic,
-                                background_hsv=hsv_cluster,
-                                object_hsv=object_hsv_cluster,
-                                cycle_stage="object_subsort",
-                            )
-                            print("CURRENT_HSV_CYCLE_META", CURRENT_HSV_CYCLE_META)
-                            map_dispatch_start = time.perf_counter()
-                            map_images(object_resultsjson, this_cluster, this_topic, CURRENT_HSV_CYCLE_META)
-                            add_mode0_timing("map_dispatch", time.perf_counter() - map_dispatch_start)
-                            emitted_subcycles += 1
-
-                        if emitted_subcycles > 0:
-                            return
-
-                        print("Object HSV subsort produced no eligible subcycles, falling back to background cycle")
-
                     # folder_name = this_topic[0] if this_topic else this_cluster
                     map_dispatch_start = time.perf_counter()
                     map_images(resultsjson, this_cluster, this_topic, CURRENT_HSV_CYCLE_META)
@@ -5898,7 +5867,8 @@ def main():
                 use_meta_cluster = bool(route_policy.get("use_meta_cluster", False))
                 meta_cluster_id = route_policy.get("meta_cluster_id")
                 print(f"cluster_topic_no: {cluster_topic_no}, hsv_cluster: {hsv_cluster}")
-                print(f"cluster_topic_no[0]: {cluster_topic_no[0]}, START_CLUSTER: {START_CLUSTER} IS_CLUSTER: {IS_CLUSTER}")
+                if isinstance(cluster_topic_no, list):
+                    print(f"cluster_topic_no[0]: {cluster_topic_no[0]}, START_CLUSTER: {START_CLUSTER} IS_CLUSTER: {IS_CLUSTER}")
                 if IS_CLUSTER and cluster_topic_no < START_CLUSTER: 
                     print(f"skipping cluster_topic_no {cluster_topic_no} because it is less than START_CLUSTER {START_CLUSTER}")
                     return

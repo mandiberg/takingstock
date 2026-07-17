@@ -28,25 +28,30 @@ SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
-# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
+ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-# FOLDER_NAME = "_looping_june22_BK"
-FOLDER_NAME = "output_folder/_2230_calc_100"
+FOLDER_NAME = "redux1"
+# FOLDER_NAME = "output_folder/redux1"
+
+# FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
     ROOT_FOLDER_PATH = '/Users/tenchc/Documents/GitHub/taking_stock_production/segment_images'
     FOLDER_NAME = "installation_images"
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 16  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 6  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None
 
+# if you borked the installation file, turn this on to JUST rebuilt it
+DO_INSTALLATION_ONLY = False
+
 LOOPING = False # defaults
-REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
+REPEAT = 6 # will repeat the entire sequence this many times, for looping videos
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
 BLEND_END_TO_FIRST = True
 OFFSET_ON_BUILD = True
@@ -118,9 +123,17 @@ elif "make_video" in CURRENT_MODE:
         PERIOD = 30 # how many images in each merge cycle
         MERGE_COUNT = 8 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
-        MERGE_PERIOD = 2  # set to 2 to double ramp duration
-        FULL_MERGE_PERIOD = 10  # set >0 to hold at MERGE_COUNT for N frames
-        AUTO_DISTRIBUTE_CYCLE_PERIOD = True
+        
+        if REPEAT > 1: 
+            # if more than 100 frames (e.g. 60s video) make longer loop cycles that progress through images
+            # longer ramp up/down, produce min period of 42
+            MERGE_PERIOD = 2  # set to 2 to double ramp duration
+            FULL_MERGE_PERIOD = 10  # set >0 to hold at MERGE_COUNT for N frames
+        else: 
+            # shorter ramp up/down, produce period of 30, which will round up to 33 or 34, to loop 3x per 100
+            MERGE_PERIOD = 1 
+            FULL_MERGE_PERIOD = 14
+        AUTO_DISTRIBUTE_CYCLE_PERIOD = True # this controls whether the period is calculated from total count
         SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe. 2 is standard (3 frames per image/10 img per second). I slowed it down with 3 (4 frames per image)
 
 # import moviepy only if making videos
@@ -142,6 +155,7 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
+# VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 # VID_DIMS_TEST = [1746,1746]
 VID_DIMS_TEST = [2160, 2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
@@ -750,7 +764,7 @@ def get_cluster_input_paths(subfolder_path, force_ls=False):
             print(f"failed to read cluster_files.csv at {cluster_files_path}: {e}")
 
     print(f"no valid cluster_files.csv found in {subfolder_path}, falling back to jpg listing")
-    img_list = io.get_img_list(subfolder_path, force_ls)
+    img_list = io.get_img_list(subfolder_path, force_ls, sort=True, walk=False)
     img_list = [img for img in img_list if isinstance(img, str) and img.endswith(".jpg")]
     img_list.sort()
     if CROP_AFTER_COUNT is not None:
@@ -976,7 +990,12 @@ def process_images(images_to_build, video_writer, total_images, current_pos=0, m
 
 
 def get_osc_target_cycle_steps(merge_count=MERGE_COUNT, start_merge=START_MERGE):
-    """Return desired oscillation cycle length from explicit ramp/hold controls."""
+    """
+    Return desired oscillation cycle length from explicit ramp/hold controls.
+    The math is: calculate ramp up, hold, and ramp down
+    ramp up/down is (number of layers merged (merge_count) - start_merge + 1) all * 2, to stretch it out
+    so with merge_count=8, you get 16 up, 10 hold, and 16 down, for total of 42 frames
+    """
     local_start_merge = max(1, int(start_merge))
     local_merge_count = max(local_start_merge, int(merge_count))
     levels = (local_merge_count - local_start_merge) + 1
@@ -1536,7 +1555,7 @@ def write_video(img_array, subfolder_path=None):
 
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}"
+    if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}_fr{len(images_to_build)-1}"
     else: merge_info = ""
     scale_info = f"_scale_{VID_DIMS_TEST[0]}" if USE_CANONICAL_RATIOS else ""
     video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+scale_info+".mp4")
@@ -1964,6 +1983,11 @@ def save_installation_metas(subfolders, output_path, csv_file):
 
     print(f"\n[save_installation_metas] combined installation_metas shape: {installation_metas.shape}")
     print(installation_metas.head())
+    # if the df is empty, print a big error warning, and return
+    if installation_metas.empty:
+        print(f"[save_installation_metas]  ❌ ❌  ERROR: no valid installation.csv files found in any subfolder")
+        return
+
     output_filename = "missing_installation.csv" if any_missing else csv_file
     print(f"[save_installation_metas] any_missing={any_missing} → output file: {output_filename}")
 
@@ -2103,7 +2127,12 @@ def main():
         # skip any folder with SKIP_PREFIX in it
         subfolders = [subfolder for subfolder in subfolders if SKIP_PREFIX not in subfolder]
         print("subfolders", subfolders)
-        if IS_VIDEO is True and ALL_ONE_VIDEO is True:
+        if DO_INSTALLATION_ONLY:
+            print("doing installation only")
+            # need it to recreate the installations.csv file
+            # contains: cluster_no,hsv_no,pose_no,width,height,ratio,file_name,duration,object
+            save_installation_metas(subfolders, FOLDER_PATH, "installation.csv")
+        elif IS_VIDEO is True and ALL_ONE_VIDEO is True:
             print("making regular combined video")
             all_img_path_list = get_img_list_subfolders(subfolders)
             write_video(all_img_path_list)

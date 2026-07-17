@@ -69,8 +69,6 @@ class SortPose:
         if not hasattr(self, 'MAX_DYNAMIC_IQR_SCALE'):
             self.MAX_DYNAMIC_IQR_SCALE = 3.0
 
-        if image_edge_multiplier is None:
-            image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
 
         # After applying config overrides, ensure required core params are present
         if motion is None or face_height_output is None:
@@ -135,7 +133,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 20000 # DOES factor if ONE_SHOT and TSP_SORT
+        self.CUTOFF = 2000 # DOES factor if ONE_SHOT and TSP_SORT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -148,12 +146,18 @@ class SortPose:
         self.DYN_BBOX_CANONICAL_RATIOS = [(2,1),(3,2), (4,3), (5,4), (7,6), (1,1), (6,7), (4,5), (3,4), (2,3), (1,2)] # these are the canonical ratios that dynamic bboxes will round to if DYN_BBOX_ROUND_CANONICAL is True
 
         self.CHECK_DESC_DIST = 30
-        self.CHECK_RANGE_LATE = 100
-        self.CHECK_RANGE_EARLY = 50
+        self.CHECK_RANGE_LATE = 500
+        self.CHECK_RANGE_EARLY = 400
 
         self.SORT_TYPE = SORT_TYPE
         self.TSP_SORT = TSP_SORT
         self.MIN_COL_SUM_MULTIPLIER = 50 # this determines which columns are "small" under MULTIPOLICY
+        if image_edge_multiplier is None:
+            if "body3D" in self.SORT_TYPE:
+                image_edge_multiplier = [5, 9, 13, 9]  # default values for body/hand sorting
+                # image_edge_multiplier = [4, 8, 12, 8]  # when doing initial sort, so I can delete easily
+            else:
+                image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
 
         if self.SORT_TYPE == "128d":
             self.MIND = self.MINFACEDIST * 1.5
@@ -275,7 +279,7 @@ class SortPose:
         else:
             self.CLUSTER_TYPE = "BodyPoses" # defaults
             self.SUBSET_LANDMARKS = self.BODY_LMS
-            print("using BodyPoses cluster type, ", self.SUBSET_LANDMARKS)
+            print("using BodyPoses 3D cluster type, ", self.SUBSET_LANDMARKS)
             # TBD for DEFAULT LMS SUBSET
 
         # print("final set of subset landmarks", self.SUBSET_LANDMARKS)
@@ -3769,7 +3773,7 @@ class SortPose:
     def get_median_value(self, df_enc, sort_column):
         # Get list of bbox rows and filter out invalid entries (None, wrong length, non-numeric)
         flattened_array = df_enc[sort_column].tolist()
-        # if self.VERBOSE: print("first item in flattened_array", flattened_array[0])
+        if self.VERBOSE: print("first item in flattened_array", flattened_array[0])
 
         clean_rows = []
         for row in flattened_array:
@@ -3815,10 +3819,19 @@ class SortPose:
         return enc1, round_down
 
     def get_start_enc_NN(self, start_img, df_enc):
-        print("get_start_enc, for self.SORT_TYPE", self.SORT_TYPE)
-        print("first row of df_enc", df_enc.iloc[0])
+        print(f"get_start_enc, for self.SORT_TYPE {self.SORT_TYPE}")
+        print(f"start_img is {start_img}, first row of df_enc {df_enc.iloc[0]}")
         enc1 = None
         sort_column, _ = self.get_sort_column_mapping(self.SORT_TYPE, self.CLUSTER_TYPE)
+        # body3D KNN consumes flattened numeric vectors from body_landmarks_array.
+        # Keep global mapping behavior intact and only redirect the seed column here.
+        if self.SORT_TYPE in ("body3D", "ArmsPoses3D") and "body_landmarks_array" in df_enc.columns:
+            if sort_column != "body_landmarks_array":
+                print(
+                    f"get_start_enc_NN body3D seed override: "
+                    f"using 'body_landmarks_array' instead of '{sort_column}'"
+                )
+            sort_column = "body_landmarks_array"
         print("sort_column", sort_column)
         if sort_column not in df_enc.columns:
             fallback_columns = []
@@ -3826,6 +3839,8 @@ class SortPose:
                 fallback_columns = ["obj_bbox_list", "obj_bbox_fusion_list", "bbox_norm"]
             elif "fusion" in self.SORT_TYPE.lower():
                 fallback_columns = ["obj_bbox_fusion_list", "obj_bbox_list"]
+            elif self.SORT_TYPE in ("body3D", "ArmsPoses3D"):
+                fallback_columns = ["body_landmarks_array", "body_landmarks_3D"]
 
             resolved_column = next((col for col in fallback_columns if col in df_enc.columns), None)
             if resolved_column is None:
@@ -3842,7 +3857,7 @@ class SortPose:
         # print("lengtth of first value", len(df_enc[sort_column].iloc[0]))
         if start_img == "median" or start_img == "start_bbox":
             # when I want to start from start_bbox, I pass it a median 128d enc
-            print("in median")
+            print(f"in median, with sort_column {sort_column}")
             # print("df_enc", df_enc)
 
             # get the median value from the sort_column

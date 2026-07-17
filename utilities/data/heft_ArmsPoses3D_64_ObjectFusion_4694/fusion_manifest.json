@@ -1,8 +1,8 @@
 {
-  "cluster_type": "ArmsPoses3D_ObjectFusion",
+  "cluster_type": "Topics_ObjectFusion",
   "contract_version": 1,
   "export_options": {
-    "helper_table": "SegmentHelper_T0_sport",
+    "helper_table": "SegmentBig_isface",
     "kept_cluster_count": 4694,
     "object_cluster_table_name": "ImagesObjectSignatures"
   },
@@ -17,6 +17,6 @@
     }
   },
   "generator": "query_all_fusion_clusters.py",
-  "mode": "ObjectSignatures",
+  "mode": "TopicsObjectSignatures",
   "mode_id": "cluster_id"
 }

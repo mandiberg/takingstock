@@ -12,7 +12,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_TheOffice_NULL_bbox_norm_June1 (
+CREATE TABLE SegmentHelper_temp_normthis (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -97,6 +97,11 @@ FROM SegmentOct20 so
 ;
 
 -- 3938723
+
+SELECT *
+FROM ObjectSignatures os 
+WHERE os.cluster_id = 4216
+;
 
 
 -- segment the segment table based on TOPICS and add to helpersegment
@@ -251,7 +256,29 @@ WHERE e.mongo_encodings = 1
         WHERE s.image_id = e.image_id
     );
 
+SET GLOBAL innodb_buffer_pool_size=8053063680;
+
    
+INSERT INTO SegmentHelper_32_sportsball (image_id)
+SELECT DISTINCT e.image_id
+FROM Encodings e
+JOIN Detections id ON id.image_id = e.image_id 
+WHERE e.is_face = 1
+AND id.class_id = 32
+    AND NOT EXISTS (
+        SELECT 1
+        FROM SegmentHelper_32_sportsball s
+        WHERE s.image_id = e.image_id
+    )
+LIMIT 200000
+;
+
+
+SELECT COUNT(*)
+FROM Detections d
+WHERE d.class_id 
+
+
 -- for making a helper from segmentbig
 INSERT INTO SegmentHelper_june2025_nmlGPU300k (image_id)
 SELECT DISTINCT e.image_id
