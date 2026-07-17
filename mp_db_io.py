@@ -322,25 +322,32 @@ class DataIO:
                 writer=csv.writer(csvfile, delimiter=',')
                 writer.writerow(value_list)
 
-    def save_img_list(self, folder):
+    def save_img_list(self, folder, walk=True):
         img_list = []
         print("Saving image list for folder:", folder)
-        for root, dirs, files in os.walk(folder):
-            if "_x" in root:
-                continue  # skip any _x folders
-            filtered = [
-                f.replace('\\', '/')
-                for f in files
+        if walk:
+            for root, dirs, files in os.walk(folder):
+                if "_x" in root:
+                    continue  # skip any _x folders
+                filtered = [
+                    f.replace('\\', '/')
+                    for f in files
                 if not f.startswith('.') and not f.endswith(('.csv', '.txt', '.json'))
             ]
             img_list.extend(filtered)
+        else:
+            img_list = [
+                f.replace('\\', '/')
+                for f in os.listdir(folder)
+                if os.path.isfile(os.path.join(folder, f)) and not f.startswith('.') and not f.endswith(('.csv', '.txt', '.json'))
+            ]
         json_path = os.path.join(folder, 'img_list.json')
         with open(json_path, 'w') as f:
             json.dump(img_list, f)
         print(f"Image list saved to {json_path}")
         return img_list
 
-    def get_img_list(self, folder, force_ls=False, sort=True):
+    def get_img_list(self, folder, force_ls=False, sort=True, walk=True):
         json_path = os.path.join(folder, 'img_list.json')
         # print("getting image list from", json_path)
         if os.path.exists(json_path) and not force_ls:
@@ -348,8 +355,8 @@ class DataIO:
             with open(json_path, 'r') as f:
                 img_list = json.load(f)
         else:
-            print("Image list does not exist, saving new list")
-            img_list = self.save_img_list(folder)
+            print(f"Image list does not exist, or force_ls is {force_ls}, saving new list")
+            img_list = self.save_img_list(folder, walk)
         if sort:
             img_list.sort()
         return img_list
@@ -374,13 +381,22 @@ class DataIO:
             subfolders.sort()  # Sort alphabetically
             print("sorted alphabetically", subfolders)
         elif sort == "chronological":
-            subfolders_dict = {}
-            # subfolders.sort(key=os.path.getmtime)
-            for i in range(len(subfolders)):
-                key = subfolders[i].split("_")[-1]
-                subfolders_dict[key] = subfolders[i]
-            keys = sorted(subfolders_dict.keys())
-            subfolders = [subfolders_dict[key] for key in keys]
+            def _extract_timestamp_key(path):
+                # Prefer a trailing numeric token in the folder name (e.g. ..._1784250985.826674_V2).
+                # If not found, fall back to mtime while preserving all folders.
+                folder_name = os.path.basename(path)
+                tokens = folder_name.split("_")
+                for token in reversed(tokens):
+                    try:
+                        return (0, float(token), folder_name)
+                    except (TypeError, ValueError):
+                        continue
+                try:
+                    return (1, os.path.getmtime(path), folder_name)
+                except OSError:
+                    return (2, 0.0, folder_name)
+
+            subfolders = sorted(subfolders, key=_extract_timestamp_key)
             print("sorted by date", subfolders)
         return subfolders
 

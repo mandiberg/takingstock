@@ -70,7 +70,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 2000000
+LIMIT= 5000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -94,7 +94,7 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # overrides THIS_CLASS_ID
-    SegmentHelper_name = 'SegmentHelper_temp_normthis'
+    SegmentHelper_name = 'SegmentBig_isface'
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
     SegmentFolder = SSD_PATH
     # SegmentFolder = None
