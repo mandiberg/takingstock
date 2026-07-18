@@ -2108,56 +2108,56 @@ def save_installation_metas(subfolders, output_path, csv_file):
         )
         return None
 
-    def _normalize_cluster_token(value):
-        if value is None or pd.isna(value):
-            return None
-        if isinstance(value, str):
-            token = value.strip()
-            if not token or token.lower() in ("none", "nan"):
-                return None
-            value = token
-        try:
-            return int(float(value))
-        except (TypeError, ValueError):
-            return None
+    # def _normalize_cluster_token(value):
+    #     if value is None or pd.isna(value):
+    #         return None
+    #     if isinstance(value, str):
+    #         token = value.strip()
+    #         if not token or token.lower() in ("none", "nan"):
+    #             return None
+    #         value = token
+    #     try:
+    #         return int(float(value))
+    #     except (TypeError, ValueError):
+    #         return None
 
-    def _load_object_signature_registry():
-        slot_cols = ["LH", "RH", "TF", "LE", "RE", "MO", "SH", "WA", "FT"]
-        if not os.path.exists(OBJECT_SIGNATURE_EXPORT_PATH):
-            print(
-                f"[save_installation_metas] object signature export missing: {OBJECT_SIGNATURE_EXPORT_PATH}"
-            )
-            return {}
+    # def _load_object_signature_registry():
+    #     slot_cols = ["LH", "RH", "TF", "LE", "RE", "MO", "SH", "WA", "FT"]
+    #     if not os.path.exists(OBJECT_SIGNATURE_EXPORT_PATH):
+    #         print(
+    #             f"[save_installation_metas] object signature export missing: {OBJECT_SIGNATURE_EXPORT_PATH}"
+    #         )
+    #         return {}
 
-        try:
-            signature_df = pd.read_csv(OBJECT_SIGNATURE_EXPORT_PATH)
-        except Exception as exc:
-            print(f"[save_installation_metas] failed to load object signature export: {exc}")
-            return {}
+    #     try:
+    #         signature_df = pd.read_csv(OBJECT_SIGNATURE_EXPORT_PATH)
+    #     except Exception as exc:
+    #         print(f"[save_installation_metas] failed to load object signature export: {exc}")
+    #         return {}
 
-        missing_cols = [col for col in ["cluster_id", *slot_cols] if col not in signature_df.columns]
-        if missing_cols:
-            print(
-                f"[save_installation_metas] object signature export missing columns: {missing_cols}"
-            )
-            return {}
+    #     missing_cols = [col for col in ["cluster_id", *slot_cols] if col not in signature_df.columns]
+    #     if missing_cols:
+    #         print(
+    #             f"[save_installation_metas] object signature export missing columns: {missing_cols}"
+    #         )
+    #         return {}
 
-        registry = {}
-        for _, row in signature_df.iterrows():
-            cluster_id = _normalize_cluster_token(row.get("cluster_id"))
-            if cluster_id is None:
-                continue
-            object_ids = []
-            for col in slot_cols:
-                obj_id = _normalize_cluster_token(row.get(col))
-                if obj_id is not None and obj_id != 0:
-                    object_ids.append(obj_id)
-            registry[cluster_id] = json.dumps(sorted(set(object_ids)))
+    #     registry = {}
+    #     for _, row in signature_df.iterrows():
+    #         cluster_id = _normalize_cluster_token(row.get("cluster_id"))
+    #         if cluster_id is None:
+    #             continue
+    #         object_ids = []
+    #         for col in slot_cols:
+    #             obj_id = _normalize_cluster_token(row.get(col))
+    #             if obj_id is not None and obj_id != 0:
+    #                 object_ids.append(obj_id)
+    #         registry[cluster_id] = json.dumps(sorted(set(object_ids)))
 
-        print(
-            f"[save_installation_metas] loaded object signature registry: {len(registry)} rows"
-        )
-        return registry
+    #     print(
+    #         f"[save_installation_metas] loaded object signature registry: {len(registry)} rows"
+    #     )
+    #     return registry
 
     # Check each cluster subfolder for its own installation.csv
     any_missing = False
@@ -2238,7 +2238,7 @@ def save_installation_metas(subfolders, output_path, csv_file):
     if dropped:
         print(f"[save_installation_metas] dropped {dropped} row(s) with no matching video")
 
-    object_signature_registry = _load_object_signature_registry()
+    object_signature_registry = io.load_object_signature_registry(OBJECT_SIGNATURE_EXPORT_PATH)
 
     installation_metas["width"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 0))
     installation_metas["height"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 1))
@@ -2251,7 +2251,7 @@ def save_installation_metas(subfolders, output_path, csv_file):
     installation_metas["file_name"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 2))
     installation_metas["duration"] = installation_metas["cluster_no"].apply(lambda x: _lookup(x, 3))
     installation_metas["object"] = installation_metas["pose_no"].apply(
-        lambda x: object_signature_registry.get(_normalize_cluster_token(x), "[]")
+        lambda x: object_signature_registry.get(io.normalize_cluster_token(x), "[]")
     )
 
     print(f"\n[save_installation_metas] final DataFrame:\n{installation_metas}")

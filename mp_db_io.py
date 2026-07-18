@@ -230,26 +230,50 @@ class DataIO:
 
     @staticmethod
     def extract_fusion_cluster(name):
-        name = name.replace("_ct", "_")
-        folder_arms_pose = folder_signature = folder_hsv = None
+        name = name.replace("_ct", "_").replace("hsv", "")
+        folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = None
+        try:
+            t = name.split("_t")[1].split("_")[0]
+        except IndexError:
+            print(f"  ❌  ❌ WARNING: Could not extract 't' from name: {name}. setting to None.")
+            t = None
+        if t is not None:
+            t = int(t)
         if "wav" in name:
             # handle audio file format: multitrack_mixdown_offset_cc183_p1_t0_1781177644.763904.wav
             folder_arms_pose = name.split("cc")[1].split("_")[0]
             folder_signature = name.split("p")[1].split("_")[0]
         elif "cc" in name:
+            # these are the hands positions x gestures 
+            # img: clustercc15_p92_t1685_h3-22_1782990020.168832_p34_st1_ct8.mp4
             folder_arms_pose = name.split("cc")[1].split("_")[0]
+            if t is not None and t > 0:
+                folder_hands_gesture = name.split("_p")[1].split("_")[0]
+                folder_signature = name.split("_t")[1].split("_")[0]
         elif "_cluster" in name:
             folder_arms_pose = name.split("_cluster")[1].split("_")[0]
         elif "_c" in name:
             folder_arms_pose = name.split("_c")[1].split("_")[0]
-        if "_p" in name:
+        if "_p" in name and folder_signature is None:
             folder_signature = name.split("_p")[1].split("_")[0]
-        if "_om" in name:
+        if "_h" in name:
+            folder_hsv = name.split("_h")[1].split("_")[0]
+        elif "_om" in name:
             folder_hsv = name.split("_om")[1].split("_")[0]
+        
+        # eval folder_arms_pose and folder_signature to None if they are string "None" or "nan"
+        if folder_arms_pose is not None and isinstance(folder_arms_pose, str) and folder_arms_pose.lower() in ["none", "nan"]:
+            folder_arms_pose = None
+        if folder_signature is not None and isinstance(folder_signature, str) and folder_signature.lower() in ["none", "nan"]:
+            folder_signature = None
+
+        # now convert to int if not None    
         if folder_arms_pose is not None and folder_signature is not None:
             folder_arms_pose = int(folder_arms_pose)
             folder_signature = int(folder_signature)
-        return folder_arms_pose, folder_signature, folder_hsv
+        if folder_hands_gesture is not None:
+            folder_hands_gesture = int(folder_hands_gesture)
+        return folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv
 
     def get_counter(self,CSV_COUNTOUT_PATH):
         # read last completed file
@@ -325,9 +349,9 @@ class DataIO:
 
     def get_img_list(self, folder, force_ls=False, sort=True, walk=True):
         json_path = os.path.join(folder, 'img_list.json')
-        print("getting image list from", json_path)
+        # print("getting image list from", json_path)
         if os.path.exists(json_path) and not force_ls:
-            print("Image list exists, loading from", json_path)
+            # print("Image list exists, loading from", json_path)
             with open(json_path, 'r') as f:
                 img_list = json.load(f)
         else:
@@ -340,6 +364,11 @@ class DataIO:
     def get_existing_image_ids_from_wavs(self,folder):
         existing_files = self.get_img_list(folder)
         existing_image_ids = [int(f.split("_")[0]) for f in existing_files if f.endswith(".wav")]
+        return existing_image_ids
+
+    def get_existing_image_ids_from_jpgs(self,folder):
+        existing_files = self.get_img_list(folder)
+        existing_image_ids = [int(f.replace(".jpg", "").replace(".jpeg", "").split("_")[-1]) for f in existing_files if f.endswith(".jpg") or f.endswith(".jpeg")]
         return existing_image_ids
 
 
@@ -588,3 +617,54 @@ class DataIO:
         migration_class = getattr(AutomapBase.classes, new_table_name)
         
         return migration_class
+
+    def normalize_cluster_token(self, value):
+        if value is None or pd.isna(value):
+            return None
+        if isinstance(value, str):
+            token = value.strip()
+            if not token or token.lower() in ("none", "nan"):
+                return None
+            value = token
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    def load_object_signature_registry(self, signature_path):
+        slot_cols = ["LH", "RH", "TF", "LE", "RE", "MO", "SH", "WA", "FT"]
+        if not os.path.exists(signature_path):
+            print(
+                f"[save_installation_metas] object signature export missing: {signature_path}"
+            )
+            return {}
+
+        try:
+            signature_df = pd.read_csv(signature_path)
+        except Exception as exc:
+            print(f"[save_installation_metas] failed to load object signature export: {exc}")
+            return {}
+
+        missing_cols = [col for col in ["cluster_id", *slot_cols] if col not in signature_df.columns]
+        if missing_cols:
+            print(
+                f"[save_installation_metas] object signature export missing columns: {missing_cols}"
+            )
+            return {}
+
+        registry = {}
+        for _, row in signature_df.iterrows():
+            cluster_id = self.normalize_cluster_token(row.get("cluster_id"))
+            if cluster_id is None:
+                continue
+            object_ids = []
+            for col in slot_cols:
+                obj_id = self.normalize_cluster_token(row.get(col))
+                if obj_id is not None and obj_id != 0:
+                    object_ids.append(obj_id)
+            registry[cluster_id] = json.dumps(sorted(set(object_ids)))
+
+        print(
+            f"[save_installation_metas] loaded object signature registry: {len(registry)} rows"
+        )
+        return registry
