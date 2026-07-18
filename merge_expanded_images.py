@@ -42,7 +42,7 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 3  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None
@@ -999,6 +999,8 @@ def get_osc_target_cycle_steps(merge_count=MERGE_COUNT, start_merge=START_MERGE)
     levels = (local_merge_count - local_start_merge) + 1
     ramp_steps = levels * max(1, int(MERGE_PERIOD))
     hold_frames = max(0, int(FULL_MERGE_PERIOD))
+    print(f"get_osc_target_cycle_steps: merge_count={merge_count}, start_merge={start_merge}, levels={levels}, ramp_steps={ramp_steps}, hold_frames={hold_frames}")
+    print(f" will return rampe_steps * 2 + hold_frames = {(ramp_steps * 2) + hold_frames}")
     return (ramp_steps * 2) + hold_frames
 
 
@@ -1050,6 +1052,7 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
     Returns a list of dicts with keys: step, size, start_idx, end_idx.
     end_idx is exclusive to support Python slicing.
     """
+    print(f"build_osc_schedule: current_pos={current_pos}, this_period={this_period}, total_images={total_images}, merge_count={merge_count}, start_merge={start_merge}")
     if this_period <= 0:
         return []
 
@@ -1060,52 +1063,184 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
     if max_available < local_start_merge:
         return []
 
-    # Use the full period budget in strict mode so cycles do not share boundary frames.
     if STRICT_UNIQUE_IMAGE_PLACEMENT:
         cycle_steps = min(max_available, max(1, int(this_period)))
     else:
-        # Legacy mode: one shared boundary frame omitted.
         cycle_steps = min(max_available, max(1, int(this_period) - 1))
 
     peak_size = min(local_merge_count, max_available)
-    size_sequence = build_osc_size_sequence(
-        start_merge=local_start_merge,
-        peak_size=peak_size,
-        merge_period=MERGE_PERIOD,
-        full_merge_period=FULL_MERGE_PERIOD,
-    )
 
-    if AUTO_DISTRIBUTE_CYCLE_PERIOD:
-        size_sequence = fit_osc_size_sequence(size_sequence, cycle_steps)
+    # Strict-unique mode uses a deterministic 3-phase schedule:
+    # 1) ramp up from singleton to peak,
+    # 2) hold at peak while start/end indices are spread across the period,
+    # 3) ramp down toward the next cycle boundary (next singleton anchor).
+    if STRICT_UNIQUE_IMAGE_PLACEMENT and cycle_steps > 0:
+        merge_period = max(1, int(MERGE_PERIOD))
+
+        up_sizes = []
+        for size in range(local_start_merge, peak_size + 1):
+            up_sizes.extend([size] * merge_period)
+
+        # Descend to start_merge + 1 so the singleton belongs to the next cycle.
+        down_sizes = []
+        if peak_size > local_start_merge:
+            for size in range(peak_size, local_start_merge, -1):
+                down_sizes.extend([size] * merge_period)
+
+        base_steps = len(up_sizes) + len(down_sizes)
+        hold_steps = cycle_steps - base_steps
+
+        if hold_steps < 0:
+            # If the requested cycle is too short, time-compress the legacy schedule.
+            # This preserves bounded behavior for short trailing cycles.
+            size_sequence = build_osc_size_sequence(
+                start_merge=local_start_merge,
+                peak_size=peak_size,
+                merge_period=merge_period,
+                full_merge_period=FULL_MERGE_PERIOD,
+            )
+            size_sequence = fit_osc_size_sequence(size_sequence, cycle_steps)
+            schedule = []
+            for step, size in enumerate(size_sequence[:cycle_steps]):
+                end_idx = current_pos + step + 1
+                if end_idx > total_images:
+                    break
+                start_idx = max(current_pos, end_idx - int(size))
+                if start_idx >= end_idx:
+                    continue
+                schedule.append(
+                    {
+                        "step": step,
+                        "size": int(size),
+                        "start_idx": int(start_idx),
+                        "end_idx": int(end_idx),
+                    }
+                )
+            print(f"build_osc_schedule: built schedule with {len(schedule)} steps, cycle_steps={cycle_steps}, size_sequence={size_sequence[:cycle_steps]}")
+            return schedule
+
+        hold_sizes = [peak_size] * hold_steps
+        size_sequence = up_sizes + hold_sizes + down_sizes
+
+        def _spread_ints(start_value, end_value, count):
+            if count <= 0:
+                return []
+            if count == 1:
+                return [int(end_value)]
+            span = end_value - start_value
+            if span <= 0:
+                return [int(start_value)] * count
+            return [
+                int(start_value + (i * span) // (count - 1))
+                for i in range(count)
+            ]
+
+        schedule = []
+        cycle_anchor = current_pos + cycle_steps
+        up_len = len(up_sizes)
+        hold_len = len(hold_sizes)
+
+        # Build ramp-up windows with local adjacency.
+        for step in range(up_len):
+            size = int(size_sequence[step])
+            end_idx = current_pos + step + 1
+            if end_idx > total_images:
+                break
+            start_idx = max(current_pos, end_idx - size)
+            if start_idx >= end_idx:
+                continue
+            schedule.append(
+                {
+                    "step": step,
+                    "size": size,
+                    "start_idx": int(start_idx),
+                    "end_idx": int(end_idx),
+                }
+            )
+
+        # Spread peak windows across the cycle so they can "cover distance"
+        # and arrive at the descent handoff point near (period - merge_count).
+        hold_start_step = len(schedule)
+        if hold_len > 0:
+            hold_first_end = current_pos + up_len + 1
+            # Let the hold phase reach cycle_anchor so the last hold window
+            # lands one step further before descending.
+            hold_last_end = max(hold_first_end, cycle_anchor)
+            hold_end_indices = _spread_ints(hold_first_end, hold_last_end, hold_len)
+            for i, end_idx in enumerate(hold_end_indices):
+                step = hold_start_step + i
+                size = peak_size
+                end_idx = min(end_idx, total_images)
+                start_idx = max(current_pos, end_idx - size)
+                if start_idx >= end_idx:
+                    continue
+                schedule.append(
+                    {
+                        "step": step,
+                        "size": int(size),
+                        "start_idx": int(start_idx),
+                        "end_idx": int(end_idx),
+                    }
+                )
+
+        # Keep descending windows anchored to the next cycle boundary.
+        down_start_step = len(schedule)
+        for i, size in enumerate(down_sizes):
+            step = down_start_step + i
+            # Use one-step lookahead (exclusive) so tail windows can include
+            # the next-cycle singleton image. On final cycle this can overflow
+            # by exactly 1 and is resolved via wrap-aware slicing.
+            end_idx = cycle_anchor + 1
+            start_idx = max(current_pos, end_idx - int(size))
+            if start_idx >= end_idx:
+                continue
+            schedule.append(
+                {
+                    "step": step,
+                    "size": int(size),
+                    "start_idx": int(start_idx),
+                    "end_idx": int(end_idx),
+                }
+            )
     else:
-        if cycle_steps > len(size_sequence):
-            cycle_steps = len(size_sequence)
-        elif cycle_steps < len(size_sequence):
-            size_sequence = size_sequence[:cycle_steps]
-
-    schedule = []
-    for step, size in enumerate(size_sequence[:cycle_steps]):
-        end_idx = current_pos + step + 1
-
-        if end_idx > total_images:
-            break
-
-        start_idx = end_idx - size
-        if start_idx < current_pos:
-            start_idx = current_pos
-
-        if start_idx >= end_idx:
-            continue
-
-        schedule.append(
-            {
-                "step": step,
-                "size": int(size),
-                "start_idx": int(start_idx),
-                "end_idx": int(end_idx),
-            }
+        size_sequence = build_osc_size_sequence(
+            start_merge=local_start_merge,
+            peak_size=peak_size,
+            merge_period=MERGE_PERIOD,
+            full_merge_period=FULL_MERGE_PERIOD,
         )
 
+        if AUTO_DISTRIBUTE_CYCLE_PERIOD:
+            size_sequence = fit_osc_size_sequence(size_sequence, cycle_steps)
+        else:
+            if cycle_steps > len(size_sequence):
+                cycle_steps = len(size_sequence)
+            elif cycle_steps < len(size_sequence):
+                size_sequence = size_sequence[:cycle_steps]
+
+        schedule = []
+        for step, size in enumerate(size_sequence[:cycle_steps]):
+            end_idx = current_pos + step + 1
+
+            if end_idx > total_images:
+                break
+
+            start_idx = end_idx - size
+            if start_idx < current_pos:
+                start_idx = current_pos
+
+            if start_idx >= end_idx:
+                continue
+
+            schedule.append(
+                {
+                    "step": step,
+                    "size": int(size),
+                    "start_idx": int(start_idx),
+                    "end_idx": int(end_idx),
+                }
+            )
+    print(f"build_osc_schedule: built schedule with {len(schedule)} steps, cycle_steps={cycle_steps}, size_sequence={size_sequence[:cycle_steps]}")
     return schedule
 
 
@@ -1139,7 +1274,7 @@ def debug_osc_step(step_i, step, schedule, current_pos, period, this_period, tot
         f"phase={phase}",
         f"size={size}",
         f"start_idx={step['start_idx']}",
-        f"end_idx={step['end_idx']}",
+        f"end_idx={step['end_idx'] - 1}",
         f"period={period}",
         f"this_period={this_period}",
         f"target_merge_count={merge_count}",
@@ -1253,14 +1388,14 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
 
     # Prime smooth state so the first emitted singleton also returns a full smooth batch.
     # Without this, the first step can return a single frame when last_image_written is None.
-    if SMOOTH_MERGE and last_image_written is None:
-        for step in schedule:
-            if step["end_idx"] - step["start_idx"] > 0:
-                _ = merge_images_numpy(
-                    images_to_build[step["start_idx"]:step["end_idx"]],
-                    make_first_image=True,
-                )
-                break
+    # if SMOOTH_MERGE and last_image_written is None:
+    #     for step in schedule:
+    #         if step["end_idx"] - step["start_idx"] > 0:
+    #             _ = merge_images_numpy(
+    #                 images_to_build[step["start_idx"]:step["end_idx"]],
+    #                 make_first_image=True,
+    #             )
+    #             break
 
     schedule_sizes = [step["size"] for step in schedule]
     print(
@@ -1326,6 +1461,17 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         end_idx = step["end_idx"]
         if end_idx - start_idx <= 0:
             continue
+
+        def _slice_with_cycle_handoff(start_exclusive_idx, end_exclusive_idx):
+            """Return a window using exclusive bounds with +1 overflow wrap support."""
+            if end_exclusive_idx <= total_images:
+                return images_to_build[start_exclusive_idx:end_exclusive_idx]
+
+            base = images_to_build[start_exclusive_idx:total_images]
+            overflow = end_exclusive_idx - total_images
+            if overflow > 0:
+                base = list(base) + list(images_to_build[:overflow])
+            return base
 
         visible_indices = list(range(start_idx, end_idx))
         if SHOW_BLEND_POSITION:
@@ -1394,7 +1540,8 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
                     debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle, skipped_reason="final_boundary_singleton")
                     continue
 
-        images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
+        window_images = _slice_with_cycle_handoff(start_idx, end_idx)
+        images_to_return = merge_images_numpy(window_images)
         # if is_final_cycle and step["size"] == 1 and first_image_written is not None and step_i == max(keep_idx_set) if 'keep_idx_set' in locals() and keep_idx_set else False:
         #     images_to_return = first_image_written.copy()
         debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle)
@@ -1426,7 +1573,7 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
             "start_idx",
             start_idx,
             "end_idx",
-            end_idx,
+            end_idx - 1,
             "last_cycle",
             last_cycle,
         )
@@ -1448,7 +1595,7 @@ def build_even_merge(images_to_build, video_writer, current_pos, merge_count, th
     
 
 def calculate_period(images_to_build):
-    image_count = len(images_to_build)-1 # subtract one for the duplicate first image at the end
+    image_count = len(images_to_build) # subtract one for the duplicate first image at the end
     if image_count <= 0:
         return 0
 
@@ -1472,7 +1619,7 @@ def calculate_period(images_to_build):
     while cycle_count > 1 and (image_count / cycle_count) < target_period:
         cycle_count -= 1
 
-    calculated_period = int(math.ceil(image_count / cycle_count))
+    calculated_period = int(math.floor(image_count / cycle_count))
     min_required = target_period
     if calculated_period < min_required:
         calculated_period = min_required
@@ -1543,9 +1690,9 @@ def write_video(img_array, subfolder_path=None):
     elif len(img_array) < PERIOD/2:
         print(f"not enough images to fill half a period ({PERIOD/2}), skipping this folder")
         return
-    if IS_VIDEO_MERGE:
-        # this had a "and not STRICT_UNIQUE_IMAGE_PLACEMENT" condition but I think it needs to be removed July 1 2026
-        img_array.append(img_array[0]) # add the first image to the end to make a loop
+    # if IS_VIDEO_MERGE:
+    #     # this had a "and not STRICT_UNIQUE_IMAGE_PLACEMENT" condition but I think it needs to be removed July 1 2026
+    #     img_array.append(img_array[0]) # add the first image to the end to make a loop
     images_to_build = load_images(img_array, subfolder_path)
     # print("img_array", img_array)
     print("len images_to_build", len(images_to_build))
@@ -1587,7 +1734,7 @@ def write_video(img_array, subfolder_path=None):
 
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}_fr{len(images_to_build)-1}"
+    if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}_fr{len(images_to_build)}"
     else: merge_info = ""
     video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+".mp4")
     print("video_path", video_path)
@@ -1617,32 +1764,33 @@ def write_video(img_array, subfolder_path=None):
 
         if SMOOTH_MERGE and OSCILATING_MERGE:
             merge_count = MERGE_COUNT
-            target_cycle_steps = get_osc_target_cycle_steps(merge_count, START_MERGE)
-            if period < target_cycle_steps:
-                print(
-                    "warning: period shorter than target oscillation cycle; schedule will be time-compressed",
-                    f"period={period}",
-                    f"target_cycle_steps={target_cycle_steps}",
-                )
-            print(
-                "osc controls:",
-                f"MERGE_PERIOD={MERGE_PERIOD}",
-                f"FULL_MERGE_PERIOD={FULL_MERGE_PERIOD}",
-                f"target_cycle_steps={target_cycle_steps}",
-                f"auto_distribute={AUTO_DISTRIBUTE_CYCLE_PERIOD}",
-                f"cycle_seconds={period / FRAMERATE:.3f}",
-            )
+            # this code was replaced by build_cycle_lengths() I believe
+            # target_cycle_steps = get_osc_target_cycle_steps(merge_count, START_MERGE)
+            # if period < target_cycle_steps:
+            #     print(
+            #         "warning: period shorter than target oscillation cycle; schedule will be time-compressed",
+            #         f"period={period}",
+            #         f"target_cycle_steps={target_cycle_steps}",
+            #     )
+            # print(
+            #     "osc controls:",
+            #     f"MERGE_PERIOD={MERGE_PERIOD}",
+            #     f"FULL_MERGE_PERIOD={FULL_MERGE_PERIOD}",
+            #     f"target_cycle_steps={target_cycle_steps}",
+            #     f"auto_distribute={AUTO_DISTRIBUTE_CYCLE_PERIOD}",
+            #     f"cycle_seconds={period / FRAMERATE:.3f}",
+            # )
                 
-            if STRICT_UNIQUE_IMAGE_PLACEMENT:
-                cycle_advance = max(1, int(period))
-                cycle_overlap_step = max(1, cycle_advance - 1)
-            else:
-                cycle_advance = max(1, merge_count - START_MERGE)
+            # if STRICT_UNIQUE_IMAGE_PLACEMENT:
+            #     cycle_advance = max(1, int(period))
+            #     cycle_overlap_step = max(1, cycle_advance - 1)
+            # else:
+            #     cycle_advance = max(1, merge_count - START_MERGE)
 
             # Process only if there are enough images to build at least one peak merge.
             if total_images >= max(merge_count, START_MERGE):
                 # Use only real source images for cycle accounting (exclude appended duplicate tail).
-                image_count = max(0, total_images - 1)
+                image_count = max(0, total_images)
 
                 if AUTO_DISTRIBUTE_CYCLE_PERIOD:
                     cycle_lengths = build_cycle_lengths(image_count, period)
@@ -1686,13 +1834,22 @@ def write_video(img_array, subfolder_path=None):
                     if BLEND_END_TO_FIRST:
                         # Coda: bridge last rendered frame back toward first rendered frame.
                         # Excludes endpoints, so this adds only in-between blend frames.
-                        if STRICT_UNIQUE_IMAGE_PLACEMENT and not STRICT_UNIQUE_SEAM_EXTRA_FRAMES:
-                            print("strict unique seam extra frames disabled, skipping seam blend")
-                            seam_blend_steps = 0
+                        if STRICT_UNIQUE_IMAGE_PLACEMENT:
+                            # Preserve a minimal closing bridge so the final frame blends
+                            # toward the first image of the loop. This restores the missing
+                            # MERGE_PERIOD seam stages (e.g. 2 when MERGE_PERIOD=2).
+                            seam_blend_steps = max(1, int(MERGE_PERIOD))
+                            if STRICT_UNIQUE_SEAM_EXTRA_FRAMES:
+                                seam_blend_steps = max(seam_blend_steps, int(LOOP_SEAM_BLEND_STEPS))
+                            print(
+                                "strict unique seam blend",
+                                f"steps={seam_blend_steps}",
+                                f"extra_frames={STRICT_UNIQUE_SEAM_EXTRA_FRAMES}",
+                            )
                         else:
-                            print("strict unique seam extra frames enabled, adding seam blend")
-                            print("last_image_written", type(last_image_written), last_image_written.shape if last_image_written is not None else None)
-                            seam_blend_steps = 2 if STRICT_UNIQUE_IMAGE_PLACEMENT else LOOP_SEAM_BLEND_STEPS
+                            print("non-strict seam blend, adding seam blend")
+                            seam_blend_steps = LOOP_SEAM_BLEND_STEPS
+                        print("last_image_written", type(last_image_written), last_image_written.shape if last_image_written is not None else None)
                         seam_frames = build_loop_seam_transition(
                             last_image_written,
                             first_image_written,
