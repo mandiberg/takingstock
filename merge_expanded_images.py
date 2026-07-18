@@ -42,7 +42,7 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 6  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 3  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None
@@ -51,7 +51,7 @@ CROP_AFTER_COUNT = None
 DO_INSTALLATION_ONLY = False
 
 LOOPING = False # defaults
-REPEAT = 6 # will repeat the entire sequence this many times, for looping videos
+REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
 BLEND_END_TO_FIRST = True
 OFFSET_ON_BUILD = True
@@ -1251,6 +1251,17 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         print("empty oscillating schedule, skipping cycle")
         return
 
+    # Prime smooth state so the first emitted singleton also returns a full smooth batch.
+    # Without this, the first step can return a single frame when last_image_written is None.
+    if SMOOTH_MERGE and last_image_written is None:
+        for step in schedule:
+            if step["end_idx"] - step["start_idx"] > 0:
+                _ = merge_images_numpy(
+                    images_to_build[step["start_idx"]:step["end_idx"]],
+                    make_first_image=True,
+                )
+                break
+
     schedule_sizes = [step["size"] for step in schedule]
     print(
         "osc schedule summary:",
@@ -1477,6 +1488,29 @@ def calculate_period(images_to_build):
     )
     return calculated_period
 
+
+def build_cycle_lengths(image_count, target_period):
+    """Split image_count into near-even cycle lengths.
+
+    Example: 100 with target around 30 -> [33, 33, 34].
+    """
+    if image_count <= 0:
+        return []
+
+    if target_period is None or target_period <= 0:
+        return [image_count]
+
+    cycle_count = max(1, int(round(image_count / target_period)))
+    base = image_count // cycle_count
+    remainder = image_count % cycle_count
+
+    lengths = [base] * cycle_count
+    # Put remainder at the end so 100 -> 33,33,34 (not 34,33,33).
+    for i in range(remainder):
+        lengths[-(i + 1)] += 1
+
+    return lengths
+
 def write_video(img_array, subfolder_path=None):
     global last_image_written
     global first_image_written
@@ -1607,34 +1641,47 @@ def write_video(img_array, subfolder_path=None):
 
             # Process only if there are enough images to build at least one peak merge.
             if total_images >= max(merge_count, START_MERGE):
-                
-                while current_pos < total_images:
-                    if STRICT_UNIQUE_IMAGE_PLACEMENT:
-                        next_pos = current_pos + cycle_overlap_step
-                    else:
-                        next_pos = current_pos + cycle_advance
-                    is_final_cycle = next_pos >= total_images
+                # Use only real source images for cycle accounting (exclude appended duplicate tail).
+                image_count = max(0, total_images - 1)
+
+                if AUTO_DISTRIBUTE_CYCLE_PERIOD:
+                    cycle_lengths = build_cycle_lengths(image_count, period)
+                else:
+                    fixed = max(1, int(period))
+                    cycle_lengths = []
+                    remaining_steps = image_count
+                    while remaining_steps > 0:
+                        step_len = min(fixed, remaining_steps)
+                        cycle_lengths.append(step_len)
+                        remaining_steps -= step_len
+
+                print("cycle_lengths", cycle_lengths, "sum", sum(cycle_lengths), "image_count", image_count)
+
+                current_pos = 0
+                for idx, cycle_len in enumerate(cycle_lengths):
+                    if cycle_len <= 0:
+                        continue
+                    is_final_cycle = idx == len(cycle_lengths) - 1
                     process_images_osc(
                         images_to_build,
                         video_writer,
-                        total_images,
-                        period,
+                        image_count,
+                        cycle_len,
                         current_pos,
                         merge_count,
                         is_final_cycle=is_final_cycle,
                     )
-                    # Move to next cycle. In strict mode this overlaps one shared boundary frame.
-                    current_pos = next_pos
+                    current_pos += cycle_len
                     print("current_pos", current_pos)
 
-                # Handle remaining images because there are not enough for a full cycle
-                # make sure to merge up to the last image, and then discard it, since it's a duplicate of the first image
-                remaining = total_images - current_pos
+                # No tail pass needed; cycles explicitly partition image_count.
+                remaining = image_count - current_pos
+                print("remaining after explicit cycle plan", remaining)
                 if "smooth_osc" in CURRENT_MODE:
                     if remaining > START_MERGE:
                         print("remaining", remaining)
                         tail_merge_count = min(merge_count, remaining)
-                        process_images_osc(images_to_build, video_writer, total_images, remaining, current_pos, tail_merge_count)
+                        process_images_osc(images_to_build, video_writer, image_count, remaining, current_pos, tail_merge_count)
 
                     if BLEND_END_TO_FIRST:
                         # Coda: bridge last rendered frame back toward first rendered frame.
