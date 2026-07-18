@@ -51,7 +51,7 @@ CROP_AFTER_COUNT = None
 DO_INSTALLATION_ONLY = False
 
 LOOPING = False # defaults
-REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
+REPEAT = 6 # will repeat the entire sequence this many times, for looping videos
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
 BLEND_END_TO_FIRST = True
 OFFSET_ON_BUILD = True
@@ -123,15 +123,15 @@ elif "make_video" in CURRENT_MODE:
         PERIOD = 30 # how many images in each merge cycle
         MERGE_COUNT = 8 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
+        MERGE_PERIOD = 1 
         
         if REPEAT > 1: 
             # if more than 100 frames (e.g. 60s video) make longer loop cycles that progress through images
             # longer ramp up/down, produce min period of 42
-            MERGE_PERIOD = 2  # set to 2 to double ramp duration
-            FULL_MERGE_PERIOD = 10  # set >0 to hold at MERGE_COUNT for N frames
+            # MERGE_PERIOD = 2  # set to 2 to double ramp duration
+            FULL_MERGE_PERIOD = 19  # set >0 to hold at MERGE_COUNT for N frames
         else: 
             # shorter ramp up/down, produce period of 30, which will round up to 33 or 34, to loop 3x per 100
-            MERGE_PERIOD = 1 
             FULL_MERGE_PERIOD = 14
         AUTO_DISTRIBUTE_CYCLE_PERIOD = True # this controls whether the period is calculated from total count
         SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe. 2 is standard (3 frames per image/10 img per second). I slowed it down with 3 (4 frames per image)
@@ -238,7 +238,7 @@ def smooth_merge_transition(image1, image2, blend_steps):
     # exclude the start one, as that is not needed
     useful_alphas = total_alphas[1:]
     for alpha in useful_alphas:
-        print(f"alpha: {alpha:.2f}")
+        # print(f"alpha: {alpha:.2f}")
         blended = cv2.addWeighted(image1, 1 - alpha, image2, alpha, 0)
         blended_uint8 = np.clip(blended, 0, 255).astype(np.uint8)
         transition_images.append(blended_uint8)
@@ -292,7 +292,7 @@ def merge_images_numpy(image_list, make_first_image=False):
             last_image_written = image_list[0].astype(np.float32)
             return last_image_written
         return [image_list[0]]
-    print("image_list[0].shape", image_list[0].shape)
+    # print("image_list[0].shape", image_list[0].shape)
     if len(image_list[0].shape) == 2:
         print("removed item 0 from the list - i think for non-images?")
         image_list.pop(0)
