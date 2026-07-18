@@ -7,7 +7,7 @@ from sqlalchemy import Float, create_engine, Column, Integer, Boolean, String
 from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.pool import NullPool
 
-ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
 from mp_db_io import DataIO 
@@ -25,11 +25,12 @@ It will output a new name like:
 TakingStock_T{TOPIC}_p{folder_arms_pose}_s{folder_signature}_obj_{obj}_h{folder_hsv}.mp4
 '''
 
-FOLDER = "//Users/michaelmandiberg/Library/CloudStorage/Dropbox/takingstock_dropbox/finished_exercise_images/gattopardo_press_images"
-MP4_ONLY = False 
+FOLDER = "/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/_hsv_bg_2tier_100"
+MP4_ONLY = True 
 io = DataIO()
+DRY_RUN = True
 
-TOPIC = 0
+TOPIC = 11
 
 OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -69,6 +70,9 @@ ImagesArmsPoses3D = io.create_class_from_reflection(engine, "ImagesObjectSignatu
 object_signature_registry = io.load_object_signature_registry(OBJECT_SIGNATURE_EXPORT_PATH)
 # print(f"object_signature_registry: {object_signature_registry}")
 folder_list = io.get_folders(FOLDER)
+# add root folder to folder_list if it is not already in the list
+if FOLDER not in folder_list:
+    folder_list.append(FOLDER)
 print(f"folder_list: {folder_list}")
 if len(folder_list) == 0:
     print(f" ❌ WARNING: No folders found in {FOLDER}, so setting folder_list to [FOLDER]")
@@ -86,14 +90,23 @@ print(f"CLASS_MAP: {CLASS_MAP}")
 
 def get_modal_cluster_id(main_folder, session):
     modal_cluster_dict = {}
+    print(f"Getting modal cluster id for all folders in {main_folder}")
     # this looks in a folder that holds other folders, and does a query per folder
-    folders = os.listdir(main_folder)
+    folders = io.get_folders(main_folder)
     for folder in folders:
+        print(f"Checking folder: {folder}")
         folder_path = os.path.join(main_folder, folder)
         if os.path.isdir(folder_path):
             # img_list = io.get_img_list(folder)
-            image_id_list = io.get_existing_image_ids_from_jpgs(folder_path)
-            # print(f"image_id_list: {image_id_list}")
+            try:
+                image_id_list = io.get_existing_image_ids_from_jpgs(folder_path)
+            except Exception as e:
+                print(f"Error occurred while getting image IDs from {folder_path}: {e}")
+                continue
+            print(f"image_id_list: {image_id_list}")
+            if len(image_id_list) == 0:
+                print(f" ❌ WARNING: No image IDs found in {folder_path}, skipping")
+                continue
             # use session to query ImagesObjectSignatures for each image's signature, and return the most common signature
             cluster_id_list = []
             for image_id in image_id_list:
@@ -105,62 +118,101 @@ def get_modal_cluster_id(main_folder, session):
             # get the most common signature
             # print(f"cluster_id_list: {cluster_id_list}")
             modal_cluster_id = max(set(cluster_id_list), key=cluster_id_list.count)
-            # print(f"modal_cluster_id for {folder}: {modal_cluster_id}")
+            print(f"modal_cluster_id for {folder}: {modal_cluster_id}")
             modal_cluster_dict[folder] = modal_cluster_id
+    print(f"modal_cluster_dict: {modal_cluster_dict}")
 
     return modal_cluster_dict
 
 def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv):
-    title = "Taking Stock "
+    title = ""
+
+    # format obj and hsv strings, but not add yet
+    if obj_str is not None:
+        if "-" in obj_str:
+            obj_list = obj_str.split("-")
+            # create a string like "Object obj1, obj2, and obj3"
+            obj_id_list = [f"{obj_id} " for obj_id in obj_list]
+            # join the list with commas and "and"
+            obj_id_string = f"Objects {', '.join(obj_id_list[:-1])}and {obj_id_list[-1]}"
+            obj_name_string = " and ".join([f"{CLASS_MAP.get(int(obj_id), 'Unknown')}" for obj_id in obj_list]).replace("_", " ")
+            
+            # obj_id_and_name_list = [f"{obj_id} ({CLASS_MAP.get(int(obj_id), 'Unknown')})" for obj_id in obj_list]
+            # obj_str = ", ".join(obj_id_and_name_list[:-1]) + f" and {obj_id_and_name_list[-1]}"
+            # obj_id += f"Objects {obj_str}, "
+        else: 
+            obj_id = f"{obj_str}"
+            obj_name = f"{CLASS_MAP.get(int(obj_str), 'Unknown')}"
+            obj_id_string = f"Object {obj_id}, "
+            obj_name_string = f"{obj_name}"
+    
+    if folder_hsv is not None:
+        hsv_name = HSV_DICT.get(folder_hsv, None)
+        if hsv_name != "None" and hsv_name is not None:
+            hsv_value += f"HSV {folder_hsv} "
+            # hsv_name += f"{hsv_name}
+    else: 
+        hsv_name = None
+        hsv_value = None
+    
+    if obj_name_string is not None and hsv_name is not None:
+        title += f"{obj_name_string}, {hsv_name} "
+    elif obj_name_string is not None:
+        title += f"{obj_name_string} "
+    elif hsv_name is not None:
+        title += f"{hsv_name} "
+    title += "("
     if topic is not None:
         title += f"Topic {topic}, "
     if folder_arms_pose is not None:
         title += f"Pose {folder_arms_pose}, "
     if folder_hands_gesture is not None:
         title += f"Gesture {folder_hands_gesture}, "
+    if obj_id_string is not None:
+        title += f"{obj_id_string}, "
+    if hsv_value is not None:
+        title += f"{hsv_value}, "
     # if folder_signature is not None:
     #     title += f"Signature {folder_signature}, "
-    if obj_str is not None:
-        if "-" in obj_str:
-            obj_list = obj_str.split("-")
-            # create a string like "Object obj1, obj2, and obj3"
-            obj_id_and_name_list = [f"{obj_id} ({CLASS_MAP.get(int(obj_id), 'Unknown')})" for obj_id in obj_list]
-            obj_str = ", ".join(obj_id_and_name_list[:-1]) + f" and {obj_id_and_name_list[-1]}"
-            title += f"Objects {obj_str}, "
-        else: 
-            obj_id_and_name = f"{obj_str} ({CLASS_MAP.get(int(obj_str), 'Unknown')})"
-            title += f"Object {obj_id_and_name}, "
-    if folder_hsv is not None:
-        hsv_name = HSV_DICT.get(folder_hsv, "")
-        if hsv_name != "None" and hsv_name is not None:
-            title += f"HSV {folder_hsv} ({hsv_name}) "
+    # remove trailing comma and space
+    title = title.rstrip(", ")
+    title += ")"
+
 
     # chomp any trailing comma and space
     title = title.rstrip(", ")
 
     return title
 
+# go get modal cluster id for everything, just in case
+folder_modal_signatures = get_modal_cluster_id(FOLDER, session)
+print(f"modal_signature: {folder_modal_signatures}")
 
 # construct df for TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv
 df = pd.DataFrame(columns=["new_name", "title", "folder", "img", "folder_arms_pose", "folder_hands_gesture", "folder_signature", "folder_hsv", "obj_str", ])
 for folder in folder_list:
     # looks in each folder, and acts on the mp4 files in that folder
-    img_list = io.get_img_list(folder, force_ls=True)
+    img_list = io.get_img_list(folder, force_ls=True, sort=True, walk=False)
     print(f"Processing folder: {folder}, found {len(img_list)} images")
 
-    # go get modal cluster id for everything, just in case
-    folder_modal_signatures = get_modal_cluster_id(folder, session)
-    print(f"modal_signature: {folder_modal_signatures}")
 
 
-    print(f"img_list: {img_list}")
+    # print(f"img_list: {img_list}")
     for img in img_list:
         original_suffix = img.split("_")[-1]
-        folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = obj_str = None
+        if "." in original_suffix:
+            original_suffix = original_suffix.split(".")[-1]
+        topic_id = None
+        folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = obj_str = frame_count = None
         # img == the mp4 file
         if MP4_ONLY and not "mp4" in img: continue
-        # print(f"img: {img}")
-        folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv = io.extract_fusion_cluster(img)
+        print(f" >> this is the filewe are going to act on: {img}")
+        folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count = io.extract_fusion_cluster(img)
+        if topic_id is None:
+            topic_id = TOPIC
+        if frame_count is not None:
+            print(f"Found frame_count: {frame_count} in filename {img}")
+            frame_token = f"_fr{frame_count}"
         if folder_arms_pose == -1:
             # find the right key from the folder_modal_signatures dict based on folder_signature and folder_hsv
             for key, value in folder_modal_signatures.items():
@@ -189,9 +241,9 @@ for folder in folder_list:
             obj_str = obj.replace(", ", "-").replace("[", "").replace("]", "")
         # print(f"obj: {obj}, obj_str: {obj_str}")
 
-        new_name = f"TakingStock_T{TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv}.{original_suffixc}"
+        new_name = f"TakingStock_T{topic_id}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv}{frame_token if frame_count is not None else ''}.{original_suffix}"
 
-        title = format_title(TOPIC, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv)
+        title = format_title(topic_id, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv)
 
         this_dict = {
             "new_name": new_name,
@@ -203,10 +255,16 @@ for folder in folder_list:
             "folder_signature": folder_signature,
             "folder_hsv": folder_hsv,
             "obj_str": obj_str,
+            "frame_count": frame_count,
+            "long_video_name": None
         }
 
         df = pd.concat([df, pd.DataFrame([this_dict])], ignore_index=True)
 
+
+        if DRY_RUN:
+            print(f"Dry run: would rename {img} to {new_name} in folder {folder}")
+            continue
         # rename the file
         try:
             os.rename(os.path.join(folder, img), os.path.join(folder, new_name))
@@ -215,5 +273,32 @@ for folder in folder_list:
             print(f"Error occurred while renaming {img}: {e}")
         # print(f"new_name: {new_name}")
         # print(f"title: {title}")
+
+
+# if two rows have the same title, and one is frame_count 100 and the other is frame_count 600
+# assign the long_video_name of the 600 frame_count row to the new_name of the 100 frame_count row
+# and drop the 600 frame_count row from the df
+for existing_row in df.itertuples():
+    title = existing_row.title
+    frame_count = existing_row.frame_count
+    if frame_count is not None and frame_count == 100:
+        # find the row with the same title and frame_count 600
+        long_video_row = df[(df["title"] == title) & (df["frame_count"] == 600)]
+        if len(long_video_row) > 0:
+            long_video_name = long_video_row.iloc[0]["new_name"]
+            df.loc[df["title"] == title, "long_video_name"] = long_video_name
+            # drop the long video row from the df
+            df = df.drop(long_video_row.index)
+
+# if frame_count is not None and frame_count == 100:
+#     # find the row with the same title and frame_count 600
+#     long_video_row = df[(df["title"] == title) & (df["frame_count"] == 600)]
+#     if len(long_video_row) > 0:
+#         long_video_name = long_video_row.iloc[0]["new_name"]
+#         this_dict["long_video_name"] = long_video_name
+#         # drop the long video row from the df
+#         df = df.drop(long_video_row.index)
+
 print(f"df: {df}")
+
 df.to_csv(os.path.join(FOLDER, "renamed_files.csv"), index=False)

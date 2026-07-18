@@ -231,41 +231,63 @@ class DataIO:
     @staticmethod
     def extract_fusion_cluster(name):
         name = name.replace("_ct", "_").replace("hsv", "")
-        folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = None
-        try:
-            t = name.split("_t")[1].split("_")[0]
-        except IndexError:
-            print(f"  ❌  ❌ WARNING: Could not extract 't' from name: {name}. setting to None.")
-            t = None
-        if t is not None:
-            t = int(t)
-        if "wav" in name:
-            # handle audio file format: multitrack_mixdown_offset_cc183_p1_t0_1781177644.763904.wav
-            folder_arms_pose = name.split("cc")[1].split("_")[0]
-            folder_signature = name.split("p")[1].split("_")[0]
-        elif "cc" in name:
-            # these are the hands positions x gestures 
-            # img: clustercc15_p92_t1685_h3-22_1782990020.168832_p34_st1_ct8.mp4
-            folder_arms_pose = name.split("cc")[1].split("_")[0]
-            if t is not None and t > 0:
-                folder_hands_gesture = name.split("_p")[1].split("_")[0]
-                folder_signature = name.split("_t")[1].split("_")[0]
-        elif "_cluster" in name:
-            folder_arms_pose = name.split("_cluster")[1].split("_")[0]
-        elif "_c" in name:
-            folder_arms_pose = name.split("_c")[1].split("_")[0]
-        if "_p" in name and folder_signature is None:
-            folder_signature = name.split("_p")[1].split("_")[0]
-        if "_h" in name:
-            folder_hsv = name.split("_h")[1].split("_")[0]
-        elif "_om" in name:
-            folder_hsv = name.split("_om")[1].split("_")[0]
+        folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = topic_id = frame_count =None
+        all_fields = [folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count]
+
+        # needs to be able to handle the formatted filenamas that are produced by rename_finished_files.py, which are of the form:
+        #         new_name = f"TakingStock_T{TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv}.{original_suffixc}"
+
+        if name.startswith("TakingStock_T"):
+            name = name.split(".")[0].replace("TakingStock_", "")
+            parts = name.split("_")
+            for part in parts:
+                if part.startswith("p"):
+                    folder_arms_pose = part[1:]
+                elif part.startswith("g"):
+                    folder_hands_gesture = part[1:]
+                elif part.startswith("s"):
+                    folder_signature = part[1:]
+                elif part.startswith("h"):
+                    folder_hsv = part[1:]
+                elif part.startswith("T"):
+                    topic_id = part[1:]
+                elif part.startswith("fr"):
+                    frame_count = part[2:]
+        else:
+            try:
+                t = name.split("_t")[1].split("_")[0]
+            except IndexError:
+                print(f"  ❌  ❌ WARNING: Could not extract 't' from name: {name}. setting to None.")
+                t = None
+            if t is not None:
+                t = int(t)
+            if "wav" in name:
+                # handle audio file format: multitrack_mixdown_offset_cc183_p1_t0_1781177644.763904.wav
+                folder_arms_pose = name.split("cc")[1].split("_")[0]
+                folder_signature = name.split("p")[1].split("_")[0]
+            elif "cc" in name:
+                # these are the hands positions x gestures 
+                # img: clustercc15_p92_t1685_h3-22_1782990020.168832_p34_st1_ct8.mp4
+                folder_arms_pose = name.split("cc")[1].split("_")[0]
+                if t is not None and t > 0:
+                    folder_hands_gesture = name.split("_p")[1].split("_")[0]
+                    folder_signature = name.split("_t")[1].split("_")[0]
+            elif "_cluster" in name:
+                folder_arms_pose = name.split("_cluster")[1].split("_")[0]
+            elif "_c" in name:
+                folder_arms_pose = name.split("_c")[1].split("_")[0]
+            if "_p" in name and folder_signature is None:
+                folder_signature = name.split("_p")[1].split("_")[0]
+            if "_h" in name:
+                folder_hsv = name.split("_h")[1].split("_")[0]
+            elif "_om" in name:
+                folder_hsv = name.split("_om")[1].split("_")[0]
+            if "_fr" in name:
+                frame_count = name.split("_fr")[1].split("_")[0].split(".")[0]
         
-        # eval folder_arms_pose and folder_signature to None if they are string "None" or "nan"
-        if folder_arms_pose is not None and isinstance(folder_arms_pose, str) and folder_arms_pose.lower() in ["none", "nan"]:
-            folder_arms_pose = None
-        if folder_signature is not None and isinstance(folder_signature, str) and folder_signature.lower() in ["none", "nan"]:
-            folder_signature = None
+        for field in all_fields:
+            if field is not None and isinstance(field, str) and field.lower() in ["none", "nan"]:
+                field = None
 
         # now convert to int if not None    
         if folder_arms_pose is not None and folder_signature is not None:
@@ -273,7 +295,11 @@ class DataIO:
             folder_signature = int(folder_signature)
         if folder_hands_gesture is not None:
             folder_hands_gesture = int(folder_hands_gesture)
-        return folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv
+        if topic_id is not None:
+            topic_id = int(topic_id)
+        if frame_count is not None:
+            frame_count = int(frame_count)
+        return folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count
 
     def get_counter(self,CSV_COUNTOUT_PATH):
         # read last completed file
@@ -327,6 +353,7 @@ class DataIO:
         print("Saving image list for folder:", folder)
         if walk:
             for root, dirs, files in os.walk(folder):
+                print(f"Walking through {root}, found {len(files)} files")
                 if "_x" in root:
                     continue  # skip any _x folders
                 filtered = [
@@ -337,6 +364,7 @@ class DataIO:
             img_list.extend(filtered)
         else:
             img_list = [
+                # this will break if it is walking folders and the last folder is an empty folder, will return empty
                 f.replace('\\', '/')
                 for f in os.listdir(folder)
                 if os.path.isfile(os.path.join(folder, f)) and not f.startswith('.') and not f.endswith(('.csv', '.txt', '.json'))
@@ -349,7 +377,7 @@ class DataIO:
 
     def get_img_list(self, folder, force_ls=False, sort=True, walk=True):
         json_path = os.path.join(folder, 'img_list.json')
-        # print("getting image list from", json_path)
+        print("getting image list from", json_path)
         if os.path.exists(json_path) and not force_ls:
             # print("Image list exists, loading from", json_path)
             with open(json_path, 'r') as f:
@@ -367,8 +395,12 @@ class DataIO:
         return existing_image_ids
 
     def get_existing_image_ids_from_jpgs(self,folder):
-        existing_files = self.get_img_list(folder)
-        existing_image_ids = [int(f.replace(".jpg", "").replace(".jpeg", "").split("_")[-1]) for f in existing_files if f.endswith(".jpg") or f.endswith(".jpeg")]
+        existing_files = self.get_img_list(folder, force_ls=True, sort=True, walk=False)
+        print("existing_files", existing_files)
+        existing_file_basenames = [f.replace(".jpg", "").replace(".jpeg", "").replace(" copy", "") for f in existing_files if f.endswith(".jpg") or f.endswith(".jpeg")]
+        existing_image_ids = [f.split("_")[-1] for f in existing_file_basenames]
+
+        print("existing_image_ids", existing_image_ids)
         return existing_image_ids
 
 
