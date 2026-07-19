@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.pool import NullPool
 from pymediainfo import MediaInfo
 
-ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
 from mp_db_io import DataIO 
@@ -26,12 +26,13 @@ It will output a new name like:
 TakingStock_T{TOPIC}_p{folder_arms_pose}_s{folder_signature}_obj_{obj}_h{folder_hsv}.mp4
 '''
 
-FOLDER = "/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/T11_1920"
+FOLDER = "/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/T37_1080"
 MP4_ONLY = True 
 io = DataIO()
 DRY_RUN = False
 
-TOPIC = 11
+TOPIC = 37
+OVERRIDE_TOPIC = True # if true it will not respect the topic currently in the filename
 
 OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -235,7 +236,7 @@ for folder in folder_list:
         
 
         folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count = io.extract_fusion_cluster(img)
-        if topic_id is None:
+        if topic_id is None or OVERRIDE_TOPIC:
             topic_id = TOPIC
         if frame_count is not None:
             print(f"Found frame_count: {frame_count} in filename {img}")
