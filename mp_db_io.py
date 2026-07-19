@@ -233,7 +233,7 @@ class DataIO:
         name = name.replace("_ct", "_").replace("hsv", "")
         folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = topic_id = frame_count =None
         all_fields = [folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count]
-
+        print(f"extract_fusion_cluster: name: {name}")
         # needs to be able to handle the formatted filenamas that are produced by rename_finished_files.py, which are of the form:
         #         new_name = f"TakingStock_T{TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv}.{original_suffixc}"
 
@@ -285,9 +285,13 @@ class DataIO:
             if "_fr" in name:
                 frame_count = name.split("_fr")[1].split("_")[0].split(".")[0]
         
-        for field in all_fields:
-            if field is not None and isinstance(field, str) and field.lower() in ["none", "nan"]:
-                field = None
+        folder_arms_pose = None if folder_arms_pose is None or folder_arms_pose.lower() in ["none", "nan"] else folder_arms_pose
+        folder_hands_gesture = None if folder_hands_gesture is None or folder_hands_gesture.lower() in ["none", "nan"] else folder_hands_gesture
+        folder_signature = None if folder_signature is None or folder_signature.lower() in ["none", "nan"] else folder_signature
+        folder_hsv = None if folder_hsv is None or folder_hsv.lower() in ["none", "nan"] else folder_hsv
+        topic_id = None if topic_id is None or topic_id.lower() in ["none", "nan"] else topic_id
+        frame_count = None if frame_count is None or frame_count.lower() in ["none", "nan"] else frame_count
+
 
         # now convert to int if not None    
         if folder_arms_pose is not None and folder_signature is not None:
@@ -299,6 +303,7 @@ class DataIO:
             topic_id = int(topic_id)
         if frame_count is not None:
             frame_count = int(frame_count)
+        print(f"extract_fusion_cluster: folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, folder_hsv: {folder_hsv}, topic_id: {topic_id}, frame_count: {frame_count}")
         return folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count
 
     def get_counter(self,CSV_COUNTOUT_PATH):

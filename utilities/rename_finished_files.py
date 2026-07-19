@@ -6,6 +6,7 @@ import pandas as pd
 from sqlalchemy import Float, create_engine, Column, Integer, Boolean, String
 from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.pool import NullPool
+from pymediainfo import MediaInfo
 
 ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
 # caution: path[0] is reserved for script path (or '' in REPL)
@@ -25,10 +26,10 @@ It will output a new name like:
 TakingStock_T{TOPIC}_p{folder_arms_pose}_s{folder_signature}_obj_{obj}_h{folder_hsv}.mp4
 '''
 
-FOLDER = "/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/_hsv_bg_2tier_100"
+FOLDER = "/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/T11_1920"
 MP4_ONLY = True 
 io = DataIO()
-DRY_RUN = True
+DRY_RUN = False
 
 TOPIC = 11
 
@@ -44,11 +45,11 @@ HSV_DICT = {
     "3-6+22": "Red",
     "3-6+9+22": "Red",
     "7-13": "Yellow",
-    "15-21": "Blue-Purple",
+    "15-21": "Blue",
     "15-19": "Blue",
     "3-22": "Red-Yellow-Blue",
     "0": "Black",
-    "1": "Grey",
+    "0-1": "Black-Grey",
     "2": "White",
     "0-22": "None",
 }
@@ -127,6 +128,7 @@ def get_modal_cluster_id(main_folder, session):
 def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv):
     title = ""
 
+    obj_id_string = obj_name_string = hsv_name = hsv_value  = None
     # format obj and hsv strings, but not add yet
     if obj_str is not None:
         if "-" in obj_str:
@@ -147,19 +149,22 @@ def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature
             obj_name_string = f"{obj_name}"
     
     if folder_hsv is not None:
+        if folder_hsv == 1 or folder_hsv == "1":
+            folder_hsv = "0-1"
+        print(f"folder_hsv: {folder_hsv}")
         hsv_name = HSV_DICT.get(folder_hsv, None)
         if hsv_name != "None" and hsv_name is not None:
-            hsv_value += f"HSV {folder_hsv} "
+            hsv_value = f"HSV {folder_hsv} "
             # hsv_name += f"{hsv_name}
     else: 
         hsv_name = None
         hsv_value = None
-    
+    print(f"format_title: topic: {topic}, folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, obj_id_string: {obj_id_string}, obj_name_string: {obj_name_string}, hsv_name: {hsv_name}, hsv_value: {hsv_value}")
     if obj_name_string is not None and hsv_name is not None:
         title += f"{obj_name_string}, {hsv_name} "
     elif obj_name_string is not None:
         title += f"{obj_name_string} "
-    elif hsv_name is not None:
+    elif hsv_name is not None and hsv_name != "None":
         title += f"{hsv_name} "
     title += "("
     if topic is not None:
@@ -175,13 +180,13 @@ def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature
     # if folder_signature is not None:
     #     title += f"Signature {folder_signature}, "
     # remove trailing comma and space
-    title = title.rstrip(", ")
+    title = title.rstrip(", ").replace(", ,", ",")
     title += ")"
 
 
     # chomp any trailing comma and space
     title = title.rstrip(", ")
-
+    print(f"format_title: title: {title}")
     return title
 
 # go get modal cluster id for everything, just in case
@@ -206,7 +211,29 @@ for folder in folder_list:
         folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = obj_str = frame_count = None
         # img == the mp4 file
         if MP4_ONLY and not "mp4" in img: continue
-        print(f" >> this is the filewe are going to act on: {img}")
+        print(f" >> this is the file we are going to act on: {img}")
+        # get the file dimensions
+        # use pymediainfo to get the dimensions of the image/video
+        media_info = MediaInfo.parse(os.path.join(folder, img))
+        media_width = media_height = media_length = None
+        if "mp4" in img:
+            # Extract dimensions from the video track
+            for track in media_info.tracks:
+                if track.track_type == 'Video':
+                    media_width = track.width
+                    media_height = track.height
+                    media_length = track.duration
+        elif "jpg" in img or "jpeg" in img:
+            # Check if an image track exists and extract dimensions
+            if media_info.image_tracks:
+                image_track = media_info.image_tracks[0]
+                print(f"Dimensions: {image_track.width}x{image_track.height}")
+                media_width = image_track.width
+                media_height = image_track.height
+        print(f"media_width: {media_width}, media_height: {media_height}, media_length: {media_length}")
+
+        
+
         folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count = io.extract_fusion_cluster(img)
         if topic_id is None:
             topic_id = TOPIC
@@ -225,7 +252,7 @@ for folder in folder_list:
                     print(f"folder_signature: {folder_signature}, folder_hsv: {folder_hsv}")
                     print(type(folder_hsv))
 
-        # print(f"folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, folder_hsv: {folder_hsv}")
+        print(f"extract_fusion_cluster DONE: folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, folder_hsv: {folder_hsv}, topic_id: {topic_id}, frame_count: {frame_count}")
         obj = object_signature_registry.get(io.normalize_cluster_token(folder_signature), None)
         # print(type(obj))
         
@@ -255,6 +282,9 @@ for folder in folder_list:
             "folder_signature": folder_signature,
             "folder_hsv": folder_hsv,
             "obj_str": obj_str,
+            "media_width": media_width,
+            "media_height": media_height,
+            "media_length": media_length,
             "frame_count": frame_count,
             "long_video_name": None
         }
@@ -290,15 +320,8 @@ for existing_row in df.itertuples():
             # drop the long video row from the df
             df = df.drop(long_video_row.index)
 
-# if frame_count is not None and frame_count == 100:
-#     # find the row with the same title and frame_count 600
-#     long_video_row = df[(df["title"] == title) & (df["frame_count"] == 600)]
-#     if len(long_video_row) > 0:
-#         long_video_name = long_video_row.iloc[0]["new_name"]
-#         this_dict["long_video_name"] = long_video_name
-#         # drop the long video row from the df
-#         df = df.drop(long_video_row.index)
-
+# sort df on title
+df = df.sort_values(by=["title"]).reset_index(drop=True)
 print(f"df: {df}")
 
 df.to_csv(os.path.join(FOLDER, "renamed_files.csv"), index=False)

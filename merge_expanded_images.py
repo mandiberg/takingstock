@@ -32,7 +32,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_TH
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "_hsv_bg_2tier_100"
+FOLDER_NAME = "mk1"
 # FOLDER_NAME = "output_folder/redux1"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
@@ -42,7 +42,7 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 6  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None
@@ -51,7 +51,7 @@ CROP_AFTER_COUNT = None
 DO_INSTALLATION_ONLY = False
 
 LOOPING = False # defaults
-REPEAT = 6 # will repeat the entire sequence this many times, for looping videos
+REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
 BLEND_END_TO_FIRST = True
 OFFSET_ON_BUILD = True
@@ -403,12 +403,12 @@ def crop_scale_giga(img1, DIMS=GIGA_DIMS):
                 ratio = DIMS[1] / img1.shape[1]
                 resize_height = int(img1.shape[0] * ratio)
                 resize_width = DIMS[1]
-        # elif abs(img1.shape[0] - img1.shape[1]) < img1.shape[0] // 10:
-        #     # catch the square ones for video merge
-        #     if DIMS == [1080, 1080]:
-        #         if VERBOSE: print("UPSCALING scaling to 1920,1920")
-        #         resize_width = 1920
-        #         resize_height = 1920
+        elif abs(img1.shape[0] - img1.shape[1]) < img1.shape[0] // 10:
+            # catch the square ones for video merge
+            if DIMS == [1080, 1080]:
+                if VERBOSE: print("scaling to 1920,1920")
+                resize_width = 1920
+                resize_height = 1920
         else:
             resize_width = DIMS[1]
             resize_height = DIMS[0]
