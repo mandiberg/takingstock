@@ -231,8 +231,19 @@ class DataIO:
     @staticmethod
     def extract_fusion_cluster(name):
         name = name.replace("_ct", "_").replace("hsv", "")
+        # establish variables to hold the extracted values, defaulting to None
         folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = topic_id = frame_count =None
-        all_fields = [folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count]
+        # construct dict to hold the extracted values, and make it easier to test Nonetype and return all
+        data = {
+            "folder_arms_pose": folder_arms_pose,
+            "folder_hands_gesture": folder_hands_gesture,
+            "folder_signature": folder_signature,
+            "folder_hsv": folder_hsv,
+            "topic_id": topic_id,
+            "frame_count": frame_count
+        }
+
+        # all_fields = [folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count]
         print(f"extract_fusion_cluster: name: {name}")
         # needs to be able to handle the formatted filenamas that are produced by rename_finished_files.py, which are of the form:
         #         new_name = f"TakingStock_T{TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv}.{original_suffixc}"
@@ -242,17 +253,17 @@ class DataIO:
             parts = name.split("_")
             for part in parts:
                 if part.startswith("p"):
-                    folder_arms_pose = part[1:]
+                    data["folder_arms_pose"] = part[1:]
                 elif part.startswith("g"):
-                    folder_hands_gesture = part[1:]
+                    data["folder_hands_gesture"] = part[1:]
                 elif part.startswith("s"):
-                    folder_signature = part[1:]
+                    data["folder_signature"] = part[1:]
                 elif part.startswith("h"):
-                    folder_hsv = part[1:]
+                    data["folder_hsv"] = part[1:]
                 elif part.startswith("T"):
-                    topic_id = part[1:]
+                    data["topic_id"] = part[1:]
                 elif part.startswith("fr"):
-                    frame_count = part[2:]
+                    data["frame_count"] = part[2:]
         else:
             try:
                 t = name.split("_t")[1].split("_")[0]
@@ -263,49 +274,46 @@ class DataIO:
                 t = int(t)
             if "wav" in name:
                 # handle audio file format: multitrack_mixdown_offset_cc183_p1_t0_1781177644.763904.wav
-                folder_arms_pose = name.split("cc")[1].split("_")[0]
-                folder_signature = name.split("p")[1].split("_")[0]
+                data["folder_arms_pose"] = name.split("cc")[1].split("_")[0]
+                data["folder_signature"] = name.split("p")[1].split("_")[0]
             elif "cc" in name:
                 # these are the hands positions x gestures 
                 # img: clustercc15_p92_t1685_h3-22_1782990020.168832_p34_st1_ct8.mp4
-                folder_arms_pose = name.split("cc")[1].split("_")[0]
+                data["folder_arms_pose"] = name.split("cc")[1].split("_")[0]
                 if t is not None and t > 0:
-                    folder_hands_gesture = name.split("_p")[1].split("_")[0]
-                    folder_signature = name.split("_t")[1].split("_")[0]
+                    data["folder_hands_gesture"] = name.split("_p")[1].split("_")[0]
+                    data["folder_signature"] = name.split("_t")[1].split("_")[0]
             elif "_cluster" in name:
-                folder_arms_pose = name.split("_cluster")[1].split("_")[0]
+                data["folder_arms_pose"] = name.split("_cluster")[1].split("_")[0]
             elif "_c" in name:
-                folder_arms_pose = name.split("_c")[1].split("_")[0]
-            if "_p" in name and folder_signature is None:
-                folder_signature = name.split("_p")[1].split("_")[0]
+                data["folder_arms_pose"] = name.split("_c")[1].split("_")[0]
+            if "_p" in name and data["folder_signature"] is None:
+                data["folder_signature"] = name.split("_p")[1].split("_")[0]
             if "_h" in name:
-                folder_hsv = name.split("_h")[1].split("_")[0]
+                data["folder_hsv"] = name.split("_h")[1].split("_")[0]
             elif "_om" in name:
-                folder_hsv = name.split("_om")[1].split("_")[0]
+                data["folder_hsv"] = name.split("_om")[1].split("_")[0]
             if "_fr" in name:
-                frame_count = name.split("_fr")[1].split("_")[0].split(".")[0]
+                data["frame_count"] = name.split("_fr")[1].split("_")[0].split(".")[0]
         
-        folder_arms_pose = None if folder_arms_pose is None or folder_arms_pose.lower() in ["none", "nan"] else folder_arms_pose
-        folder_hands_gesture = None if folder_hands_gesture is None or folder_hands_gesture.lower() in ["none", "nan"] else folder_hands_gesture
-        folder_signature = None if folder_signature is None or folder_signature.lower() in ["none", "nan"] else folder_signature
-        folder_hsv = None if folder_hsv is None or folder_hsv.lower() in ["none", "nan"] else folder_hsv
-        topic_id = None if topic_id is None or topic_id.lower() in ["none", "nan"] else topic_id
-        frame_count = None if frame_count is None or frame_count.lower() in ["none", "nan"] else frame_count
+        for key, val in data.items():
+            if val is None or str(val).lower() in ["none", "nan"]:
+                data[key] = None
 
 
         # now convert to int if not None    
-        if folder_arms_pose is not None and folder_signature is not None:
-            folder_arms_pose = int(folder_arms_pose)
-            folder_signature = int(folder_signature)
-        if folder_hands_gesture is not None:
-            folder_hands_gesture = int(folder_hands_gesture)
-        if topic_id is not None:
-            topic_id = int(topic_id)
-        if frame_count is not None:
-            frame_count = int(frame_count)
-        print(f"extract_fusion_cluster: folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, folder_hsv: {folder_hsv}, topic_id: {topic_id}, frame_count: {frame_count}")
-        return folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count
-
+        if data["folder_arms_pose"] is not None and data["folder_signature"] is not None:
+            data["folder_arms_pose"] = int(data["folder_arms_pose"])
+            data["folder_signature"] = int(data["folder_signature"])
+        if data["folder_hands_gesture"] is not None:
+            data["folder_hands_gesture"] = int(data["folder_hands_gesture"])
+        if data["topic_id"] is not None:
+            data["topic_id"] = int(data["topic_id"])
+        if data["frame_count"] is not None:
+            data["frame_count"] = int(data["frame_count"])
+        print(f"extract_fusion_cluster: folder_arms_pose: {data['folder_arms_pose']}, folder_hands_gesture: {data['folder_hands_gesture']}, folder_signature: {data['folder_signature']}, folder_hsv: {data['folder_hsv']}, topic_id: {data['topic_id']}, frame_count: {data['frame_count']}")
+        return data
+    
     def get_counter(self,CSV_COUNTOUT_PATH):
         # read last completed file
         try:
