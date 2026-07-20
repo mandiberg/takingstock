@@ -71,7 +71,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 2000000
+LIMIT= 3000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -375,40 +375,6 @@ def has_existing_hand_landmarks_norm(image_id):
         print("has_existing_hand_landmarks_norm no docs for", image_id, "candidate_ids", candidate_ids)
 
     return False
-    
-# def get_hand_landmarks_mongo(image_id):
-#     if image_id:
-#         results = mongo_hand_collection.find_one({"image_id": image_id})
-#         if results:
-#             hand_landmarks = results['nlms']
-#             # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-#             return unpickle_array(hand_landmarks)
-#         else:
-#             return None
-#     else:
-#         return None
-    
-# def insert_n_landmarks(image_id,n_landmarks):
-#     nlms_dict = { "image_id": image_id, "nlms": pickle.dumps(n_landmarks) }
-#     x = bboxnormed_collection.insert_one(nlms_dict)
-#     print("inserted id",x.inserted_id)
-#     return
-
-
-# def insert_n_landmarks(image_id, n_landmarks):
-#     start = time.time()
-#     nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
-#     result = bboxnormed_collection.update_one(
-#         {"image_id": image_id},  # filter
-#         {"$set": nlms_dict},     # update
-#         upsert=True              # insert if not exists
-#     )
-#     if result.upserted_id:
-#         print("Inserted new document with id:", result.upserted_id)
-#     else:
-#         print("Updated existing document")
-#     print("Time to insert:", time.time()-start)
-#     return
 
 
 def insert_n_phone_bbox(image_id, n_phone_bbox, batch_updates):
@@ -1116,18 +1082,8 @@ for result in results:
     image_id_to_shape[image_id] = (height, width, bbox, face_height, nose_pixel_x, nose_pixel_y)
 
     ### temp single thread for debugging
-    # calc_nlm(image_id_to_shape, lock=None, session=session)
     if VERBOSE: print("image_id_to_shape", image_id_to_shape)
-    # print(" ")
-    # print(" ")
     work_queue.put(image_id_to_shape)        
-
-# distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
-# if VERBOSE: print("query length",len(distinct_image_ids))
-# if VERBOSE: print("distinct_image_ids",(distinct_image_ids))
-# for counter,target_image_id in enumerate(distinct_image_ids):
-#     if counter%1000==0:print("###########"+str(counter)+"images processed ##########")
-    # work_queue.put(target_image_id)        
 
 if VERBOSE: print("queue filled")
 

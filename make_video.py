@@ -1961,54 +1961,6 @@ def tsp_sort(df_enc):
     df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
     return df_sorted
 
-def cycling_order(CYCLECOUNT, sort):
-    img_array = []
-    cycle = 0 
-    # metamedian = get_metamedian(angle_list)
-    metamedian = sort.metamedian
-    d = sort.d
-
-    print("CYCLE to test: ",cycle)
-
-    while cycle < CYCLECOUNT:
-        print("CYCLE: ",cycle)
-        for angle in sort.angle_list:
-            print("angle: ",str(angle))
-            # # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
-            # # print(d[angle].size)
-            try:
-                # I don't remember exactly how this segments the data...!!!
-                # [:CYCLECOUNT] gets the first [:0] value on first cycle?
-                # or does it limit the total number of values to the number of cycles?
-                print(d[angle])
-                
-                #this is a way of finding the image with closest second sort (Y)
-                #mystery value is the image to be matched? 
-                print("second sort, metamedian ",d[angle][sort.SECOND_SORT],sort.metamedian)
-                mysteryvalue = (d[angle][sort.SECOND_SORT]-sort.metamedian)
-                print('mysteryvalue ',mysteryvalue)
-                #is mystery value a df?
-                #this is finding the 
-                mysterykey = mysteryvalue.abs().argsort()[:CYCLECOUNT]
-                print('mysterykey: ',mysterykey)
-                closest = d[angle].iloc[mysterykey]
-                closest_file = closest.iloc[cycle]['imagename']
-                closest_mouth = closest.iloc[cycle]['mouth_gap']
-                print('closest: ')
-                print(closest_file)
-                img = cv2.imread(closest_file)
-                height, width, layers = img.shape
-                size = (width, height)
-                img_array.append(img)
-            except:
-                print('failed cycle angle:')
-                # print('failed:',row['imagename'])
-        print('finished a cycle')
-        sort.angle_list.reverse()
-        cycle = cycle +1
-        # print(angle_list)
-    return img_array, size
-
 def prep_encodings_NN(df_segment, effective_sort_type=None):
     _sort_type = effective_sort_type if effective_sort_type is not None else SORT_TYPE
     def create_hsv_list(row):
@@ -2233,28 +2185,6 @@ def generate_cropped_image(img, context):
     if is_inpaint:
         return None, "needs_inpaint"
     return cropped_image, "ok"
-
-
-
-def print_counters(counter_state=None):
-    counter_state = counter_state if counter_state is not None else sort.counter_dict
-    print("good_count")
-    print(counter_state["good_count"])
-    print("isnot_face_count")
-    print(counter_state["isnot_face_count"])
-    print("cropfail_count")
-    print(counter_state["cropfail_count"])
-    print("sort.negmargin_count")
-    print(sort.negmargin_count)
-    print("sort.toosmall_count")
-    print(sort.toosmall_count)
-    print("failed_dist_count")
-    print(counter_state["failed_dist_count"])
-    print("total count")
-    print(counter_state["counter"])
-    print("inpaint count")
-    print(counter_state["inpaint_count"])
-
 
 def const_imgfilename_NN(UID, df, imgfileprefix, counter_state=None):
     # print("filename", filename)
@@ -3366,9 +3296,6 @@ def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
     return {"generated": generated, "skipped": skipped, "failed": failed, "total": total}
 
 
-def write_images(img_list):
-    for path_img in img_list:
-        cv2.imwrite(path_img[0],path_img[1])
 
 
 def enrich_image_metas(df):
@@ -3640,11 +3567,6 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
             print(f"sorting by face distance took {lap_time:.2f} seconds for {segment_count} segments")
     finally:
         sort.SORT_TYPE = original_sort_type
-
-        # test to see if they make good faces
-        # write_images(img_list)
-        # write_images(sort.not_make_face)
-        # print_counters()
 
 def parse_cluster_no(this_cluster):
     # if this_cluster is a list, then assign the first one to cluster_no
@@ -5256,11 +5178,6 @@ def main():
             ### SORT THE LIST OF SELECTED IMAGES ###
             ###    THESE ARE THE VARIATIONS      ###
 
-            if motion["side_to_side"] is True and IS_ANGLE_SORT is False:
-                # this is old, hasn't been refactored.
-                img_list, size = cycling_order(CYCLECOUNT, sort)
-                # size = sort.get_cv2size(ROOT, img_list[0])
-            # ANGLE SORT USED TO BE HERE in an elif. Removed Nov 20, 2205
             else:   
                 # hard coding override to just start from median
                 # sort.counter_dict["start_img_name"] = "median"
