@@ -155,7 +155,7 @@ class SortPose:
         if image_edge_multiplier is None:
             if "body3D" in self.SORT_TYPE:
                 image_edge_multiplier = [5, 9, 13, 9]  # default values for body/hand sorting
-                # image_edge_multiplier = [4, 8, 12, 8]  # when doing initial sort, so I can delete easily
+                image_edge_multiplier = [4, 8, 12, 8]  # when doing initial sort, so I can delete easily
             else:
                 image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
 
@@ -682,19 +682,6 @@ class SortPose:
                 break
         total = sum(self.dist_matrix[route[i], route[i+1]] for i in range(len(route)-1))
         return (total + skip_cnt * self.SKIP_PENALTY,)
-    
-    def cxFixedEndsSimpleSwap(self,ind1, ind2):
-        """Swap a random slice only within ind[1:-1], keeping endpoints fixed."""
-        a, b = sorted(random.sample(range(1, self.N_POINTS-1), 2))
-        ind1[a:b], ind2[a:b] = ind2[a:b], ind1[a:b]
-        return ind1, ind2
-
-    def mutFixedEndsShuffle(self,ind, indpb):
-        """Shuffle only inside ind[1:-1], keeping endpoints fixed."""
-        sub = ind[1:-1]
-        tools.mutShuffleIndexes(sub, indpb=indpb)
-        ind[1:-1] = sub
-        return (ind,)
 
     def set_TSP_sort(self,df,START_IDX=None,END_IDX=None):
         #____SETTING UP DISTANCE MATRIX_______
@@ -1147,37 +1134,6 @@ class SortPose:
         d=np.linalg.norm(enc1 - enc2, axis=0)
         return d
 
-
-    def simplest_order(self, segment):
-        img_array = []
-        delta_array = []
-        #simple ordering, second sort, because this is the...?
-        rotation = segment.sort_values(by=self.SORT)
-
-        i = 0
-        for index, row in rotation.iterrows():
-            print(row['face_x'], row['face_y'], row['imagename'])
-
-            #I don't know what this does or why
-            delta_array.append(row['mouth_gap'])
-
-            try:
-                img = cv2.imread(row['imagename'])
-                height, width, layers = img.shape
-                size = (width, height)
-                # test to see if this is actually an face, to get rid of blank ones/bad ones
-                # this may not be necessary
-                img_array.append(img)
-
-                i+=1
-
-            except:
-                print('failed:',row['imagename'])
-        # print("delta_array")
-        # print(delta_array)
-        return img_array, size        
-
-
     def get_cv2size(self, site_specific_root_folder, filename_or_imagedata):
         #IF filename_or_imagedata IS STRING:
         img = cv2.imread(os.path.join(site_specific_root_folder,filename_or_imagedata))
@@ -1186,37 +1142,8 @@ class SortPose:
         size = (img.shape[0], img.shape[1])
         return size
 
-    # this doesn't seem to work
-    # but it might be relevant later
-    def cv2_safeopen_size(self, ROOT, filename_or_imagedata):
-        print('attempting safeopen')
-        if (len(filename_or_imagedata.split('/'))>1):
-            # has path
-            print('about to try')
-            try:
-                img = cv2.imread(filename_or_imagedata)
-            except:
-                print('could not read image path ',filename_or_imagedata)
+    
 
-        elif (len(filename_or_imagedata.split('.'))==1):
-            # is filename
-            print('about to try')
-            try:
-                img = cv2.imread(os.path.join(ROOT,filename_or_imagedata))
-            except:
-                print('could not read image ',filename_or_imagedata)
-
-        else:
-            # is imagedata
-            img = filename_or_imagedata
-            print('was image data')
-
-        size = (img.shape[0], img.shape[1])
-        return img, size
-
-
-
-    # test if new and old make a face, calls is_face
     def test_pair(self, last_img, img):
 
         print(img.shape,"@@@@@@@@@@@@@@@@@@@@")
@@ -1429,28 +1356,6 @@ class SortPose:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-
-    def check_body_landmarks_visibility_for_duplicate(self, df_sorted, index):
-        #function to check body landmarks visibility for dupes, ie if one of two images has legs and the other doesn't, cant be dupe. first pass for dupe detection
-        print("checking body landmark visibility for duplicates at index", index)
-        current_row = df_sorted.iloc[index]
-        visibility_enc_1 = current_row.get('body_landmarks_normalized_visible_array', None)
-        visibility_enc_1 = [round(value) for value in visibility_enc_1]
-        count_of_comparisons = 10  # Number of rows to compare with the current row
-        df_slice = df_sorted.iloc[index-1:index+count_of_comparisons]
-        visibility_diffs = []
-        for i, row in df_slice.iterrows():
-            if i != index:
-                visibility_enc_2 = row.get('body_landmarks_normalized_visible_array', None)
-                visibility_enc_2 = [round(value) for value in visibility_enc_2]
-                if (visibility_enc_1 is not None) and (visibility_enc_2 is not None):
-                    visibility_diff = sum(abs(a - b) for a, b in zip(visibility_enc_1, visibility_enc_2))
-                   
-                    #highest diffs so far have been 4, going to have it ping for any higher
-                    if visibility_diff > 4:
-                        print("!!!HIGH VIS DIFF!!!", visibility_diff)
-                    visibility_diffs.append(visibility_diff)
-        return visibility_diffs
 
     def trim_bottom(self, img, site_name_id):
         # if self.VERBOSE: print("trimming bottom")
@@ -3951,24 +3856,6 @@ class SortPose:
                 print("couldn't drop the start_img")
         return enc1
 
-
-
-
-    def get_face_2d_dict(self, faceLms):
-        face_2d = {}
-        for idx, lm in enumerate(faceLms.landmark):
-            if idx == 33 or idx == 263 or idx == 1 or idx == 61 or idx == 291 or idx == 199 or idx == 10 or idx == 152:
-                # x, y = int(lm.x * img_w), int(lm.y * img_h)
-                face_2d[idx] =([lm.x, lm.y])
-
-                # Get the 2D Coordinates
-                # face_2d.append([x, y])
-
-        # Convert it to the NumPy array
-        # image points
-        # self.face_2d = np.array(face_2d, dtype=np.float64)
-
-        return face_2d
 
     def choose_hand(self, landmark_list, hand):
         right = []

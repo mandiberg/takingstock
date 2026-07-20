@@ -57,23 +57,23 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T3_player'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+SegmentHelper_name = 'SegmentHelper_TheOffice'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
-SSD_PATH = "/Volumes/LaCie/segment_images_45_nature"
+SSD_PATH = "/Volumes/LaCie/segment_images_thegym_redux"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 8  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -105,7 +105,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheGym_3Dbodies_T45nature_select/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheOffice_looping_redux/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -191,7 +191,7 @@ MULTIPOLICY = False
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 3
+MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
@@ -273,8 +273,8 @@ elif "3D" in CURRENT_MODE:
     TOPIC_NO = [0]
     IS_ONE_TOPIC = True
 
-    # only for print production, for file sorting
-    ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
+    # # only for print production, for file sorting
+    # ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
 
     IS_CLUSTER = True
     # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
@@ -301,7 +301,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     '''
 
     # main switches
-    INSTALLATION_VIDEO = True # if false, it will do the animation TSP sort
+    INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
@@ -311,7 +311,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
 
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEGYM"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
@@ -1777,11 +1777,6 @@ def expand_vector_column(df, vector_col="face_encodings68", prefix="enc", expect
         )
     return vector_df
 
-
-def expand_face_encodings(df,encoding_col= "face_encodings68",):
-    """Backward-compatible wrapper for face encoding expansion."""
-    return expand_vector_column(df, vector_col=encoding_col, prefix="enc", expected_len=128)
-
 def get_closest_knn_or_break(df_enc, df_sorted):
     # send in both dfs, and return same dfs with 1+ rows sorted
     print(" -- BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
@@ -2239,92 +2234,6 @@ def generate_cropped_image(img, context):
         return None, "needs_inpaint"
     return cropped_image, "ok"
 
-# this seems deprecated?????
-# def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current_image_id=None):
-#     # for some reason the function is called with either a df and index, or face_landmarks and bbox
-#     # rw to handle both here. 
-#     if isinstance(face_landmarks_or_df, pd.DataFrame):
-#         df_sorted = face_landmarks_or_df
-#         index = bbox_or_index
-#         face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
-#         current_image_id = df_sorted.iloc[index].get('image_id', current_image_id)
-#         current_yaw = df_sorted.iloc[index].get('yaw', None)
-#         current_roll = df_sorted.iloc[index].get('roll', None)
-#         current_pitch = df_sorted.iloc[index].get('pitch', None)
-#         is_df = True
-#     else:
-#         face_landmarks = face_landmarks_or_df
-#         bbox = bbox_or_index
-#         current_yaw = current_roll = current_pitch = None
-#         is_df = False
-
-#     is_face = None
-#     skip_face = False
-#     #crop image here:
-    
-#     print(f". ---  compare_images with is_df {is_df} for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")
-#     if sort.counter_dict["first_run"] is False and last_image is None: print(" ><><>< YIKES, last_image is None ><><>< ")
-#     crop_context = {
-#         "is_valid": True,
-#         "face_landmarks": face_landmarks,
-#         "bbox": bbox,
-#         "current_image_id": current_image_id,
-#         "yaw": current_yaw,
-#         "roll": current_roll,
-#         "pitch": current_pitch,
-#     }
-#     cropped_image, crop_status = generate_cropped_image(img, crop_context)
-#     is_inpaint = crop_status == "needs_inpaint"
-
-
-#     # this code takes image i, and blends it with the subsequent image
-#     # next step is to test to see if mp can recognize a face in the image
-#     # if no face, a bad blend, try again with i+2, etc. 
-#     if cropped_image is not None and not is_inpaint:
-#         if VERBOSE: print("have a cropped image trying to save", cropped_image.shape)
-#         try:
-#             if sort.counter_dict["first_run"] is False:
-#                 if VERBOSE:  print("testing is_face")
-#                 if SORT_TYPE not in ("planar_body", "body3D"):
-#                 #     # check to see if the two faces make one
-#                     if VERBOSE:
-#                         print("testing is_face to see if the two make a face")
-#                         print("last_image shape:", last_image.shape)
-#                         print("cropped_image shape:", cropped_image.shape)
-#                     is_face = sort.test_or_lookup_face_pair(last_image, cropped_image, current_image_id)
-#                     print("test_or_lookup_face_pair is_face result:", is_face)
-#                 # sept 2025 dedupe used to happen here, but removing this, as it is now handled in separate dedupe process
-#                 else:
-#                     print("failed is_face test")
-#             else:
-#                 print("first round, skipping the pair test")
-#         except:
-#             print("last_image try failed")
-#         # if is_face or first_run and sort.resize_factor < sort.resize_max:
-#         if is_face or sort.counter_dict["first_run"]:
-#             # if successful, prepare for the next round
-#             sort.counter_dict["first_run"] = False
-#             last_image = cropped_image
-#             sort.counter_dict["good_count"] += 1
-#         else: 
-#             sort.counter_dict["isnot_face_count"] += 1
-#             print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
-#             return None, True
-        
-#     elif cropped_image is None and sort.counter_dict["first_run"]:
-#         print("first run, but bad first image")
-#         last_image = cropped_image
-#         sort.counter_dict["cropfail_count"] += 1
-#     elif is_inpaint:
-#         print("bad crop, will try inpainting and try again")
-#         sort.counter_dict["inpaint_count"] += 1
-#     elif cropped_image is None:
-#         print("no image or resize to great, trying next")
-#         sort.counter_dict["cropfail_count"] += 1
-#         skip_face = True
-#     # print(type(cropped_image),"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-
-#     return cropped_image, skip_face
 
 
 def print_counters(counter_state=None):

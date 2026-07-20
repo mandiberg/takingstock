@@ -221,13 +221,6 @@ class DataIO:
             ]
         # print("folder_list is ", self.folder_list)
 
-    def capitalize_directory(self,path):
-        dirname, filename = os.path.split(path)
-        parts = dirname.split('/')
-        capitalized_parts = [part if i < len(parts) - 2 else part.upper() for i, part in enumerate(parts)]
-        capitalized_dirname = '/'.join(capitalized_parts)
-        return os.path.join(capitalized_dirname, filename)
-
     @staticmethod
     def extract_fusion_cluster(name):
         name = name.replace("_ct", "_").replace("hsv", "")
@@ -616,14 +609,6 @@ class DataIO:
     #         return Lms1d3
     #     else:
     #         return Lms2d
-
-
-    def make_float(self, value):
-        try:
-            return float(value)
-        except (ValueError, TypeError):
-            return value
-
 
     def print_sqlalchemy_query(self, engine, query):
         # Print the actual SQL SELECT statement with all parameters filled in
