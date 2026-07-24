@@ -32,7 +32,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_TH
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "mk1"
+FOLDER_NAME = "T37_final_looping_video_source_files"
 # FOLDER_NAME = "output_folder/redux1"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
@@ -42,7 +42,7 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 6  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None
@@ -52,6 +52,7 @@ DO_INSTALLATION_ONLY = False
 
 LOOPING = False # defaults
 REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
+EXPORT_GIF = True # if true, it will save still jpg and animated gif for each subfolder
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
 BLEND_END_TO_FIRST = True
 OFFSET_ON_BUILD = True
@@ -77,6 +78,9 @@ singleton_skip_counts = {
     "terminal_non_final": 0,
     "terminal_final": 0,
 }
+EXPORT_FIRST_CYCLE_STILL_ENABLED = False
+EXPORT_FIRST_CYCLE_STILL_DONE = False
+EXPORT_FIRST_CYCLE_STILL_PATH = None
 last_image_written = None
 first_image_written = None
 run_counter = 0
@@ -867,6 +871,9 @@ def save_images_to_video(images_to_return, video_writer, debug_meta=None):
     global first_image_written
     global run_counter
     global pending_offset_frames
+    global EXPORT_FIRST_CYCLE_STILL_ENABLED
+    global EXPORT_FIRST_CYCLE_STILL_DONE
+    global EXPORT_FIRST_CYCLE_STILL_PATH
     # print("save_images_to_video called with", len(images_to_return) if images_to_return is not None else 0, "images")
     if images_to_return is not None: 
         if isinstance(images_to_return, np.ndarray):
@@ -892,6 +899,33 @@ def save_images_to_video(images_to_return, video_writer, debug_meta=None):
                 if debug_meta.get("skipped"):
                     debug_lines.append(f"skipped={debug_meta['skipped']}")
                 img = overlay_debug_lines(img, debug_lines)
+
+            # Export one still frame when first cycle first reaches MERGE_COUNT.
+            if (
+                EXPORT_FIRST_CYCLE_STILL_ENABLED
+                and (not EXPORT_FIRST_CYCLE_STILL_DONE)
+                and EXPORT_FIRST_CYCLE_STILL_PATH
+                and debug_meta is not None
+                and int(debug_meta.get("current_pos", -1)) == 0
+                and int(debug_meta.get("size", -1)) == int(MERGE_COUNT)
+                and batch_index == (len(image_batch) - 1)
+            ):
+                still_frame = img
+                if still_frame.dtype != np.uint8:
+                    still_frame = np.clip(still_frame, 0, 255).astype(np.uint8)
+                if len(still_frame.shape) == 2:
+                    still_frame = cv2.cvtColor(still_frame, cv2.COLOR_GRAY2BGR)
+                saved = cv2.imwrite(EXPORT_FIRST_CYCLE_STILL_PATH, still_frame)
+                print(
+                    "first-cycle still export",
+                    f"saved={saved}",
+                    f"path={EXPORT_FIRST_CYCLE_STILL_PATH}",
+                    f"frame={run_counter}",
+                    f"size={debug_meta.get('size')}",
+                    f"current_pos={debug_meta.get('current_pos')}",
+                )
+                EXPORT_FIRST_CYCLE_STILL_DONE = bool(saved)
+
             # save this image for testing
             # cv2.imwrite(os.path.join(FOLDER_PATH, f"test_{run_counter}.png"), img)
             # print(f"save_images_to_video test_{run_counter}.png", img.shape)
@@ -1597,6 +1631,9 @@ def write_video(img_array, subfolder_path=None):
     global START_FRAME_OFFSET
     global pending_offset_frames
     global singleton_skip_counts
+    global EXPORT_FIRST_CYCLE_STILL_ENABLED
+    global EXPORT_FIRST_CYCLE_STILL_DONE
+    global EXPORT_FIRST_CYCLE_STILL_PATH
     last_image_written = None
     first_image_written = None
     run_counter = 0
@@ -1608,6 +1645,9 @@ def write_video(img_array, subfolder_path=None):
         "terminal_non_final": 0,
         "terminal_final": 0,
     }
+    EXPORT_FIRST_CYCLE_STILL_ENABLED = False
+    EXPORT_FIRST_CYCLE_STILL_DONE = False
+    EXPORT_FIRST_CYCLE_STILL_PATH = None
     img_array = [img for img in img_array if img.endswith(".jpg")]
     if CROP_AFTER_COUNT is not None and len(img_array) > CROP_AFTER_COUNT:
         img_array = img_array[:CROP_AFTER_COUNT]
@@ -1669,6 +1709,13 @@ def write_video(img_array, subfolder_path=None):
     else: merge_info = ""
     video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+".mp4")
     print("video_path", video_path)
+
+    if EXPORT_GIF and LOOPING and IS_VIDEO_MERGE and SMOOTH_MERGE and OSCILATING_MERGE:
+        EXPORT_FIRST_CYCLE_STILL_ENABLED = True
+        EXPORT_FIRST_CYCLE_STILL_DONE = False
+        EXPORT_FIRST_CYCLE_STILL_PATH = os.path.splitext(video_path)[0] + ".jpg"
+        print("first-cycle still export armed", EXPORT_FIRST_CYCLE_STILL_PATH)
+
     video_writer = cv2.VideoWriter(video_path, fourcc, FRAMERATE, (width, height))
     if not video_writer.isOpened():
         raise RuntimeError(
