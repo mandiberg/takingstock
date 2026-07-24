@@ -62,6 +62,7 @@ pending_offset_frames = []
 # these have separate overrides for "osc" mode below
 MERGE_PERIOD = 1  # repeats each merge-size level during ramp up/down
 FULL_MERGE_PERIOD = 0  # explicit hold-at-peak frames per cycle
+FULL_MERGE_PERIOD_GIF = None  # None -> reuse FULL_MERGE_PERIOD for GIF cycle length
 AUTO_DISTRIBUTE_CYCLE_PERIOD = False  # optionally spread images into near-even full cycles
 SINGLETON_MODE = "blended_singleton"  # blended_singleton preserves the current soft singleton behavior
 # Preserve full frame budget by default: do not drop boundary singletons.
@@ -72,6 +73,17 @@ STRICT_UNIQUE_SEAM_EXTRA_FRAMES = False
 # Keeping this at 1 preserves a clean transition without changing frame count.
 TRANSITION_SINGLETON_TARGET = 1
 
+# GIF export tuning (size/quality/speed tradeoffs).
+GIF_EXPORT_MAX_DIM = 640  # max of width/height, preserving aspect ratio
+GIF_FRAME_DELAY_SECONDS = None  # set explicit per-frame delay in seconds, e.g. 0.024
+GIF_FRAME_DELAY_MULTIPLIER = 3.0  # used when GIF_FRAME_DELAY_SECONDS is None
+GIF_QUANTIZE_COLORS = 196  # 2-256, smaller means smaller file and less color detail
+GIF_DITHER = False
+GIF_OPTIMIZE = True
+GIF_LOOP_COUNT = 0  # 0 means infinite loop
+GIF_USE_SMOOTH_MERGE_COUNT = False # if True, creates tweens between keyframes
+if GIF_USE_SMOOTH_MERGE_COUNT:
+    GIF_FRAME_DELAY_MULTIPLIER = 1.0  # use the same frame delay as the smooth merge count
 
 singleton_skip_counts = {
     "leading_non_first": 0,
@@ -128,6 +140,7 @@ elif "make_video" in CURRENT_MODE:
         MERGE_COUNT = 8 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
         MERGE_PERIOD = 1 
+        FULL_MERGE_PERIOD_GIF = 8  # None -> reuse FULL_MERGE_PERIOD for GIF cycle length
         
         if REPEAT > 1: 
             # if more than 100 frames (e.g. 60s video) make longer loop cycles that progress through images
@@ -1224,6 +1237,223 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
     return schedule
 
 
+def merge_images_keyframe_numpy(image_list):
+    """Merge a window into a single keyframe without smooth tween expansion."""
+    if not image_list:
+        return None
+
+    first = image_list[0]
+    if len(first.shape) == 2:
+        first = cv2.cvtColor(first, cv2.COLOR_GRAY2BGR)
+    h, w = first.shape[:2]
+
+    processed_images = []
+    for img in image_list:
+        if len(img.shape) == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        if img.shape[0] != h or img.shape[1] != w:
+            img = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+        processed_images.append(img.astype(np.float32))
+
+    merged_img = np.mean(np.stack(processed_images, axis=0), axis=0)
+    return np.clip(merged_img, 0, 255).astype(np.uint8)
+
+
+def build_first_cycle_loop_keyframes(images_to_build, cycle_period, merge_count, include_tweens=False):
+    """Build one repeatable oscillation cycle using the same schedule logic as process_images_osc."""
+    local_period = int(max(1, cycle_period))
+    if len(images_to_build) < local_period:
+        print(
+            "first-cycle gif: not enough preprocessed images for requested period",
+            f"need={local_period}",
+            f"have={len(images_to_build)}",
+        )
+        return []
+
+    # Slice first-cycle source images only.
+    cycle_images = list(images_to_build[:local_period])
+    total_images = len(cycle_images)
+    if total_images <= 0:
+        return []
+
+    schedule = build_osc_schedule(
+        current_pos=0,
+        this_period=local_period,
+        total_images=total_images,
+        merge_count=merge_count,
+        start_merge=START_MERGE,
+    )
+    if not schedule:
+        print("first-cycle gif: empty schedule")
+        return []
+
+    # Keep strict-unique singleton normalization consistent with process_images_osc.
+    if STRICT_UNIQUE_IMAGE_PLACEMENT and schedule:
+        target_singletons = max(0, int(TRANSITION_SINGLETON_TARGET))
+
+        def _promote_singleton_step(step):
+            if step["size"] != 1:
+                return
+            promoted_size = min(2, step["end_idx"])
+            if promoted_size > 1:
+                step["size"] = promoted_size
+                step["start_idx"] = max(0, step["end_idx"] - promoted_size)
+                return
+            if step["end_idx"] < total_images:
+                step["size"] = 2
+                step["start_idx"] = step["end_idx"] - 1
+                step["end_idx"] = step["end_idx"] + 1
+
+        singleton_idxs = [i for i, step in enumerate(schedule) if step["size"] == 1]
+        keep_idx_set = set(singleton_idxs[: min(target_singletons, len(singleton_idxs))])
+        for idx in singleton_idxs:
+            if idx not in keep_idx_set:
+                _promote_singleton_step(schedule[idx])
+
+    def _slice_with_cycle_handoff(start_exclusive_idx, end_exclusive_idx):
+        if end_exclusive_idx <= total_images:
+            return cycle_images[start_exclusive_idx:end_exclusive_idx]
+        base = cycle_images[start_exclusive_idx:total_images]
+        overflow = end_exclusive_idx - total_images
+        if overflow > 0:
+            base = list(base) + list(cycle_images[:overflow])
+        return base
+
+    keyframes_bgr = []
+    prev_keyframe = None
+    for step in schedule:
+        start_idx = step["start_idx"]
+        end_idx = step["end_idx"]
+        if end_idx - start_idx <= 0:
+            continue
+        window_images = _slice_with_cycle_handoff(start_idx, end_idx)
+        merged_frame = merge_images_keyframe_numpy(window_images)
+        if merged_frame is not None:
+            if include_tweens and prev_keyframe is not None:
+                keyframes_bgr.extend(
+                    smooth_merge_transition(prev_keyframe, merged_frame, SMOOTH_MERGE_COUNT)
+                )
+            else:
+                keyframes_bgr.append(merged_frame)
+            prev_keyframe = merged_frame
+
+    print(
+        "first-cycle gif keyframes",
+        f"count={len(keyframes_bgr)}",
+        f"target_period={local_period}",
+    )
+    return keyframes_bgr
+
+
+def resize_gif_frames_max_dim(frames_bgr, max_dim):
+    """Resize frames so max(width, height) <= max_dim while preserving aspect ratio."""
+    if not frames_bgr:
+        return []
+    if max_dim is None:
+        return frames_bgr
+    local_max_dim = int(max_dim)
+    if local_max_dim <= 0:
+        return frames_bgr
+
+    resized = []
+    for frame in frames_bgr:
+        h, w = frame.shape[:2]
+        longest = max(h, w)
+        if longest <= local_max_dim:
+            resized.append(frame)
+            continue
+
+        scale = float(local_max_dim) / float(longest)
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+        resized.append(cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA))
+    return resized
+
+
+def save_first_cycle_loop_gif(images_to_build, gif_path, merge_count):
+    """Save one seamless looping GIF cycle next to the MP4 output."""
+    gif_hold_period = FULL_MERGE_PERIOD if FULL_MERGE_PERIOD_GIF is None else FULL_MERGE_PERIOD_GIF
+    gif_period = int(max(1, (int(merge_count) * 2) + int(gif_hold_period)))
+    keyframes_bgr = build_first_cycle_loop_keyframes(
+        images_to_build,
+        gif_period,
+        merge_count,
+        include_tweens=bool(GIF_USE_SMOOTH_MERGE_COUNT),
+    )
+    if not keyframes_bgr:
+        print("first-cycle gif: no keyframes generated, skipping export")
+        return False
+
+    keyframes_bgr = resize_gif_frames_max_dim(keyframes_bgr, GIF_EXPORT_MAX_DIM)
+
+    base_delay_s = 1.0 / max(1, int(FRAMERATE or 30))
+    if GIF_FRAME_DELAY_SECONDS is not None:
+        frame_delay_s = max(0.001, float(GIF_FRAME_DELAY_SECONDS))
+    else:
+        frame_delay_s = max(0.001, base_delay_s * float(GIF_FRAME_DELAY_MULTIPLIER))
+    duration_ms = max(1, int(round(frame_delay_s * 1000.0)))
+
+    keyframes_rgb = [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in keyframes_bgr]
+
+    try:
+        from PIL import Image
+
+        pil_frames = [Image.fromarray(frame) for frame in keyframes_rgb]
+
+        palette_colors = int(max(2, min(256, int(GIF_QUANTIZE_COLORS))))
+        dither_mode = Image.Dither.FLOYDSTEINBERG if GIF_DITHER else Image.Dither.NONE
+
+        # Build a shared palette from the first frame for consistency and smaller files.
+        first_q = pil_frames[0].convert("RGB").quantize(
+            colors=palette_colors,
+            method=Image.Quantize.MEDIANCUT,
+            dither=dither_mode,
+        )
+        quantized_frames = [first_q]
+        for frame in pil_frames[1:]:
+            quantized_frames.append(
+                frame.convert("RGB").quantize(
+                    palette=first_q,
+                    dither=dither_mode,
+                )
+            )
+
+        quantized_frames[0].save(
+            gif_path,
+            save_all=True,
+            append_images=quantized_frames[1:],
+            duration=duration_ms,
+            loop=int(GIF_LOOP_COUNT),
+            optimize=bool(GIF_OPTIMIZE),
+            disposal=2,
+        )
+    except Exception as exc:
+        # Fallback path if PIL is unavailable.
+        try:
+            import imageio.v2 as imageio
+            imageio.mimsave(gif_path, keyframes_rgb, duration=frame_delay_s, loop=int(GIF_LOOP_COUNT))
+        except Exception as exc2:
+            print(f"first-cycle gif: export failed (PIL and imageio): {exc} | {exc2}")
+            return False
+
+    print(
+        "first-cycle gif export",
+        f"path={gif_path}",
+        f"frames={len(keyframes_bgr)}",
+        f"period={gif_period}",
+        f"hold_period={gif_hold_period}",
+        f"include_tweens={GIF_USE_SMOOTH_MERGE_COUNT}",
+        f"smooth_merge_count={SMOOTH_MERGE_COUNT if GIF_USE_SMOOTH_MERGE_COUNT else 0}",
+        f"max_dim={GIF_EXPORT_MAX_DIM}",
+        f"delay_s={frame_delay_s:.6f}",
+        f"delay_ms={duration_ms}",
+        f"colors={GIF_QUANTIZE_COLORS}",
+        f"dither={GIF_DITHER}",
+        f"optimize={GIF_OPTIMIZE}",
+    )
+    return True
+
+
 def debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle, skipped_reason=None):
     if not DEBUG:
         return
@@ -1634,6 +1864,7 @@ def write_video(img_array, subfolder_path=None):
     global EXPORT_FIRST_CYCLE_STILL_ENABLED
     global EXPORT_FIRST_CYCLE_STILL_DONE
     global EXPORT_FIRST_CYCLE_STILL_PATH
+    export_first_cycle_gif_path = None
     last_image_written = None
     first_image_written = None
     run_counter = 0
@@ -1714,7 +1945,9 @@ def write_video(img_array, subfolder_path=None):
         EXPORT_FIRST_CYCLE_STILL_ENABLED = True
         EXPORT_FIRST_CYCLE_STILL_DONE = False
         EXPORT_FIRST_CYCLE_STILL_PATH = os.path.splitext(video_path)[0] + ".jpg"
+        export_first_cycle_gif_path = os.path.splitext(video_path)[0] + ".gif"
         print("first-cycle still export armed", EXPORT_FIRST_CYCLE_STILL_PATH)
+        print("first-cycle gif export armed", export_first_cycle_gif_path)
 
     video_writer = cv2.VideoWriter(video_path, fourcc, FRAMERATE, (width, height))
     if not video_writer.isOpened():
@@ -1913,6 +2146,13 @@ def write_video(img_array, subfolder_path=None):
     print("outfile size", os.path.getsize(video_path))
 
     print(f"Video saved at: {video_path}")
+
+    if export_first_cycle_gif_path:
+        save_first_cycle_loop_gif(
+            images_to_build=images_to_build,
+            gif_path=export_first_cycle_gif_path,
+            merge_count=MERGE_COUNT,
+        )
 
 
 
