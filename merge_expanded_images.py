@@ -32,7 +32,7 @@ ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_TH
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "T37_final_looping_video_source_files"
+FOLDER_NAME = "T11_final_looping_video_source_files"
 # FOLDER_NAME = "output_folder/redux1"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
@@ -81,6 +81,8 @@ GIF_QUANTIZE_COLORS = 196  # 2-256, smaller means smaller file and less color de
 GIF_DITHER = False
 GIF_OPTIMIZE = True
 GIF_LOOP_COUNT = 0  # 0 means infinite loop
+GIF_DO_OSC = True # if True, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE
+GIF_SO_SKIP_VIDEO = True # if True, will skip the video merge and just do the GIF merge
 GIF_USE_SMOOTH_MERGE_COUNT = False # if True, creates tweens between keyframes
 if GIF_USE_SMOOTH_MERGE_COUNT:
     GIF_FRAME_DELAY_MULTIPLIER = 1.0  # use the same frame delay as the smooth merge count
@@ -1260,7 +1262,7 @@ def merge_images_keyframe_numpy(image_list):
 
 
 def build_first_cycle_loop_keyframes(images_to_build, cycle_period, merge_count, include_tweens=False):
-    """Build one repeatable oscillation cycle using the same schedule logic as process_images_osc."""
+    """Build one repeatable GIF cycle using oscillating or fixed-window schedule."""
     local_period = int(max(1, cycle_period))
     if len(images_to_build) < local_period:
         print(
@@ -1276,19 +1278,34 @@ def build_first_cycle_loop_keyframes(images_to_build, cycle_period, merge_count,
     if total_images <= 0:
         return []
 
-    schedule = build_osc_schedule(
-        current_pos=0,
-        this_period=local_period,
-        total_images=total_images,
-        merge_count=merge_count,
-        start_merge=START_MERGE,
-    )
+    if GIF_DO_OSC:
+        schedule = build_osc_schedule(
+            current_pos=0,
+            this_period=local_period,
+            total_images=total_images,
+            merge_count=merge_count,
+            start_merge=START_MERGE,
+        )
+    else:
+        local_merge_count = max(1, int(merge_count))
+        schedule = []
+        for step in range(local_period):
+            schedule.append(
+                {
+                    "step": step,
+                    "size": local_merge_count,
+                    "start_idx": int(step),
+                    # Exclusive bound; overflow is resolved by wrap-aware slicing below.
+                    "end_idx": int(step + local_merge_count),
+                }
+            )
+
     if not schedule:
         print("first-cycle gif: empty schedule")
         return []
 
     # Keep strict-unique singleton normalization consistent with process_images_osc.
-    if STRICT_UNIQUE_IMAGE_PLACEMENT and schedule:
+    if GIF_DO_OSC and STRICT_UNIQUE_IMAGE_PLACEMENT and schedule:
         target_singletons = max(0, int(TRANSITION_SINGLETON_TARGET))
 
         def _promote_singleton_step(step):
@@ -1372,8 +1389,13 @@ def resize_gif_frames_max_dim(frames_bgr, max_dim):
 
 def save_first_cycle_loop_gif(images_to_build, gif_path, merge_count):
     """Save one seamless looping GIF cycle next to the MP4 output."""
-    gif_hold_period = FULL_MERGE_PERIOD if FULL_MERGE_PERIOD_GIF is None else FULL_MERGE_PERIOD_GIF
-    gif_period = int(max(1, (int(merge_count) * 2) + int(gif_hold_period)))
+    if GIF_DO_OSC:
+        gif_hold_period = FULL_MERGE_PERIOD if FULL_MERGE_PERIOD_GIF is None else FULL_MERGE_PERIOD_GIF
+        gif_period = int(max(1, (int(merge_count) * 2) + int(gif_hold_period)))
+    else:
+        gif_hold_period = 0
+        gif_period = int(max(1, int(merge_count) * 2))
+
     keyframes_bgr = build_first_cycle_loop_keyframes(
         images_to_build,
         gif_period,
@@ -1442,6 +1464,7 @@ def save_first_cycle_loop_gif(images_to_build, gif_path, merge_count):
         f"frames={len(keyframes_bgr)}",
         f"period={gif_period}",
         f"hold_period={gif_hold_period}",
+        f"gif_do_osc={GIF_DO_OSC}",
         f"include_tweens={GIF_USE_SMOOTH_MERGE_COUNT}",
         f"smooth_merge_count={SMOOTH_MERGE_COUNT if GIF_USE_SMOOTH_MERGE_COUNT else 0}",
         f"max_dim={GIF_EXPORT_MAX_DIM}",
@@ -1941,11 +1964,29 @@ def write_video(img_array, subfolder_path=None):
     video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+".mp4")
     print("video_path", video_path)
 
+    if GIF_SO_SKIP_VIDEO:
+        if not EXPORT_GIF:
+            print("GIF_SO_SKIP_VIDEO is True but EXPORT_GIF is False; skipping all exports for this folder")
+            return None
+
+        export_first_cycle_gif_path = os.path.splitext(video_path)[0] + "_preview.gif"
+        print("GIF_SO_SKIP_VIDEO enabled: skipping mp4 writer and exporting GIF only")
+        gif_saved = save_first_cycle_loop_gif(
+            images_to_build=images_to_build,
+            gif_path=export_first_cycle_gif_path,
+            merge_count=MERGE_COUNT,
+        )
+        if not gif_saved:
+            print("GIF_SO_SKIP_VIDEO: gif export failed")
+            return None
+        print(f"GIF saved at: {export_first_cycle_gif_path}")
+        return export_first_cycle_gif_path
+
     if EXPORT_GIF and LOOPING and IS_VIDEO_MERGE and SMOOTH_MERGE and OSCILATING_MERGE:
         EXPORT_FIRST_CYCLE_STILL_ENABLED = True
         EXPORT_FIRST_CYCLE_STILL_DONE = False
-        EXPORT_FIRST_CYCLE_STILL_PATH = os.path.splitext(video_path)[0] + ".jpg"
-        export_first_cycle_gif_path = os.path.splitext(video_path)[0] + ".gif"
+        EXPORT_FIRST_CYCLE_STILL_PATH = os.path.splitext(video_path)[0] + "_preview.jpg"
+        export_first_cycle_gif_path = os.path.splitext(video_path)[0] + "_preview.gif"
         print("first-cycle still export armed", EXPORT_FIRST_CYCLE_STILL_PATH)
         print("first-cycle gif export armed", export_first_cycle_gif_path)
 
