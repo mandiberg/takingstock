@@ -87,7 +87,7 @@ VERBOSE = True
 RANDOM = False # selects random image_ids from the DB. not tested. maybe runs very slow. 
 global_counter = 0
 QUERY_LIMIT = 1000
-query_start_counter = 0 # only used in write image topics
+QUERY_START_COUNTER = 0 # only used in write image topics
 ANGLE = 1 # controls x/y face angle in +/-, set to 9 for building the full model, then indexed
 MIN_TOKEN_LENGTH = 2 # minimum token length for the model
 
@@ -235,7 +235,7 @@ def clarify_keywords(text):
         # print("clarified text: ",text)
     return text
 
-def set_query():
+def set_query(query_start_counter=0):
     # currently only used for indexing
     # not refactored for mongo (despite the one WHERE line)
     print("setting query from MODE: ",MODE)
@@ -271,13 +271,14 @@ def set_query():
         # I'm not sure how this is different from USE_BIGSEGMENT
         WHERE = f" {mongo_tokens} = 1 AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
 
-    if not REDO_NEWBIGS: WHERE += f" AND image_id > {query_start_counter} "
+    if REDO_NEWBIGS: WHERE += f" AND i.image_id > {query_start_counter} "
+    else: WHERE += f" AND image_id > {query_start_counter} "
 
     return SELECT, FROM, WHERE, LIMIT
 
-def selectSQL():
+def selectSQL(query_start_counter=0):
     # currently only used for indexing
-    SELECT, FROM, WHERE, LIMIT = set_query()
+    SELECT, FROM, WHERE, LIMIT = set_query(query_start_counter)
     selectsql = f"SELECT {SELECT} FROM {FROM} WHERE {WHERE} LIMIT {str(LIMIT)};"
     print("actual SELECT is: ",selectsql)
     result = engine.connect().execute(text(selectsql))
@@ -404,7 +405,7 @@ def write_topics(lda_model):
     return
 
 def write_imagetopics(resultsjson,lda_model_tfidf,dictionary,MY_STOPWORDS):
-    global query_start_counter
+    global QUERY_START_COUNTER
     print("writing data to the imagetopic table")
     idx_list, topic_list = zip(*lda_model_tfidf.print_topics(-1))
     for i,row in enumerate(resultsjson):
@@ -416,21 +417,23 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary,MY_STOPWORDS):
             # turn results into a list of strings
             results = [r[0] for r in results]
 
-            print("mongo results type: ",type(results))
-            print("mongo results: ",results)
+            # print("SQL results type: ",type(results))
+            # print("SQL results: ",results)
             
-            if bool(results):
-                exit()
         else:
             # do it the mongo way
             results = mongo_collection.find_one({"image_id": row["image_id"]})
+
         if results:
-            if VERBOSE: print("results: ",results)
-            keyword_list=" ".join(pickle.loads(results['tokenized_keyword_list']))
+            if REDO_NEWBIGS:
+                keyword_list = " ".join(results)
+            else:
+                keyword_list=" ".join(pickle.loads(results['tokenized_keyword_list']))
+            # if VERBOSE: print("results: ",keyword_list)
         else:
             print("mongo results are empty, using description instead")
             keyword_list = row["description"]
-        if VERBOSE: print(keyword_list)
+        # if VERBOSE: print("keyword_list: ",keyword_list)
         # keyword_list=" ".join(pickle.loads(row["tokenized_keyword_list"]))
 
 
@@ -523,17 +526,18 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary,MY_STOPWORDS):
                 topic_score3=score3
             )
         session.add(imagestopics_entry)
-        # print(f'image_id {row["image_id"]} -- topic_id {index} -- topic tokens {topic_list[index][:100]}')
-        # print(f"keyword list {keyword_list}")
+        print(f'image_id {row["image_id"]} -- topic_id {index} -- topic tokens {topic_list[index][:100]}')
+        print(f"keyword list {keyword_list}")
 
         if row["image_id"] % 1000 == 0:
             print("Updated image_id {}".format(row["image_id"]))
-            query_start_counter = row["image_id"]
+            QUERY_START_COUNTER = row["image_id"]
 
 
     # Add the imagestopics object to the session
     session.commit()
     return
+
 def calc_optimum_topics():
 
     dictionary, corpus = load_corpus()
@@ -686,24 +690,26 @@ def topic_index(resultsjson):
         MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(NOT_AFFECT_LIST))        
     else:
         MY_STOPWORDS = gensim.parsing.preprocessing.STOPWORDS.union(set(GENDER_LIST+ETH_LIST+AGE_LIST))
-
+    query_start_counter = QUERY_START_COUNTER
     print("model loaded successfully")
     while True:
         # go get LIMIT number of items (will duplicate initial select, but only the initial one)
         # LIMIT is set to a reasonably small number, so as to itterate, (not the whole db)
         print("about to SQL:")
-        resultsjson = selectSQL()
+        resultsjson = selectSQL(query_start_counter)
         print("got results, count is: ",len(resultsjson))
         if len(resultsjson) == 0:
             break
 
         write_imagetopics(resultsjson,lda_model_tfidf,lda_dict,MY_STOPWORDS)
+        query_start_counter = resultsjson[-1]["image_id"]
         print("updated cells")
     print("DONE")
 
     return
     
 def main():
+    global QUERY_START_COUNTER
     global MODE
     OPTION, MODE = pick(options, title)
 
