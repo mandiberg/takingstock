@@ -665,15 +665,6 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
                 "topic_no", topic_no,
             )
                 
-            # if "None" in image_folder:
-            #     cluster_no = None_counter
-            #     None_counter += 1
-            #     print("cluster_no is None, incrementing None_counter to", None_counter)
-            # else:
-            #     print("cluster found", image_folder)
-            #     cluster_no = int(image_folder.split("_")[0].replace("cluster",""))
-            #     try: handpose_no = int(image_folder.split("_")[1])
-            #     except: print("handpose_no = None")
         count = len(images_to_build)
         print("about to iterate_image_list with ", len(images_to_build), "images")
         if len(images_to_build) == 0: 
@@ -869,58 +860,7 @@ def shift_video_frames(video_path):
     # Replace original video with reordered video
     os.remove(video_path)
     os.rename(temp_video_path, video_path)
-    print("reordered video saved")
-
-def construct_incrementor(merge_count, current_pos, this_period, total_images):
-    '''
-    the leading image speeds through the remaining merge_count images in half the time
-    the trailing image super-speeds through the images to get to the last this_second_merge_count images
-    once it gets to there, it will do normal increments to the end
-    '''
-    print(f"constructing incrementor from merge_count, current_pos, this_period, total_images")
-    print(f"{merge_count}, {current_pos}, {this_period}, {total_images}")
-    this_first_merge_count = math.floor(merge_count / 2)
-    this_second_merge_count = merge_count - this_first_merge_count
-    print("this_first_merge_count", this_first_merge_count, "this_second_merge_count", this_second_merge_count)
-    if this_first_merge_count < 1 or this_second_merge_count < 1:
-        print(f"construct_incrementor: merge_count={merge_count} too small (first={this_first_merge_count}, second={this_second_merge_count}), returning empty incrementors")
-        return [], [], current_pos + merge_count + 1, current_pos + (merge_count * 2)
-    leading_incrementor = []
-    trailing_incrementor = []
-    end_image = min(current_pos + this_period + 1, total_images)
-    current_image_no = current_pos+(merge_count*2)
-    trailing_start_image = current_pos + merge_count + 1
-    print("trailing_start_image", trailing_start_image, "current_image_no", current_image_no, "end_image", end_image)
-
-    print(f"this_first_merge_count: {this_first_merge_count}, this_second_merge_count: {this_second_merge_count}")
-    # construct leading incrementor to cover the full distance in 1/2 of the merge_count (this_first_merge_count)
-    leading_increment = (end_image - current_image_no) // this_first_merge_count # might need to be merge_count -1 TBD
-    leading_remainder = (end_image - current_image_no) - (leading_increment * this_first_merge_count)
-    print("leading_increment", leading_increment, "leading_remainder", leading_remainder)
-    # first append remainder
-    leading_incrementor.append(leading_increment+leading_remainder)
-    for i in range(this_first_merge_count-1):
-        leading_incrementor.append(leading_increment)
-    print(f"len {len(leading_incrementor)} leading_incrementor:", this_first_merge_count)
-
-    # construct trailing incrementor to cover 
-    images_to_speed_through = (end_image-trailing_start_image) - this_first_merge_count
-    print("images_to_speed_through", images_to_speed_through)
-    trailing_increment_speedy = images_to_speed_through // this_second_merge_count
-    trailing_remainder = images_to_speed_through - (trailing_increment_speedy * this_second_merge_count)
-    print("trailing_increment_speedy", trailing_increment_speedy, "trailing_remainder", trailing_remainder)
-    # first append remainder
-    trailing_incrementor.append(trailing_increment_speedy + trailing_remainder)
-    for i in range(this_second_merge_count - 1):
-        trailing_incrementor.append(trailing_increment_speedy)
-    print(f"len {len(trailing_incrementor)} trailing_incrementor:", this_second_merge_count)
-    for i in range(end_image - (trailing_start_image + sum(trailing_incrementor))):
-        trailing_incrementor.append(1)
-    print(f"final len {len(trailing_incrementor)} trailing_incrementor:", len(trailing_incrementor))
-
-    return leading_incrementor, trailing_incrementor, trailing_start_image, current_image_no
-
-     
+    print("reordered video saved")     
 
 def save_images_to_video(images_to_return, video_writer, debug_meta=None):
     global last_image_written
@@ -1583,22 +1523,7 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
             "last_cycle",
             last_cycle,
         )
-        save_images_to_video(images_to_return, video_writer, debug_meta=debug_meta)
-
-def build_even_merge(images_to_build, video_writer, current_pos, merge_count, this_period):
-    for i in range(MERGE_COUNT + 1, this_period - MERGE_COUNT + 1):
-            # Load and merge images from current_pos + i to current_pos + i + MERGE_COUNT
-            # start counting at the second image in the set, because I want to only add on one new image at a time
-            # as I enter the middle section
-            # (START_MERGE-1)+(i - MERGE_COUNT):(START_MERGE-1)+(i)
-            # current_pos + i:current_pos + i + MERGE_COUNT
-        images_to_return = merge_images_numpy(images_to_build[(current_pos)+(i - MERGE_COUNT):(current_pos)+(i)])
-        save_images_to_video(images_to_return, video_writer)
-        print("merged middle img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), MERGE_COUNT)
-    return
-            # if merged_img is not None: video_writer.write(merged_img)
-
-    
+        save_images_to_video(images_to_return, video_writer, debug_meta=debug_meta)    
 
 def calculate_period(images_to_build):
     image_count = len(images_to_build) # subtract one for the duplicate first image at the end
