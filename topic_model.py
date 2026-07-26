@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 # my ORM
-from my_declarative_base import Base, Images, SegmentBig, Topics,Topics_isnotface, Topics_affect, ImagesTopics, ImagesTopics_isnotface, ImagesTopics_isnotface_isfacemodel, ImagesTopics_affect, imagestopics_ALLgetty4faces_isfacemodel, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
+from my_declarative_base import Base, Images, ImagesKeywords, Keywords, SegmentBig, Topics,Topics_isnotface, Topics_affect, ImagesTopics, ImagesTopics_isnotface, ImagesTopics_isnotface_isfacemodel, ImagesTopics_affect, imagestopics_ALLgetty4faces_isfacemodel, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, ForeignKey
 import pymongo
 
 from sqlalchemy.exc import IntegrityError
@@ -76,16 +76,17 @@ io.db["name"] = "stock"
 io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/model_files"
 
 # Satyam, you want to set this to False
-USE_SEGMENT = False # only used for indexing
-USE_BIGSEGMENT = True # sets declarative base object. Seem to need to be True for corpus generation. limit with ANGLE instead
+USE_SEGMENT = True # only used for indexing
+USE_BIGSEGMENT = False # sets declarative base object. Seem to need to be True for corpus generation. limit with ANGLE instead
+REDO_NEWBIGS = True # this is for the July 2026 fix to for redoing the newbigs final round
 IS_GETTYONLY = False # this is for the NOT FACE to constrain the database to only getty images for testing
 IS_NOT_FACE = False # this turns of the xyz angle filter for faces pointing forward and returns all images
 USE_EXISTING_MODEL = True # this is for the NOT FACE data, to use the FACE model, not used elsewhere
-IS_AFFECT = True # switches to the affect model
-VERBOSE = False
+IS_AFFECT = False # switches to the affect model
+VERBOSE = True
 RANDOM = False # selects random image_ids from the DB. not tested. maybe runs very slow. 
 global_counter = 0
-QUERY_LIMIT = 10000
+QUERY_LIMIT = 1000
 query_start_counter = 0 # only used in write image topics
 ANGLE = 1 # controls x/y face angle in +/-, set to 9 for building the full model, then indexed
 MIN_TOKEN_LENGTH = 2 # minimum token length for the model
@@ -186,7 +187,7 @@ elif IS_AFFECT:
     images_topics_table = "imagestopics_affect"
     SegmentTable = SegmentBig
     SegmentTable_name = 'SegmentBig_isface'
-    mongo_tokens = "mongo_tokens_affect" # redefine for affect
+    mongo_tokens = "mongo_tokens_affect" # redefine for affect    
 else:
     mongo_collection = mongo_db['tokens']
     topics_table = "topics"
@@ -194,6 +195,9 @@ else:
     if USE_BIGSEGMENT:
         SegmentTable = SegmentBig
         SegmentTable_name = 'SegmentBig_isface'
+    elif REDO_NEWBIGS:
+        SegmentTable = SegmentBig
+        SegmentTable_name = 'SegmentHelper_NewBig'
     else:
         # this is prob redundant, and could be replaced by calling the SegmentTable object from Base
         SegmentTable_name = 'SegmentOct20'
@@ -236,10 +240,15 @@ def set_query():
     # not refactored for mongo (despite the one WHERE line)
     print("setting query from MODE: ",MODE)
     # mongofy, for indexing:
-    SELECT = "DISTINCT(image_id),description"
     FROM = SegmentTable_name
-    WHERE = f" {mongo_tokens} IS NOT NULL "
-    WHERE += " AND face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 "
+    if not REDO_NEWBIGS:
+        SELECT = "DISTINCT(image_id),description"
+        WHERE = f" {mongo_tokens} IS NOT NULL "
+        WHERE += " AND face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 "
+    else:
+        SELECT = "DISTINCT(i.image_id),i.description"
+        WHERE = f" i.image_id IS NOT NULL " # placeholder
+        FROM += f" JOIN Images i on {SegmentTable_name}.image_id = i.image_id"
     if RANDOM: WHERE += "AND image_id >= (SELECT FLOOR(MAX(image_id) * RAND()) FROM bagofkeywords)"
     LIMIT = QUERY_LIMIT
     if MODE==2 and USE_BIGSEGMENT:
@@ -248,9 +257,13 @@ def set_query():
         WHERE = f" {mongo_tokens} IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
     elif MODE==2 and USE_SEGMENT:
         print("assigning topics via small segment")
-        WHERE = " face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 AND "
-        # WHERE = " face_x > -40 AND face_x < -20 AND face_y > -5 AND face_y < 5 AND face_z > -5 AND face_z < 5 AND "
-        WHERE += f" {mongo_tokens} IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
+        # this is how I found it on july 25, before doing newface helper segment
+        # WHERE = " face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 AND "
+        # WHERE += f" {mongo_tokens} IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
+
+        # this is my newface helper segment hack to redo the missing images
+        # WHERE = " face_x > -35 AND face_x < -24 AND face_y > -3 AND face_y < 3 AND face_z > -3 AND face_z < 3 AND "
+        # WHERE += f" image_id NOT IN (SELECT image_id FROM {images_topics_table})"
 
     elif MODE==2:
         print("assigning topics without any segment")
@@ -258,7 +271,7 @@ def set_query():
         # I'm not sure how this is different from USE_BIGSEGMENT
         WHERE = f" {mongo_tokens} = 1 AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
 
-    WHERE += f" AND image_id > {query_start_counter} "
+    if not REDO_NEWBIGS: WHERE += f" AND image_id > {query_start_counter} "
 
     return SELECT, FROM, WHERE, LIMIT
 
@@ -397,7 +410,20 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary,MY_STOPWORDS):
     for i,row in enumerate(resultsjson):
         if VERBOSE: print("row: ",row)
         # mongofy:
-        results = mongo_collection.find_one({"image_id": row["image_id"]})
+        if REDO_NEWBIGS:
+            # query keyword_text from Keywords, joined to ImagesKeywords table in SQL and get all rowswhere image_id = row["image_id"] 
+            results = session.query(Keywords.keyword_text).join(ImagesKeywords).filter(ImagesKeywords.image_id == row["image_id"]).all()
+            # turn results into a list of strings
+            results = [r[0] for r in results]
+
+            print("mongo results type: ",type(results))
+            print("mongo results: ",results)
+            
+            if bool(results):
+                exit()
+        else:
+            # do it the mongo way
+            results = mongo_collection.find_one({"image_id": row["image_id"]})
         if results:
             if VERBOSE: print("results: ",results)
             keyword_list=" ".join(pickle.loads(results['tokenized_keyword_list']))
@@ -688,7 +714,6 @@ def main():
     if MODE==2:
         resultsjson = selectSQL()
         print("got results, count is: ",len(resultsjson))
-
     if MODE==0:gen_corpus()
     elif MODE==1:topic_model()
     elif MODE==2:topic_index(resultsjson)
