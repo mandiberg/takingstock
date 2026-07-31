@@ -73,7 +73,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 8  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -3848,6 +3848,170 @@ def _mode1_normalize_token(value):
         return None
 
 
+def _mode1_parse_bbox_dict(value):
+    """Parse bbox-like payloads into a dict with top/right/bottom/left floats.
+    needs to be able to handle this format too: 
+    {'detection_id': 27270362, 'class_id': 1.0, 'conf': 0.79, 'top': 2.611940298507463, 'left': -1.9440298507462688, 'right': 2.078358208955224, 'bottom': 3.3470149253731343}
+    """
+    if value is None:
+        return None
+    # print(f"_mode1_parse_bbox_dict: {value}")
+    parsed = value
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        if not text or text.lower() in ("none", "nan"):
+            return None
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            try:
+                parsed = ast.literal_eval(text)
+            except Exception:
+                return None
+
+    if isinstance(parsed, (list, tuple)) and len(parsed) >= 4:
+        parsed = {
+            "top": parsed[0],
+            "right": parsed[1],
+            "bottom": parsed[2],
+            "left": parsed[3],
+        }
+
+    if not isinstance(parsed, dict):
+        return None
+
+    if not all(k in parsed for k in ("top", "right", "bottom", "left")):
+        return None
+
+    try:
+        bbox = {
+            "top": float(parsed["top"]),
+            "right": float(parsed["right"]),
+            "bottom": float(parsed["bottom"]),
+            "left": float(parsed["left"]),
+        }
+    except (TypeError, ValueError):
+        return None
+
+    if not all(np.isfinite(v) for v in bbox.values()):
+        return None
+    return bbox
+
+
+def _mode1_collect_object_bboxes_for_row(row):
+    """Collect object bbox candidates from known row payload fields."""
+    object_bboxes = []
+
+    # print("_mode1_collect_object_bboxes_for_row", row)
+    # direct_cols = ["bbox_norm", "obj_bbox", "object_bbox", "obj_bbox_list"]
+    for col_name in DETECTION_COLS:
+        if col_name not in row.index:
+            continue
+        bbox = _mode1_parse_bbox_dict(row.get(col_name))
+        if bbox is not None:
+            object_bboxes.append(bbox)
+    # if bool(object_bboxes): print("object_bboxes", object_bboxes)
+    # else: print("no object bboxes found in row")
+    # when obj bboxes exist, object_bboxes looks like this: 
+    # object_bboxes [{'top': 3.3057851239669422, 'right': 2.347107438016529, 'bottom': 5.545454545454546, 'left': -2.6115702479338845}, {'top': 3.3057851239669422, 'right': 2.347107438016529, 'bottom': 5.545454545454546, 'left': -2.6115702479338845}]
+
+    # detections_payload = row.get("detections_json") if "detections_json" in row.index else None
+    # if isinstance(detections_payload, str) and detections_payload.strip():
+    #     try:
+    #         detections = json.loads(detections_payload)
+    #     except Exception:
+    #         detections = None
+    #     if isinstance(detections, list):
+    #         for detection in detections:
+    #             if not isinstance(detection, dict):
+    #                 continue
+    #             bbox = _mode1_parse_bbox_dict(detection.get("bbox_norm"))
+    #             if bbox is None:
+    #                 bbox = _mode1_parse_bbox_dict(detection.get("bbox"))
+    #             if bbox is not None:
+    #                 object_bboxes.append(bbox)
+
+    return object_bboxes
+
+
+def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
+    """Estimate dynamic crop multipliers using body landmarks plus object bbox extents.
+
+    Object extents are measured from face-bbox center in face-height units and then
+    unioned with body-only extents so objects can only expand the crop.
+    """
+
+    body_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, padding)
+    if df_segment is None or not isinstance(df_segment, pd.DataFrame) or df_segment.empty:
+        return body_multiplier
+
+    if "bbox" not in df_segment.columns:
+        print("[mode1 bbox-aware] no face bbox column available; using body-only multiplier")
+        return body_multiplier
+
+    obj_top_samples = []
+    obj_right_samples = []
+    obj_bottom_samples = []
+    obj_left_samples = []
+    rows_with_object_bboxes = 0
+
+
+    print(f"_mode1_calc_dynamic_multiplier_bbox_aware, columns:", df_segment.columns)
+    for _, row in df_segment.iterrows():
+        # print(f"_mode1_calc_dynamic_multiplier_bbox_aware Processing row: {row}")
+        face_bbox = _mode1_parse_bbox_dict(row.get("bbox"))
+        if face_bbox is None:
+            continue
+
+        face_height = abs(face_bbox["bottom"] - face_bbox["top"])
+        if face_height <= 0:
+            continue
+
+        cx = (face_bbox["left"] + face_bbox["right"]) / 2.0
+        cy = (face_bbox["top"] + face_bbox["bottom"]) / 2.0
+
+        object_bboxes = _mode1_collect_object_bboxes_for_row(row)
+        if not object_bboxes:
+            continue
+
+        rows_with_object_bboxes += 1
+        for obj_bbox in object_bboxes:
+            # obj_top = max(0.0, (cy - obj_bbox["top"]) / face_height)
+            # obj_right = max(0.0, (obj_bbox["right"] - cx) / face_height)
+            # obj_bottom = max(0.0, (obj_bbox["bottom"] - cy) / face_height)
+            # obj_left = max(0.0, (cx - obj_bbox["left"]) / face_height)
+
+            # these bboxes are already normalized
+            obj_top_samples.append(obj_bbox["top"])
+            obj_right_samples.append(obj_bbox["right"])
+            obj_bottom_samples.append(obj_bbox["bottom"])
+            obj_left_samples.append(obj_bbox["left"])
+
+    if not obj_top_samples:
+        print("[mode1 bbox-aware] no usable object bbox samples; using body-only multiplier")
+        return body_multiplier
+
+    # Use a high percentile so large held objects (bike/barbell) influence framing.
+    obj_multiplier = [
+        max(float(np.percentile(obj_top_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[0])),
+        max(float(np.percentile(obj_right_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[1])),
+        max(float(np.percentile(obj_bottom_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[2])),
+        max(float(np.percentile(obj_left_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[3])),
+    ]
+
+    merged_multiplier = [
+        max(float(body_multiplier[i]), float(obj_multiplier[i]))
+        for i in range(4)
+    ]
+
+    print(
+        "[mode1 bbox-aware] merged dynamic multiplier "
+        f"rows_with_object_bboxes={rows_with_object_bboxes} "
+        f"body={body_multiplier} obj={obj_multiplier} merged={merged_multiplier}"
+    )
+    return merged_multiplier
+
+
 def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """Standalone set_multiplier_and_dims for pool workers (no main() closures).
 
@@ -3884,10 +4048,13 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
         if crop_dict_index is not None:
             sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
     elif image_edge_multiplier is None:
-        # dynamic fallback — populate_image_dims not available at module level;
-        # fall back to landmark-based calculation (no closure required).
-        sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
-        print("No multiplier found in canonical registry or pose crop dict; calculating dynamic multiplier from body landmarks:", sort.image_edge_multiplier)
+        # Dynamic fallback with object-bbox awareness.
+        sort.image_edge_multiplier = _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, 0)
+        print(
+            "No multiplier found in canonical registry or pose crop dict; "
+            "calculating dynamic multiplier with bbox-aware estimator:",
+            sort.image_edge_multiplier,
+        )
         if (
             MODE == 1
             and CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion"
@@ -3935,6 +4102,8 @@ def _mode1_load_df(csv_path: str, timing: dict):
         df["face_landmarks"] = df["face_landmarks"].apply(sort.str_to_landmarks)
     if "bbox" in df.columns:
         df["bbox"] = df["bbox"].apply(lambda x: io.unstring_json(x) if isinstance(x, str) else x)
+    if "bbox_norm" in df.columns:
+        df["bbox_norm"] = df["bbox_norm"].apply(lambda x: io.unstring_json(x) if isinstance(x, str) else x)
     df["folder"] = df["folder"].apply(lambda x: os.path.join(io.ROOT, os.path.basename(x)))
     df["face_encodings68"] = df["face_encodings68"].apply(lambda x: eval(x) if isinstance(x, str) else x)
     df["body_landmarks_array"] = df["body_landmarks_array"].apply(lambda x: eval(x) if isinstance(x, str) else x)
@@ -4194,7 +4363,6 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "timing": timing,
                 "learned_multipliers": learned_multipliers,
             }
-
         df_sorted = _mode1_run_db_dedupe(
             df_sorted,
             db_session,
