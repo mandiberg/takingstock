@@ -59,21 +59,21 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_T3_player'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-SegmentHelper_name = 'SegmentHelper_TheOffice'
+SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
-SSD_PATH = "/Volumes/LaCie/segment_images_thegym_redux"
+SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 8  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -105,7 +105,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheOffice_looping_redux/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_fullset_test/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -301,7 +301,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     '''
 
     # main switches
-    INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
+    INSTALLATION_VIDEO = True # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
@@ -412,11 +412,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
-            GENERATE_FUSION_PAIRS = False 
+            GENERATE_FUSION_PAIRS = True 
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
+            ONE_SHOT = True
         else:
             print(f"in second condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
 
@@ -3859,6 +3860,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     pose_no = _mode1_normalize_token(pose_no)
     use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
     canonical_multiplier = None
+    learned_record = None
     if not use_pose_crop:
         canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
     if canonical_multiplier is not None:
@@ -3882,12 +3884,29 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
         if crop_dict_index is not None:
             sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
     elif image_edge_multiplier is None:
-        print("No multiplier found in canonical registry or pose crop dict; calculating dynamic multiplier from body landmarks")
         # dynamic fallback — populate_image_dims not available at module level;
         # fall back to landmark-based calculation (no closure required).
         sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
+        print("No multiplier found in canonical registry or pose crop dict; calculating dynamic multiplier from body landmarks:", sort.image_edge_multiplier)
+        if (
+            MODE == 1
+            and CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion"
+            and cluster_no is not None
+            and pose_no is not None
+            and not use_pose_crop
+        ):
+            learned_record = {
+                "arms_cluster_id": int(cluster_no),
+                "object_signature_cluster_id": int(pose_no),
+                "multiplier": [float(value) for value in sort.image_edge_multiplier],
+            }
+            print(
+                "[canonical multipliers][worker] learned candidate "
+                f"arms={cluster_no} object_signature={pose_no} mult={learned_record['multiplier']}"
+            )
     sort.face_height_output = face_height_output
     sort.set_output_dims()
+    return learned_record
 
 
 def _mode1_load_df(csv_path: str, timing: dict):
@@ -4138,6 +4157,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
 
     timing: dict = {}
     file_start = time.perf_counter()
+    learned_multipliers = []
 
     try:
         parts = csv_file.replace(".csv", "").split("_")
@@ -4172,6 +4192,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "early_return": "empty_df",
                 "error": "empty df",
                 "timing": timing,
+                "learned_multipliers": learned_multipliers,
             }
 
         df_sorted = _mode1_run_db_dedupe(
@@ -4193,10 +4214,13 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "early_return": "purging_dupes",
                 "error": None,
                 "timing": timing,
+                "learned_multipliers": learned_multipliers,
             }
 
         multiplier_start = time.perf_counter()
-        _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        learned_multiplier = _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        if learned_multiplier is not None:
+            learned_multipliers.append(learned_multiplier)
         timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (
             time.perf_counter() - multiplier_start
         )
@@ -4209,6 +4233,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "early_return": "calibrating",
                 "error": None,
                 "timing": timing,
+                "learned_multipliers": learned_multipliers,
             }
 
         assembly_start = time.perf_counter()
@@ -4224,6 +4249,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             "early_return": None,
             "error": None,
             "timing": timing,
+            "learned_multipliers": learned_multipliers,
         }
     except Exception as exc:
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
@@ -4233,6 +4259,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             "early_return": None,
             "error": str(exc),
             "timing": timing,
+            "learned_multipliers": learned_multipliers,
         }
 
 
@@ -5298,6 +5325,8 @@ def main():
             "file_total": 0.0,
         }
         mode1_processed_files = 0
+        mode1_learned_multiplier_new = 0
+        mode1_learned_multiplier_duplicates = 0
 
         def add_mode1_timing(stage, elapsed):
             if not mode1_timing_enabled:
@@ -5348,6 +5377,52 @@ def main():
                 print(f"[MODE1 TIMING] {stage}: {stage_time:.2f}s ({pct_wall:.1f}% of wall)")
             print("[MODE1 TIMING] ============================\n")
 
+        def merge_mode1_learned_multiplier_records(records, source_csv):
+            nonlocal mode1_learned_multiplier_new
+            nonlocal mode1_learned_multiplier_duplicates
+
+            if not records:
+                return
+
+            for record in records:
+                arms_cluster_id = normalize_cluster_token(record.get("arms_cluster_id"))
+                object_signature_cluster_id = normalize_cluster_token(record.get("object_signature_cluster_id"))
+                multiplier_values = record.get("multiplier")
+
+                if arms_cluster_id is None or object_signature_cluster_id is None:
+                    continue
+                if not isinstance(multiplier_values, (list, tuple)) or len(multiplier_values) != 4:
+                    continue
+
+                try:
+                    parsed_values = [float(value) for value in multiplier_values]
+                except (TypeError, ValueError):
+                    continue
+
+                key = (arms_cluster_id, object_signature_cluster_id)
+                existing = canonical_multiplier_registry.get(key)
+                if existing is not None:
+                    try:
+                        existing_values = [float(value) for value in existing]
+                    except (TypeError, ValueError):
+                        existing_values = existing
+                    if existing_values != parsed_values:
+                        mode1_learned_multiplier_duplicates += 1
+                        print(
+                            "[canonical multipliers][mode1] duplicate learned key ignored (first-write-wins) "
+                            f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
+                            f"existing={existing_values} candidate={parsed_values}"
+                        )
+                    continue
+
+                canonical_multiplier_registry[key] = parsed_values
+                mode1_learned_multiplier_new += 1
+                print(
+                    "[canonical multipliers][mode1] accepted learned key "
+                    f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
+                    f"mult={parsed_values}"
+                )
+
         load_canonical_multiplier_registry_once()
         mode1_enable_db_dedupe = bool(globals().get("MODE1_ENABLE_DB_DEDUPE", True))
         print(f"[MODE1 DEDUPE] MODE1_ENABLE_DB_DEDUPE={mode1_enable_db_dedupe}")
@@ -5390,6 +5465,10 @@ def main():
                 for result in pool.imap_unordered(_mode1_csv_worker, csv_files_to_process):
                     for stage, elapsed in result.get("timing", {}).items():
                         add_mode1_timing(stage, elapsed)
+                    merge_mode1_learned_multiplier_records(
+                        result.get("learned_multipliers", []),
+                        result.get("csv_file"),
+                    )
                     if not result.get("success"):
                         print(
                             f"[MODE1 WORKER] error in {result.get('csv_file')}: "
@@ -5406,11 +5485,27 @@ def main():
                 )
                 for stage, elapsed in result.get("timing", {}).items():
                     add_mode1_timing(stage, elapsed)
+                merge_mode1_learned_multiplier_records(
+                    result.get("learned_multipliers", []),
+                    result.get("csv_file"),
+                )
                 if not result.get("success"):
                     print(
                         f"[MODE1 SERIAL] error in {result.get('csv_file')}: "
                         f"{result.get('error')}"
                     )
+
+        if should_use_canonical_multiplier_registry() and mode1_learned_multiplier_new > 0:
+            print(
+                "[canonical multipliers][mode1] persisting learned registry updates "
+                f"new={mode1_learned_multiplier_new} duplicate_ignored={mode1_learned_multiplier_duplicates}"
+            )
+            write_canonical_multiplier_registry()
+        elif should_use_canonical_multiplier_registry():
+            print(
+                "[canonical multipliers][mode1] no new learned keys to persist "
+                f"duplicate_ignored={mode1_learned_multiplier_duplicates}"
+            )
 
         print_mode1_timing_summary(total_csv_candidates)
         MODE1_ASSEMBLY_TIMING_CALLBACK = None
