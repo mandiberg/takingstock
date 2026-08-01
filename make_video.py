@@ -73,7 +73,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 8  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -105,7 +105,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_fullset_test/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_fullset_400/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -199,6 +199,7 @@ CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
+MULTIPLIER_PADDING = 1
 
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if "paris" in CURRENT_MODE:
@@ -3949,10 +3950,10 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
         print("[mode1 bbox-aware] no face bbox column available; using body-only multiplier")
         return body_multiplier
 
-    obj_top_samples = []
-    obj_right_samples = []
-    obj_bottom_samples = []
-    obj_left_samples = []
+    obj_top_extent_samples = []
+    obj_right_extent_samples = []
+    obj_bottom_extent_samples = []
+    obj_left_extent_samples = []
     rows_with_object_bboxes = 0
 
 
@@ -3967,8 +3968,8 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
         if face_height <= 0:
             continue
 
-        cx = (face_bbox["left"] + face_bbox["right"]) / 2.0
-        cy = (face_bbox["top"] + face_bbox["bottom"]) / 2.0
+        # cx = (face_bbox["left"] + face_bbox["right"]) / 2.0
+        # cy = (face_bbox["top"] + face_bbox["bottom"]) / 2.0
 
         object_bboxes = _mode1_collect_object_bboxes_for_row(row)
         if not object_bboxes:
@@ -3976,33 +3977,63 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
 
         rows_with_object_bboxes += 1
         for obj_bbox in object_bboxes:
-            # obj_top = max(0.0, (cy - obj_bbox["top"]) / face_height)
-            # obj_right = max(0.0, (obj_bbox["right"] - cx) / face_height)
-            # obj_bottom = max(0.0, (obj_bbox["bottom"] - cy) / face_height)
-            # obj_left = max(0.0, (cx - obj_bbox["left"]) / face_height)
+            # bbox_norm values are nose-origin signed offsets in face-height units.
+            # Convert to extension extents in multiplier units (always non-negative).
+            obj_top_extent = max(0.0, -float(obj_bbox["top"]))
+            obj_right_extent = max(0.0, float(obj_bbox["right"]))
+            obj_bottom_extent = max(0.0, float(obj_bbox["bottom"]))
+            obj_left_extent = max(0.0, -float(obj_bbox["left"]))
 
-            # these bboxes are already normalized
-            obj_top_samples.append(obj_bbox["top"])
-            obj_right_samples.append(obj_bbox["right"])
-            obj_bottom_samples.append(obj_bbox["bottom"])
-            obj_left_samples.append(obj_bbox["left"])
+            obj_top_extent_samples.append(obj_top_extent)
+            obj_right_extent_samples.append(obj_right_extent)
+            obj_bottom_extent_samples.append(obj_bottom_extent)
+            obj_left_extent_samples.append(obj_left_extent)
 
-    if not obj_top_samples:
+    if not obj_top_extent_samples:
         print("[mode1 bbox-aware] no usable object bbox samples; using body-only multiplier")
         return body_multiplier
 
+    # sort each list of samples:
+    obj_top_extent_samples.sort()
+    obj_right_extent_samples.sort()
+    obj_bottom_extent_samples.sort()
+    obj_left_extent_samples.sort()
+
+    # print each list of samples:
+    print(f"[mode1 bbox-aware] obj_top_extent_samples: {obj_top_extent_samples}")
+    print(f"[mode1 bbox-aware] obj_right_extent_samples: {obj_right_extent_samples}")
+    print(f"[mode1 bbox-aware] obj_bottom_extent_samples: {obj_bottom_extent_samples}")
+    print(f"[mode1 bbox-aware] obj_left_extent_samples: {obj_left_extent_samples}")
+    
     # Use a high percentile so large held objects (bike/barbell) influence framing.
     obj_multiplier = [
-        max(float(np.percentile(obj_top_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[0])),
-        max(float(np.percentile(obj_right_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[1])),
-        max(float(np.percentile(obj_bottom_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[2])),
-        max(float(np.percentile(obj_left_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[3])),
+        max(float(np.percentile(obj_top_extent_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[0])),
+        max(float(np.percentile(obj_right_extent_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[1])),
+        max(float(np.percentile(obj_bottom_extent_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[2])),
+        max(float(np.percentile(obj_left_extent_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[3])),
     ]
 
+    # body_multiplier is the amount that the image needs to be extended
+    # negative and positive have already been accounted for in the body_multiplier calculation.
+
+    # obj_multiplier is the relative position of each edge of the object bbox. 
+    # when top is positive, it actually means that the object is below the nose, so we don't extend higher
+    # when the top is negative, it means the object is above the nose, and we need to extend
+    # when the bottom is is negative, it means the object is above the head, so we don't extend lower.
+    # when the right side is negative, it mean we don't extend to the right
+    # when the left is negative, it means the object is to the left of the nose, and we need to extend
+    # when the left is positive, it mean we don't extend to the right
+
+    
+
     merged_multiplier = [
-        max(float(body_multiplier[i]), float(obj_multiplier[i]))
+    # round multiplier to confirm with merge_step using this pattern:
+    #  top_extent = max(self.round_up_step((top_raw + padding), self.ROUND_STEP), self.MIN_DYN_BBOX_DIM[0])
+        max(sort.round_up_step(float(body_multiplier[i])), sort.round_up_step(float(obj_multiplier[i])))
         for i in range(4)
     ]
+
+
 
     print(
         "[mode1 bbox-aware] merged dynamic multiplier "
@@ -4049,7 +4080,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
             sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
     elif image_edge_multiplier is None:
         # Dynamic fallback with object-bbox awareness.
-        sort.image_edge_multiplier = _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, 0)
+        sort.image_edge_multiplier = _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, MULTIPLIER_PADDING)
         print(
             "No multiplier found in canonical registry or pose crop dict; "
             "calculating dynamic multiplier with bbox-aware estimator:",

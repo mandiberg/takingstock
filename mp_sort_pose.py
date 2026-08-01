@@ -133,12 +133,13 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 100 # DOES factor if ONE_SHOT and TSP_SORT
+        self.CUTOFF = 400 # DOES factor if ONE_SHOT and TSP_SORT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
         # IQR_SCALE_FACTOR already set above after VERBOSE
         self.MIN_DYN_BBOX_DIM = [1.0,1.0,1.0,1.0] # controls how closely AUTO_EDGE_CROP can get
+        self.ROUND_STEP = 0.5 # fixed incriments for all calculated multipliers
         self.DYN_BBOX_FROM_IMAGE_DIMS = True # if True, use image dimensions to calculate dynamic multiplier rather than body landmarks
         self.DYN_BBOX_ROUND_TO = 0.25 # round to nearest 0.5 bbox for crop dimensions
         self.DYN_BBOX_PCT = 50 # percentile for dynamic bbox calculation
@@ -460,6 +461,10 @@ class SortPose:
             self.MAXMOUTHGAP = 1000
             self.SORT = 'face_x'
             self.ROUND = 1
+
+    def round_up_step(self, value, step = None):
+        if step is None: step = self.ROUND_STEP
+        return math.ceil(value / step) * step
 
     def get_sort_column_mapping(self, SORT_TYPE, CLUSTER1=None):
         """
@@ -2146,10 +2151,10 @@ class SortPose:
             left_raw = abs(median_min_x)
             x_orientation = "natural(x+ is right)"
 
-        top_extent = max(math.ceil(top_raw + padding), self.MIN_DYN_BBOX_DIM[0])
-        right_extent = max(math.ceil(right_raw + padding), self.MIN_DYN_BBOX_DIM[1])
-        bottom_extent = max(math.ceil(bottom_raw + padding), self.MIN_DYN_BBOX_DIM[2])
-        left_extent = max(math.ceil(left_raw + padding), self.MIN_DYN_BBOX_DIM[3])
+        top_extent = max(self.round_up_step((top_raw + padding)), self.MIN_DYN_BBOX_DIM[0])
+        right_extent = max(self.round_up_step((right_raw + padding)), self.MIN_DYN_BBOX_DIM[1])
+        bottom_extent = max(self.round_up_step((bottom_raw + padding)), self.MIN_DYN_BBOX_DIM[2])
+        left_extent = max(self.round_up_step((left_raw + padding)), self.MIN_DYN_BBOX_DIM[3])
 
         # if diff between left and right is less/equal to 1 bbox, take the bigger one and make them symmetrical.
         if abs(left_extent) != abs(right_extent) and abs(abs(left_extent) - abs(right_extent)) <= 1:
