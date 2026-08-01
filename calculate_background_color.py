@@ -27,6 +27,7 @@ import sys
 from sqlalchemy import create_engine, text,func, select, delete, and_, exists
 from sqlalchemy.orm import sessionmaker,scoped_session, declarative_base
 from sqlalchemy.pool import NullPool
+from sqlalchemy.exc import IntegrityError
 from mp_db_io import DataIO
 import pickle
 import numpy as np
@@ -40,6 +41,7 @@ import mediapipe as mp
 import shutil
 import pandas as pd
 import json
+import pymysql
 from my_declarative_base import Base, Clusters, Encodings, Images,ImagesBackground, ImagesTopics, SegmentTable, SegmentBig, Column, Integer, String, Date, Boolean, DECIMAL, BLOB, ForeignKey, JSON, Images
 #from sqlalchemy.ext.declarative import declarative_base
 from mp_sort_pose import SortPose
@@ -58,10 +60,10 @@ SHOULDER_THRESH=.75
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # for fingerpoint
-HelperTable_name = "SegmentHelper_TheOffice"
+HelperTable_name = "SegmentHelper_TheGym"
 # MM controlling which folder to use
 IS_SSD = True
-SSD_PATH = "/Volumes/LaCie/segment_images"
+SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 
 io = DataIO(IS_SSD, VERBOSE, SSD_PATH)
 db = io.db
@@ -141,9 +143,30 @@ session = scoped_session(sessionmaker(bind=engine))
 
 title = 'Please choose your operation: '
 options = ['Create table', 'Fetch BG color stats',"test sorting"]
-option, index = pick(options, title)
 
-LIMIT= 30000000
+def get_mode_index_from_flags(args):
+    mode_flags = {
+        '--0': 0,
+        '--1': 1,
+        '--2': 2,
+    }
+    selected = [mode_flags[arg] for arg in args if arg in mode_flags]
+    if len(selected) > 1:
+        print("Please pass only one mode flag: --0, --1, or --2")
+        sys.exit(1)
+    if len(selected) == 1:
+        return selected[0]
+    return None
+
+mode_index = get_mode_index_from_flags(sys.argv[1:])
+if mode_index is not None:
+    index = mode_index
+    option = options[index]
+    print(f"Mode selected via CLI: {index} ({option})")
+else:
+    option, index = pick(options, title)
+
+LIMIT= 10000000
 # Initialize the counter
 counter = 0
 
@@ -285,10 +308,18 @@ def create_table(row, lock, session):
     session.add(images_bg)
 
     with lock:
-        # Increment the counter using the lock to ensure thread safety
-        global counter
-        counter += 1
-        session.commit()
+        try:
+            session.commit()
+            # Increment only after a successful commit.
+            global counter
+            counter += 1
+        except (IntegrityError, pymysql.err.IntegrityError) as e:
+            session.rollback()
+            err_msg = str(e)
+            if "1062" in err_msg and "imagesbackground" in err_msg.lower() and "primary" in err_msg.lower():
+                print(f"Duplicate ImagesBackground row for image_id {image_id}; skipping.")
+                return
+            raise
 
     # Print a message to confirm the update
     # print(f"BG list list for image_id {image_id} updated successfully.")
