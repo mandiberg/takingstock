@@ -133,12 +133,12 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 400 # DOES factor if ONE_SHOT and TSP_SORT
+        self.CUTOFF = 200 # DOES factor if ONE_SHOT and TSP_SORT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
         # IQR_SCALE_FACTOR already set above after VERBOSE
-        self.MIN_DYN_BBOX_DIM = [1.0,1.0,1.0,1.0] # controls how closely AUTO_EDGE_CROP can get
+        self.MIN_DYN_BBOX_DIM = [2.0,2.0,2.0,2.0] # controls how closely AUTO_EDGE_CROP can get
         self.ROUND_STEP = 0.5 # fixed incriments for all calculated multipliers
         self.DYN_BBOX_FROM_IMAGE_DIMS = True # if True, use image dimensions to calculate dynamic multiplier rather than body landmarks
         self.DYN_BBOX_ROUND_TO = 0.25 # round to nearest 0.5 bbox for crop dimensions
@@ -1966,7 +1966,7 @@ class SortPose:
         return enc1
 
 
-    def calc_dynamic_multiplier_from_min_max_body_landmarks(self, df, padding = 0):
+    def calc_dynamic_multiplier_from_min_max_body_landmarks(self, df, padding = 0, percentile = 5):
         """
         returns image edge multiplier for crop for each cluster. 
         Needs df and padding for number of bboxes to buffer crop
@@ -2015,37 +2015,39 @@ class SortPose:
                 current_x_coords.append(x)
                 current_y_coords.append(y)
 
-                # Orientation anchors from anatomy:
-                # hips/knees/ankles are below the nose; shoulders/arms indicate left/right.
-                if idx in (23, 24, 25, 26, 27, 28):
-                    current_lower_y_samples.append(y)
-                if idx in (11, 13, 15, 17, 19, 21):
-                    current_left_x_samples.append(x)
-                if idx in (12, 14, 16, 18, 20, 22):
-                    current_right_x_samples.append(x)
+                # # Orientation anchors from anatomy:
+                # # hips/knees/ankles are below the nose; shoulders/arms indicate left/right.
+                # if idx in (23, 24, 25, 26, 27, 28):
+                #     current_lower_y_samples.append(y)
+                # if idx in (11, 13, 15, 17, 19, 21):
+                #     current_left_x_samples.append(x)
+                # if idx in (12, 14, 16, 18, 20, 22):
+                #     current_right_x_samples.append(x)
             
             if current_x_coords:
-                row_min_x = float(np.percentile(current_x_coords, 5))
-                row_max_x = float(np.percentile(current_x_coords, 95))
-                row_min_y = float(np.percentile(current_y_coords, 5))
-                row_max_y = float(np.percentile(current_y_coords, 95))
+                row_min_x = float(np.percentile(current_x_coords, percentile))
+                row_max_x = float(np.percentile(current_x_coords, 100-percentile))
+                row_min_y = float(np.percentile(current_y_coords, percentile))
+                row_max_y = float(np.percentile(current_y_coords, 100-percentile))
+                if self.VERBOSE: print(f" -- {image_id} -- row_min_x: {row_min_x}, row_max_x: {row_max_x}, row_min_y: {row_min_y}, row_max_y: {row_max_y}")
 
-                if current_lower_y_samples:
-                    row_y_sign = "inverted" if statistics.median(current_lower_y_samples) < 0 else "natural"
-                    row_y_source = "anatomy"
-                else:
-                    row_y_sign = "inverted" if abs(row_min_y) >= abs(row_max_y) else "natural"
-                    row_y_source = "extrema-fallback"
+                # if current_lower_y_samples:
+                #     row_y_sign = "inverted" if statistics.median(current_lower_y_samples) < 0 else "natural"
+                #     row_y_source = "anatomy"
+                # else:
+                #     row_y_sign = "inverted" if abs(row_min_y) >= abs(row_max_y) else "natural"
+                #     row_y_source = "extrema-fallback"
 
-                if current_left_x_samples and current_right_x_samples:
-                    row_x_sign = "inverted" if statistics.median(current_right_x_samples) < statistics.median(current_left_x_samples) else "natural"
-                    row_x_source = "anatomy"
-                else:
-                    row_x_sign = "inverted" if abs(row_min_x) >= abs(row_max_x) else "natural"
-                    row_x_source = "extrema-fallback"
+                # if current_left_x_samples and current_right_x_samples:
+                #     row_x_sign = "inverted" if statistics.median(current_right_x_samples) < statistics.median(current_left_x_samples) else "natural"
+                #     row_x_source = "anatomy"
+                # else:
+                #     row_x_sign = "inverted" if abs(row_min_x) >= abs(row_max_x) else "natural"
+                #     row_x_source = "extrema-fallback"
 
-                y_sign_counter[row_y_sign] += 1
-                x_sign_counter[row_x_sign] += 1
+                # print(f"row_y_sign: {row_y_sign}, row_x_sign: {row_x_sign}, row_y_source: {row_y_source}, row_x_source: {row_x_source}  ")
+                # y_sign_counter[row_y_sign] += 1
+                # x_sign_counter[row_x_sign] += 1
                 pending_rows.append(
                     {
                         "image_id": image_id,
@@ -2053,47 +2055,51 @@ class SortPose:
                         "max_x": row_max_x,
                         "min_y": row_min_y,
                         "max_y": row_max_y,
-                        "y_sign": row_y_sign,
-                        "x_sign": row_x_sign,
-                        "y_source": row_y_source,
-                        "x_source": row_x_source,
-                        "lower_y_samples": current_lower_y_samples,
-                        "left_x_samples": current_left_x_samples,
-                        "right_x_samples": current_right_x_samples,
+                        # "y_sign": row_y_sign,
+                        # "x_sign": row_x_sign,
+                        # "y_source": row_y_source,
+                        # "x_source": row_x_source,
+                        # "lower_y_samples": current_lower_y_samples,
+                        # "left_x_samples": current_left_x_samples,
+                        # "right_x_samples": current_right_x_samples,
                     }
                 )
 
-        dominant_y_sign = y_sign_counter.most_common(1)[0][0] if y_sign_counter else None
-        dominant_x_sign = x_sign_counter.most_common(1)[0][0] if x_sign_counter else None
+        # dominant_y_sign = y_sign_counter.most_common(1)[0][0] if y_sign_counter else None
+        # dominant_x_sign = x_sign_counter.most_common(1)[0][0] if x_sign_counter else None
 
         for row in pending_rows:
-            if dominant_y_sign and row["y_sign"] != dominant_y_sign:
-                rejected_image_ids.append(row["image_id"])
-                rejected_details.append(
-                    {
-                        "image_id": row["image_id"],
-                        "reason": "y_sign_mismatch",
-                        "row_y_sign": row["y_sign"],
-                        "dominant_y_sign": dominant_y_sign,
-                        "min_y": row["min_y"],
-                        "max_y": row["max_y"],
-                    }
-                )
-                continue
+            # if dominant_y_sign and row["y_sign"] != dominant_y_sign:
+            #     rejected_image_ids.append(row["image_id"])
+            #     rejected_details.append(
+            #         {
+            #             "image_id": row["image_id"],
+            #             "reason": "y_sign_mismatch",
+            #             "row_y_sign": row["y_sign"],
+            #             "dominant_y_sign": dominant_y_sign,
+            #             "min_y": row["min_y"],
+            #             "max_y": row["max_y"],
+            #         }
+            #     )
+            #     continue
 
-            if dominant_x_sign and row["x_sign"] != dominant_x_sign and self.VERBOSE:
-                print(
-                    f"calc_dynamic_multiplier_from_min_max_body_landmarks: image {row['image_id']} has x sign {row['x_sign']} "
-                    f"but dominant x sign is {dominant_x_sign}; keeping row because crop failure is y-driven"
-                )
+            # if dominant_x_sign and row["x_sign"] != dominant_x_sign and self.VERBOSE:
+            #     print(
+            #         f"calc_dynamic_multiplier_from_min_max_body_landmarks: image {row['image_id']} has x sign {row['x_sign']} "
+            #         f"but dominant x sign is {dominant_x_sign}; keeping row because crop failure is y-driven"
+            #     )
 
             list_min_xs.append(row["min_x"])
             list_max_xs.append(row["max_x"])
             list_min_ys.append(row["min_y"])
             list_max_ys.append(row["max_y"])
-            lower_y_samples.extend(row["lower_y_samples"])
-            left_x_samples.extend(row["left_x_samples"])
-            right_x_samples.extend(row["right_x_samples"])
+            # lower_y_samples.extend(row["lower_y_samples"])
+            # left_x_samples.extend(row["left_x_samples"])
+            # right_x_samples.extend(row["right_x_samples"])
+        list_min_xs.sort()
+        list_max_xs.sort()
+        list_min_ys.sort()
+        list_max_ys.sort()
 
         if self.VERBOSE:
             print("list_min_xs", list_min_xs)
@@ -2109,52 +2115,52 @@ class SortPose:
         median_max_x = statistics.median(list_max_xs)
         median_min_y = statistics.median(list_min_ys)
         median_max_y = statistics.median(list_max_ys)
-        print("medians: ", median_min_x, median_min_y, median_max_x, median_max_y)
+        print(f"medians (FYI not using, using percentile {percentile}): ", median_min_x, median_min_y, median_max_x, median_max_y)
 
 
-        # Determine orientation using semantic landmarks first, then fallback.
-        if lower_y_samples:
-            below_is_negative = statistics.median(lower_y_samples) < 0
-            y_source = "anatomy"
-        else:
-            below_is_negative = abs(median_min_y) >= abs(median_max_y)
-            y_source = "extrema-fallback"
+        # # Determine orientation using semantic landmarks first, then fallback.
+        # if lower_y_samples:
+        #     below_is_negative = statistics.median(lower_y_samples) < 0
+        #     y_source = "anatomy"
+        # else:
+        #     below_is_negative = abs(median_min_y) >= abs(median_max_y)
+        #     y_source = "extrema-fallback"
 
-        if left_x_samples and right_x_samples:
-            right_is_negative = statistics.median(right_x_samples) < statistics.median(left_x_samples)
-            x_source = "anatomy"
-        else:
-            right_is_negative = abs(median_min_x) >= abs(median_max_x)
-            x_source = "extrema-fallback"
+        # if left_x_samples and right_x_samples:
+        #     right_is_negative = statistics.median(right_x_samples) < statistics.median(left_x_samples)
+        #     x_source = "anatomy"
+        # else:
+        #     right_is_negative = abs(median_min_x) >= abs(median_max_x)
+        #     x_source = "extrema-fallback"
 
-        if below_is_negative:
-            # Inverted convention (common in normalize_landmarks):
-            # +y up, -y down
-            top_raw = median_max_y
-            bottom_raw = abs(median_min_y)
-            y_orientation = "inverted(y- is down)"
-        else:
-            # Natural convention:
-            # +y down, -y up
-            top_raw = abs(median_min_y)
-            bottom_raw = median_max_y
-            y_orientation = "natural(y+ is down)"
+        # if below_is_negative:
+        #     # Inverted convention (common in normalize_landmarks):
+        #     # +y up, -y down
+        #     top_raw = median_max_y
+        #     bottom_raw = abs(median_min_y)
+        #     y_orientation = "inverted(y- is down)"
+        # else:
+        #     # Natural convention:
+        #     # +y down, -y up
+        #     top_raw = abs(median_min_y)
+        #     bottom_raw = median_max_y
+        #     y_orientation = "natural(y+ is down)"
 
-        if right_is_negative:
-            # Inverted x: +x left, -x right
-            right_raw = abs(median_min_x)
-            left_raw = median_max_x
-            x_orientation = "inverted(x- is right)"
-        else:
-            # Natural x: +x right, -x left
-            right_raw = median_max_x
-            left_raw = abs(median_min_x)
-            x_orientation = "natural(x+ is right)"
+        # if right_is_negative:
+        #     # Inverted x: +x left, -x right
+        #     right_raw = abs(median_min_x)
+        #     left_raw = median_max_x
+        #     x_orientation = "inverted(x- is right)"
+        # else:
+        #     # Natural x: +x right, -x left
+        #     right_raw = median_max_x
+        #     left_raw = abs(median_min_x)
+        #     x_orientation = "natural(x+ is right)"
 
-        top_extent = max(self.round_up_step((top_raw + padding)), self.MIN_DYN_BBOX_DIM[0])
-        right_extent = max(self.round_up_step((right_raw + padding)), self.MIN_DYN_BBOX_DIM[1])
-        bottom_extent = max(self.round_up_step((bottom_raw + padding)), self.MIN_DYN_BBOX_DIM[2])
-        left_extent = max(self.round_up_step((left_raw + padding)), self.MIN_DYN_BBOX_DIM[3])
+        top_extent = max(self.round_up_step((median_min_y + padding)), self.MIN_DYN_BBOX_DIM[0])
+        right_extent = max(self.round_up_step((median_max_x + padding)), self.MIN_DYN_BBOX_DIM[1])
+        bottom_extent = max(self.round_up_step((median_max_y + padding)), self.MIN_DYN_BBOX_DIM[2])
+        left_extent = max(self.round_up_step((median_min_x + padding)), self.MIN_DYN_BBOX_DIM[3])
 
         # if diff between left and right is less/equal to 1 bbox, take the bigger one and make them symmetrical.
         if abs(left_extent) != abs(right_extent) and abs(abs(left_extent) - abs(right_extent)) <= 1:
@@ -2170,14 +2176,14 @@ class SortPose:
         #     highest_x = math.floor(highest_y * 3 / 2)
         #     lowest_x = math.ceil(lowest_x * 3 / 2)
         if self.VERBOSE:
-            print(f"calc_dynamic_multiplier_from_min_max_body_landmarks orientation: {y_orientation}, {x_orientation}")
-            print(f"orientation source: y={y_source}, x={x_source}")
-            print(f"dominant sign counters: y={dict(y_sign_counter)}, x={dict(x_sign_counter)}")
-            print(f"rejected mixed-sign image ids: {rejected_image_ids}")
+            # print(f"calc_dynamic_multiplier_from_min_max_body_landmarks orientation: {y_orientation}, {x_orientation}")
+            # print(f"orientation source: y={y_source}, x={x_source}")
+            # print(f"dominant sign counters: y={dict(y_sign_counter)}, x={dict(x_sign_counter)}")
+            # print(f"rejected mixed-sign image ids: {rejected_image_ids}")
             print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {(top_extent, right_extent, bottom_extent, left_extent)}")
         return [top_extent, right_extent, bottom_extent, left_extent]
 
-    def calc_dynamic_multiplier_from_image_dims(self, df, padding=0):
+    def calc_dynamic_multiplier_from_image_dims(self, df, padding=0, percentile=5):
         """
         Returns image_edge_multiplier [top, right, bottom, left] in face-height units
         by measuring each image's pixel half-extents from its geometric center,
@@ -2196,7 +2202,7 @@ class SortPose:
         if not required_cols.issubset(df.columns):
             missing = required_cols - set(df.columns)
             print(f"calc_dynamic_multiplier_from_image_dims: missing columns {missing}, falling back to body landmarks")
-            return self.calc_dynamic_multiplier_from_min_max_body_landmarks(df, padding)
+            return self.calc_dynamic_multiplier_from_min_max_body_landmarks(df, padding, percentile)
 
         tops, rights, bottoms, lefts = [], [], [], []
         skipped = 0
@@ -4243,7 +4249,7 @@ class SortPose:
         # pointers = self.get_landmarks_2d(enc1, landmarks, structure)
 
         if structure == "visible":
-            if self.VERBOSE: print("structure is visible")
+            # if self.VERBOSE: print("structure is visible")
             values = self.get_landmarks_2d(enc1, landmarks, "list3D")
             # extract only the visible ones
             visible_values = values[3::4]

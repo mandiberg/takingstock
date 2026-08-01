@@ -67,7 +67,7 @@ SegmentHelper_name = 'SegmentHelper_TheGym'
 IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
 SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
@@ -105,7 +105,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_fullset_400/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_fullset_test/_LRtest" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -3993,6 +3993,16 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
         print("[mode1 bbox-aware] no usable object bbox samples; using body-only multiplier")
         return body_multiplier
 
+    # if there are not a significant number of obj bboxes, then just return the body_multiplier
+    MIN_OBJ_BBOX_PCT_FOR_MULTIPLIER = .5
+    if len(obj_top_extent_samples) < MIN_OBJ_BBOX_PCT_FOR_MULTIPLIER * len(df_segment):
+        print(
+            f"[mode1 bbox-aware] only {len(obj_top_extent_samples)} usable object bbox samples "
+            f"out of {len(df_segment)} rows ({len(obj_top_extent_samples)/len(df_segment):.2%}); "
+            f"using body-only multiplier"
+        )
+        return body_multiplier
+
     # sort each list of samples:
     obj_top_extent_samples.sort()
     obj_right_extent_samples.sort()
@@ -5137,7 +5147,9 @@ def main():
                 print("DYN_BBOX_FROM_IMAGE_DIMS enabled: computing multiplier from image pixel dimensions")
                 df_segment, n_ok = populate_image_dims(df_segment)
                 if n_ok > 10:
-                    sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0)
+                    # percentile is what point you take the upper/lower bounds of the dimensions.
+                    # 5 was leaving too many anomalies in there. 
+                    sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0, percentile = 20)
                 else:
                     print(f"Not enough valid image dimensions ({n_ok}) to compute dynamic multiplier; using default {sort.image_edge_multiplier}")
             else:
