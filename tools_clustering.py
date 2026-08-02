@@ -3914,6 +3914,14 @@ class ToolsClustering:
         if has_nan:
             print(df[df.isna().any(axis=1)])
 
+            # make a df with the rows that have NaN values
+            df_nan = df[df.isna().any(axis=1)]
+
+            # print each row with a NaN value
+            print("df_nan")
+            print(df_nan)
+            
+
         # Prints the count of NaNs for every column
         print(df.isna().sum())
 

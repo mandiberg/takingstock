@@ -105,7 +105,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_fullset_test/_LRtest" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_debug600plus" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -5175,6 +5175,15 @@ def main():
         if row_count <= max_rows_per_csv:
             return [df_segment]
 
+        # chop the df down to the key dimensions to send that in to kmeans for partitioning
+        cols_to_cluster = ["pitch", "yaw", "roll", "left_pointer_knuckle_norm", "right_pointer_knuckle_norm", "is_feet"]
+        # print(f"first row of df_segment:", df_segment.iloc[0]['body_landmarks_array'])
+        # create an is_feet bool column and set it to True if any of the feet lms [27-32] have a visibility greater than .5
+        feet_vis_items = [(i*4+3) for i in range(27, 33)]
+        # for item in feet_vis_items:
+        #     print(f"checking feet visibility item index {item} for row 0: {df_segment.iloc[0]['body_landmarks_array'][item]}")
+        df_segment['is_feet'] = df_segment.apply(lambda row: any(row['body_landmarks_array'][i] > 0.5 for i in feet_vis_items), axis=1)
+        
         n_clusters = compute_partition_cluster_count(row_count, max_rows_per_csv)
         if n_clusters >= row_count:
             # Degenerate case fallback: one-row groups in deterministic index order.
@@ -5185,8 +5194,9 @@ def main():
             f"and max_rows_per_csv={max_rows_per_csv}"
         )
 
+        # only send in the cols_to_cluster
         labels = cl.kmeans_cluster(
-            df_segment,
+            df_segment[cols_to_cluster],
             n_clusters=n_clusters,
             fit_scaler=True,
             random_state=42,
