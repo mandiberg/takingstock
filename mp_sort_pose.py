@@ -462,9 +462,21 @@ class SortPose:
             self.SORT = 'face_x'
             self.ROUND = 1
 
-    def round_up_step(self, value, step = None):
+    def round_up_step(self, value, padding, step = None):
         if step is None: step = self.ROUND_STEP
-        return math.ceil(value / step) * step
+
+        # this needs to add padding to value in an ABS way
+        # and then round to the ABS largest next step
+        # for negative value, the padding needs to move the value further away from zero (eg subtract, or do something with ABS)
+        # for negative numbers getting rounded, it needs to be to floor, not ceil
+
+        if value < 0:
+            value -= padding
+            result = math.floor(value / step) * step
+        else:
+            value += padding
+            result = math.ceil(value / step) * step
+        return result
 
     def get_sort_column_mapping(self, SORT_TYPE, CLUSTER1=None):
         """
@@ -1971,6 +1983,8 @@ class SortPose:
         returns image edge multiplier for crop for each cluster. 
         Needs df and padding for number of bboxes to buffer crop
         """
+        print(f"calc_dynamic_multiplier_from_min_max_body_landmarks with percentile: {percentile} and padding: {padding}")
+
         landmarks_list = df['body_landmarks_normalized'].tolist()
         image_ids = df['image_id'].tolist() if 'image_id' in df.columns else [None] * len(landmarks_list)
         list_min_xs = []
@@ -2030,15 +2044,26 @@ class SortPose:
         list_min_ys = [row["min_y"] for row in pending_rows]
         list_max_ys = [row["max_y"] for row in pending_rows]
 
-        min_x = float(np.percentile(list_min_xs, percentile))
-        max_x = float(np.percentile(list_max_xs, 100-percentile))
-        min_y = float(np.percentile(list_min_ys, percentile))
-        max_y = float(np.percentile(list_max_ys, 100-percentile))
+        list_min_xs.sort()
+        list_max_xs.sort()
+        list_min_ys.sort()
+        list_max_ys.sort()
 
-        top_extent = max(self.round_up_step((min_y + padding)), self.MIN_DYN_BBOX_DIM[0])
-        right_extent = max(self.round_up_step((max_x + padding)), self.MIN_DYN_BBOX_DIM[1])
-        bottom_extent = max(self.round_up_step((max_y + padding)), self.MIN_DYN_BBOX_DIM[2])
-        left_extent = max(self.round_up_step((min_x + padding)), self.MIN_DYN_BBOX_DIM[3])
+        print(f"list_min_ys: {list_min_ys}")
+        print(f"list_max_xs: {list_max_xs}")
+        print(f"list_max_ys: {list_max_ys}")
+        print(f"list_min_xs: {list_min_xs}")
+
+        min_x = float(np.percentile(list_min_xs, 100-percentile))
+        max_x = float(np.percentile(list_max_xs, percentile))
+        min_y = float(np.percentile(list_min_ys, 100-percentile))
+        max_y = float(np.percentile(list_max_ys, percentile))
+
+        print(f"before rounding, the values are min_y {min_y} max_x {max_x} max_y {max_y} min_x {min_x}")
+        top_extent = max(abs(self.round_up_step(min_y , padding)), self.MIN_DYN_BBOX_DIM[0])
+        right_extent = max(abs(self.round_up_step(max_x , padding)), self.MIN_DYN_BBOX_DIM[1])
+        bottom_extent = max(abs(self.round_up_step(max_y , padding)), self.MIN_DYN_BBOX_DIM[2])
+        left_extent = max(abs(self.round_up_step(min_x , padding)), self.MIN_DYN_BBOX_DIM[3])
 
         # if diff between left and right is less/equal to 1 bbox, take the bigger one and make them symmetrical.
         if abs(left_extent) != abs(right_extent) and abs(abs(left_extent) - abs(right_extent)) <= 1:
@@ -2049,7 +2074,7 @@ class SortPose:
             if self.VERBOSE: print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: left-right imbalance detected, equalizing to {left_extent}")
 
         if self.VERBOSE:
-            print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {(top_extent, right_extent, bottom_extent, left_extent)}")
+            print(f"calc_dynamic_multiplier_from_min_max_body_landmarks: {top_extent, right_extent, bottom_extent, left_extent}")
         return [top_extent, right_extent, bottom_extent, left_extent]
 
     def calc_dynamic_multiplier_from_image_dims(self, df, padding=0, percentile=5):
@@ -2070,7 +2095,7 @@ class SortPose:
         required_cols = {'image_w', 'image_h', 'face_height_px', 'nose_x_px', 'nose_y_px'}
         if not required_cols.issubset(df.columns):
             missing = required_cols - set(df.columns)
-            print(f"calc_dynamic_multiplier_from_image_dims: missing columns {missing}, falling back to body landmarks")
+            print(f"calc_dynamic_multiplier_from_image_dims: missing columns {missing}, falling back to body landmarks, using padding {padding} and percentile {percentile}")
             return self.calc_dynamic_multiplier_from_min_max_body_landmarks(df, padding, percentile)
 
         tops, rights, bottoms, lefts = [], [], [], []

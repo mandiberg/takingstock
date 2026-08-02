@@ -67,13 +67,13 @@ SegmentHelper_name = 'SegmentHelper_TheGym'
 IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
 SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
-ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -199,7 +199,10 @@ CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
-MULTIPLIER_PADDING = 1
+MULTIPLIER_PADDING = 1 # this is how much extra padding every multiplier gets
+# percentile is what point you take the upper/lower bounds of the dimensions for multiplier
+# 5 was leaving too many anomalies in there. 
+PERCENTILE = 80
 
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if "paris" in CURRENT_MODE:
@@ -3942,7 +3945,7 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     unioned with body-only extents so objects can only expand the crop.
     """
 
-    body_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, padding)
+    body_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, padding, PERCENTILE)
     if df_segment is None or not isinstance(df_segment, pd.DataFrame) or df_segment.empty:
         return body_multiplier
 
@@ -4017,10 +4020,10 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     
     # Use a high percentile so large held objects (bike/barbell) influence framing.
     obj_multiplier = [
-        max(float(np.percentile(obj_top_extent_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[0])),
-        max(float(np.percentile(obj_right_extent_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[1])),
-        max(float(np.percentile(obj_bottom_extent_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[2])),
-        max(float(np.percentile(obj_left_extent_samples, 75)) + padding, float(sort.MIN_DYN_BBOX_DIM[3])),
+        max(abs(float(np.percentile(obj_top_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[0])),
+        max(abs(float(np.percentile(obj_right_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[1])),
+        max(abs(float(np.percentile(obj_bottom_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[2])),
+        max(abs(float(np.percentile(obj_left_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[3])),
     ]
 
     # body_multiplier is the amount that the image needs to be extended
@@ -4039,7 +4042,8 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     merged_multiplier = [
     # round multiplier to confirm with merge_step using this pattern:
     #  top_extent = max(self.round_up_step((top_raw + padding), self.ROUND_STEP), self.MIN_DYN_BBOX_DIM[0])
-        max(sort.round_up_step(float(body_multiplier[i])), sort.round_up_step(float(obj_multiplier[i])))
+        # already padded the body multiplier, but need to pad the obj now
+        max(sort.round_up_step(float(body_multiplier[i]), padding = 0), sort.round_up_step(float(obj_multiplier[i]), padding = padding))
         for i in range(4)
     ]
 
@@ -5147,13 +5151,11 @@ def main():
                 print("DYN_BBOX_FROM_IMAGE_DIMS enabled: computing multiplier from image pixel dimensions")
                 df_segment, n_ok = populate_image_dims(df_segment)
                 if n_ok > 10:
-                    # percentile is what point you take the upper/lower bounds of the dimensions.
-                    # 5 was leaving too many anomalies in there. 
-                    sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0, percentile = 20)
+                    sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0, PERCENTILE)
                 else:
                     print(f"Not enough valid image dimensions ({n_ok}) to compute dynamic multiplier; using default {sort.image_edge_multiplier}")
             else:
-                sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
+                sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0, PERCENTILE)
 
         if canonical_multiplier is None and not use_pose_crop:
             register_canonical_multiplier(cluster_no, pose_no, sort.image_edge_multiplier)
