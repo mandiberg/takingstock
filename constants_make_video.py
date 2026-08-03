@@ -957,7 +957,7 @@ FUSION_FOLDER = FOCUS_CLUSTER_HACK_LIST = FORCE_TARGET_COUNT = KEYWORD_OBJECT = 
 SSD_PATH = None
 FORCE_TOPIC_FIT_SCORE = KEYWORD_EXCLUDE = KNN_LARGE_CLUSTERS = HAND_POSE_GESTURE_FUSION = False
 
-OBJ_DONT_SUBSELECT = TRUST_FACE_PAIR_CACHE = True
+OBJ_DONT_SUBSELECT = TRUST_FACE_PAIR_CACHE = DO_ENRICH_IMAGE_METAS = True
 MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 # TRUST_FACE_PAIR_CACHE = True # set False to force re-test all face pairs, ignoring cached pass/fail results

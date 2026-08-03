@@ -68,12 +68,13 @@ IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
 SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+# DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -105,7 +106,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_debug600plus" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_debug_metatest" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -447,6 +448,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         CHOP_ITTER_TSP_SORT = False
         ONE_SHOT = False # take all files, based off the very first sort order.
         ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
+        DO_ENRICH_IMAGE_METAS = False # don't bother getting topics/detections because it isn't used.
 
     if DO_SMALL_CLUSTER_FUSION_BUCKET:
         # set above, going to override fusion pairs, MULTIPOLICY and set keep clusters
@@ -2500,7 +2502,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         # sort internals continue reading sort.counter_dict.
         sort.counter_dict = counter_state
 
-    df_sorted = enrich_image_metas(df_sorted)
+    if DO_ENRICH_IMAGE_METAS: df_sorted = enrich_image_metas(df_sorted)
 
     linear_test_start = time.perf_counter()
     assembly_stats = {
@@ -2649,12 +2651,10 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         image_id = row['image_id']
         if row['description']: description = row['description']
         else: description = None
-        try: topic_score = row['topic_score']
-        except: topic_score = 0
-        try: detection_count = row['detection_count']
-        except: detection_count = 0
-        try: detections_json = row['detections_json']
-        except: detections_json = "[]"
+        topic_id = row.get('topic_id', None)
+        topic_score = row.get('topic_score', 0)
+        detection_count = row.get('detection_count', 0)    
+        detections_json = row.get('detections_json', 0)   
         # use image_id to retrieve description from mysql database 
         # this is temporary until I resegment the images with description in the segment
         # try:
@@ -2669,7 +2669,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 description = None
             else:
                 description = description
-            metas = [image_id, description, topic_score, detection_count, detections_json]
+            metas = [image_id, description, topic_score, detection_count, detections_json, topic_id]
             
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)
@@ -3307,6 +3307,8 @@ def enrich_image_metas(df):
     print("enriching image metas")
     KEYWORD_TO_SCORE_DIVISOR = 4
     RANDOM_DIVISOR = 5
+    if 'description' not in df.columns:
+        df['description'] = None
     def count_keywords_in_description(description, keywords):
         print("count_keywords_in_description called with description:", description)
         keywords = ["banknote", "money", "dollar", "euro", "pounds", "credit", "financ", "card", "currenc", "cash", "rupee", "yen", "yuan", 'ruble', "mark", "rupee", "peso", "franc", "lira", "shekel", "ether", "crypto", "bitcoin"]
@@ -3324,46 +3326,34 @@ def enrich_image_metas(df):
 
     parts = SegmentHelper_name.split("_")
     topic_id = None
-    for part in parts:
-        # Only parse tokens like "T11" (or T-prefixed numeric values), not names like "TheOffice".
-        if isinstance(part, str) and part.startswith("T") and len(part) > 1:
-            topic_token = part[1:]
+    if 'topic_score' not in df.columns:
+        image_ids = df['image_id'].dropna().tolist()
+        topic_scores = {}
+        if image_ids:
             try:
-                topic_id = int(float(topic_token))
-                break
-            except (TypeError, ValueError):
-                continue
-    if topic_id is None:
-        if SegmentHelper_name == "SegmentHelper_TheOffice":
-            # default to T11 but change to T37 for money 82, and credit card 95
-            topic_id = 37
-            print(f"Parsed topic_id=11 from SegmentHelper_name: {SegmentHelper_name}")
-        else:
-            print(f"Could not parse topic_id from SegmentHelper_name: {SegmentHelper_name}")
-    if 'description' not in df.columns:
-        df['description'] = None
-    if topic_id is not None:
-        if 'topic_score' not in df.columns:
-            image_ids = df['image_id'].dropna().tolist()
-            topic_scores = {}
-            if image_ids:
-                try:
-                    score_rows = session.query(ImagesTopics.image_id, ImagesTopics.topic_score).filter(
-                        ImagesTopics.topic_id == topic_id,
-                        ImagesTopics.image_id.in_(image_ids),
-                    ).all()
-                    topic_scores = {image_id: topic_score for image_id, topic_score in score_rows}
-                except Exception as e:
-                    traceback.print_exc()
-                    print(str(e))
-                    topic_scores = {}
-            df['topic_score'] = df['image_id'].map(topic_scores)
-            print(
-                f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
-                f"using topic_id={topic_id}"
-            )
-    # go back through and count_keywords_in_description for each row, and add a column for that count
-    df['topic_score'] = df['description'].apply(lambda desc: count_keywords_in_description(desc, []))
+                score_rows = session.query(ImagesTopics.image_id, ImagesTopics.topic_id, ImagesTopics.topic_score).filter(
+                    ImagesTopics.image_id.in_(image_ids),
+                ).all()
+                topic_scores = {image_id: (topic_id,topic_score) for image_id, topic_id, topic_score in score_rows}
+            except Exception as e:
+                traceback.print_exc()
+                print(str(e))
+                topic_scores = {}
+        print(f"going to unpack score_rows with tuples")
+        # df[['New_Col1', 'New_Col2']] = pd.DataFrame(df['A'].map(my_map).tolist(), index=df.index)
+
+        df[['topic_id', 'topic_score']] = df['image_id'].map(topic_scores).tolist()
+        print(
+            f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
+            f"using topic_id={topic_id}"
+        )
+            
+    # Only backfill topic_score from description when no usable score already exists.
+    topic_score_missing_mask = df['topic_score'].isna() | (pd.to_numeric(df['topic_score'], errors='coerce') == 0)
+    if topic_score_missing_mask.any():
+        df.loc[topic_score_missing_mask, 'topic_score'] = df.loc[
+            topic_score_missing_mask, 'description'
+        ].apply(lambda desc: count_keywords_in_description(desc, []))
     
     image_ids = df['image_id'].dropna().tolist()
     detection_payloads = {}
