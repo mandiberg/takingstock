@@ -8,7 +8,7 @@ import sys
 import csv
 from pathlib import Path
 
-ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
 
@@ -25,9 +25,14 @@ io = DataIO()
 # if ALL_IN_ONE_FOLDER = True it will look only in the PATH folder (for when all files are in one folder)
 # if ALL_IN_ONE_FOLDER = False it will look inside all the folders recursively inside of PATH
 
+################################################
+##################  CAREFUL. ###################
 # (does not leave original file in place)
 # if False it will not delete the original file
-MOVE_DELETE_ORIGINAL = False
+MOVE_DELETE_ORIGINAL = True
+################################################
+
+VERBOSE = True
 WRITE_CSV_LIST = False
 # testname = "woman-in-a-music-concert-picture-id505111652.jpg"
 # # PATH= os.path.join(os.environ['HOME'], "Documents/projects-active/facemap_production/gettyimages") 
@@ -35,10 +40,11 @@ WRITE_CSV_LIST = False
 # PATH = "/Volumes/SSD4green/images_shutterstock2"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Volumes/OWC4/segment_images/images_alamy"
-NEWPATH = "/Volumes/OWC52/segment_images/images_alamy"
+PATH = "/Volumes/LaCie/segment_images_15_muscle"
+NEWPATH = "/Volumes/LaCie/segment_images_0_sport"
 
 ALL_IN_ONE_FOLDER = False # if False it will walk through all folders inside of PATH
+SAVE_TO_SITE_FOLDERS = True # if True, it will recognize the sitefolder, and include that in the savepath, to preserve the 20 site folders
 
 IMAGE_ID_FILENAMES = False # if True it will convert the filename to an image id (e.g. 12345678.jpg) instead of the original filename
 # folder ="5GB_testimages"
@@ -143,7 +149,18 @@ def threaded_process_files():
     while not work_queue.empty():
         currentpathfile, newfile, a, b = work_queue.get()
         if IMAGE_ID_FILENAMES: newfile = convert_filename_to_id(newfile)
-        newpathfile = os.path.join(NEWPATH, a, b, newfile)
+
+        # print(f"adding to queue: {newfile}, from path: {this_path}")
+        if SAVE_TO_SITE_FOLDERS:
+            # get the site folder from the currentpathfile, which looks like this: /Volumes/LaCie/segment_images_15_musclex/images_nappy/5/52
+            # the site folder is the part of the path with "images_*******" in it
+            site_folder_match = re.search(r'\bimages_[^/]+', currentpathfile)
+            # site_folder = os.path.basename(os.path.dirname(currentpathfile))
+            site_folder = site_folder_match.group() if site_folder_match else ""
+            # print(f"site folder: {site_folder}")
+            newpathfile = os.path.join(NEWPATH, site_folder, a, b, newfile)
+        else:
+            newpathfile = os.path.join(NEWPATH, a, b, newfile)
 
         if os.path.exists(newpathfile):
             pass
@@ -155,6 +172,10 @@ def threaded_process_files():
             if MOVE_DELETE_ORIGINAL:
                 shutil.move(currentpathfile, newpathfile)
                 print(f"moved {currentpathfile} to: {newpathfile}")
+                # if VERBOSE:
+                #     # verify that the file was moved
+                #     if os.path.exists(newpathfile):
+                #         print(f"verified that {newpathfile} exists")
             else:
                 shutil.copy(currentpathfile,  newpathfile)
                 print(f"copied {currentpathfile} (w/o deleting) to: {newpathfile}")

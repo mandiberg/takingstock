@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker, aliased
 from sqlalchemy.pool import NullPool
 from pymediainfo import MediaInfo
 
-ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
 from mp_db_io import DataIO 
@@ -26,8 +26,8 @@ It will output a new name like:
 TakingStock_T{TOPIC}_p{folder_arms_pose}_s{folder_signature}_obj_{obj}_h{folder_hsv}.mp4
 '''
 
-FOLDER = "/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/T37_1080"
-MP4_ONLY = True 
+FOLDER = "/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/T11_final_looping_video_source_files"
+MP4_ONLY = False 
 io = DataIO()
 DRY_RUN = False
 
@@ -196,8 +196,9 @@ print(f"modal_signature: {folder_modal_signatures}")
 
 # construct df for TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv
 df = pd.DataFrame(columns=["new_name", "title", "folder", "img", "folder_arms_pose", "folder_hands_gesture", "folder_signature", "folder_hsv", "obj_str", ])
-for folder in folder_list:
-    # looks in each folder, and acts on the mp4 files in that folder
+rename_folder_list = [FOLDER]
+for folder in rename_folder_list:
+    # only rename files in the root finished folder; subfolders are used only for lookup
     img_list = io.get_img_list(folder, force_ls=True, sort=True, walk=False)
     print(f"Processing folder: {folder}, found {len(img_list)} images")
 
@@ -224,7 +225,7 @@ for folder in folder_list:
                     media_width = track.width
                     media_height = track.height
                     media_length = track.duration
-        elif "jpg" in img or "jpeg" in img:
+        elif "jpg" in img or "jpeg" in img or "gif" in img:
             # Check if an image track exists and extract dimensions
             if media_info.image_tracks:
                 image_track = media_info.image_tracks[0]
@@ -235,13 +236,22 @@ for folder in folder_list:
 
         
 
-        folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count = io.extract_fusion_cluster(img)
+        # folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count = io.extract_fusion_cluster(img)
+        data = io.extract_fusion_cluster(img)
+        folder_arms_pose = data.get("folder_arms_pose", None)
+        folder_hands_gesture = data.get("folder_hands_gesture", None)
+        folder_signature = data.get("folder_signature", None)
+        folder_hsv = data.get("folder_hsv", None)
+        topic_id = data.get("topic_id", None)
+        frame_count = data.get("frame_count", None)
+
+        # print(f"data dict: ", data)
         if topic_id is None or OVERRIDE_TOPIC:
             topic_id = TOPIC
         if frame_count is not None:
             print(f"Found frame_count: {frame_count} in filename {img}")
             frame_token = f"_fr{frame_count}"
-        if folder_arms_pose == -1:
+        if folder_arms_pose == -1 and bool(folder_modal_signatures):
             # find the right key from the folder_modal_signatures dict based on folder_signature and folder_hsv
             for key, value in folder_modal_signatures.items():
                 if str(folder_signature) in key and folder_hsv is None:
@@ -252,6 +262,9 @@ for folder in folder_list:
                     print(f" ✖️ key: {key}, value: {value}")
                     print(f"folder_signature: {folder_signature}, folder_hsv: {folder_hsv}")
                     print(type(folder_hsv))
+        elif folder_arms_pose == -1 and not bool(folder_modal_signatures):
+            print(f" ❌ WARNING: folder_arms_pose not found in filename, and no modal signature found for folder {folder}. Setting folder_arms_pose to None")
+            folder_arms_pose = None
 
         print(f"extract_fusion_cluster DONE: folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, folder_hsv: {folder_hsv}, topic_id: {topic_id}, frame_count: {frame_count}")
         obj = object_signature_registry.get(io.normalize_cluster_token(folder_signature), None)

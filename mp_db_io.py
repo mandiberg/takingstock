@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import ast
+import re
 import pandas as pd
 import pickle
 import numpy as np
@@ -220,6 +221,40 @@ class DataIO:
                 os.path.join(self.ROOT18,"") # 18	afripics
             ]
         # print("folder_list is ", self.folder_list)
+
+    @staticmethod
+    def get_mode_index_from_cli(args, max_index=None):
+        """Parse a single mode flag in the form --N and return N, else None.
+
+        Raises ValueError if multiple mode flags are passed or if N is out of range
+        when max_index is provided.
+        """
+        mode_indices = []
+        for arg in args:
+            match = re.match(r"^--(\d+)$", arg)
+            if match:
+                mode_indices.append(int(match.group(1)))
+
+        if len(mode_indices) > 1:
+            raise ValueError("Please pass only one mode flag in the form --N")
+
+        if not mode_indices:
+            return None
+
+        mode_index = mode_indices[0]
+        if max_index is not None and (mode_index < 0 or mode_index > max_index):
+            raise ValueError(f"Invalid mode flag --{mode_index}; expected 0..{max_index}")
+        return mode_index
+
+    @staticmethod
+    def select_mode(options, title, args, pick_fn):
+        """Select mode from CLI flag (--N) or interactive picker fallback."""
+        mode_index = DataIO.get_mode_index_from_cli(args, max_index=len(options) - 1)
+        if mode_index is not None:
+            option = options[mode_index]
+            print(f"Mode selected via CLI: {mode_index} ({option})")
+            return option, mode_index
+        return pick_fn(options, title)
 
     @staticmethod
     def extract_fusion_cluster(name):
@@ -609,6 +644,13 @@ class DataIO:
     #         return Lms1d3
     #     else:
     #         return Lms2d
+
+    def make_float(self, value):
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return value
+
 
     def print_sqlalchemy_query(self, engine, query):
         # Print the actual SQL SELECT statement with all parameters filled in

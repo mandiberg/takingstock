@@ -59,21 +59,21 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_T3_player'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-SegmentHelper_name = 'SegmentHelper_TheOffice'
+SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
-SSD_PATH = "/Volumes/LaCie/segment_images_thegym_redux"
+SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 8  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -105,7 +105,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheOffice_looping_redux/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_debug600plus" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -199,6 +199,10 @@ CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
+MULTIPLIER_PADDING = 1 # this is how much extra padding every multiplier gets
+# percentile is what point you take the upper/lower bounds of the dimensions for multiplier
+# 5 was leaving too many anomalies in there. 
+PERCENTILE = 80
 
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if "paris" in CURRENT_MODE:
@@ -301,7 +305,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     '''
 
     # main switches
-    INSTALLATION_VIDEO = False # if false, it will do the animation TSP sort
+    INSTALLATION_VIDEO = True # if false, it will do the animation TSP sort
     HAND_POSE_GESTURE_FUSION = False # this triggers cluster on hand pose/gesture, and sort on object fusion features. Used for phone/money facing forward
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
@@ -412,11 +416,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
-            GENERATE_FUSION_PAIRS = False 
+            GENERATE_FUSION_PAIRS = True 
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
+            ONE_SHOT = True
         else:
             print(f"in second condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
 
@@ -3850,6 +3855,211 @@ def _mode1_normalize_token(value):
         return None
 
 
+def _mode1_parse_bbox_dict(value):
+    """Parse bbox-like payloads into a dict with top/right/bottom/left floats.
+    needs to be able to handle this format too: 
+    {'detection_id': 27270362, 'class_id': 1.0, 'conf': 0.79, 'top': 2.611940298507463, 'left': -1.9440298507462688, 'right': 2.078358208955224, 'bottom': 3.3470149253731343}
+    """
+    if value is None:
+        return None
+    # print(f"_mode1_parse_bbox_dict: {value}")
+    parsed = value
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        if not text or text.lower() in ("none", "nan"):
+            return None
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            try:
+                parsed = ast.literal_eval(text)
+            except Exception:
+                return None
+
+    if isinstance(parsed, (list, tuple)) and len(parsed) >= 4:
+        parsed = {
+            "top": parsed[0],
+            "right": parsed[1],
+            "bottom": parsed[2],
+            "left": parsed[3],
+        }
+
+    if not isinstance(parsed, dict):
+        return None
+
+    if not all(k in parsed for k in ("top", "right", "bottom", "left")):
+        return None
+
+    try:
+        bbox = {
+            "top": float(parsed["top"]),
+            "right": float(parsed["right"]),
+            "bottom": float(parsed["bottom"]),
+            "left": float(parsed["left"]),
+        }
+    except (TypeError, ValueError):
+        return None
+
+    if not all(np.isfinite(v) for v in bbox.values()):
+        return None
+    return bbox
+
+
+def _mode1_collect_object_bboxes_for_row(row):
+    """Collect object bbox candidates from known row payload fields."""
+    object_bboxes = []
+
+    # print("_mode1_collect_object_bboxes_for_row", row)
+    # direct_cols = ["bbox_norm", "obj_bbox", "object_bbox", "obj_bbox_list"]
+    for col_name in DETECTION_COLS:
+        if col_name not in row.index:
+            continue
+        bbox = _mode1_parse_bbox_dict(row.get(col_name))
+        if bbox is not None:
+            object_bboxes.append(bbox)
+    # if bool(object_bboxes): print("object_bboxes", object_bboxes)
+    # else: print("no object bboxes found in row")
+    # when obj bboxes exist, object_bboxes looks like this: 
+    # object_bboxes [{'top': 3.3057851239669422, 'right': 2.347107438016529, 'bottom': 5.545454545454546, 'left': -2.6115702479338845}, {'top': 3.3057851239669422, 'right': 2.347107438016529, 'bottom': 5.545454545454546, 'left': -2.6115702479338845}]
+
+    # detections_payload = row.get("detections_json") if "detections_json" in row.index else None
+    # if isinstance(detections_payload, str) and detections_payload.strip():
+    #     try:
+    #         detections = json.loads(detections_payload)
+    #     except Exception:
+    #         detections = None
+    #     if isinstance(detections, list):
+    #         for detection in detections:
+    #             if not isinstance(detection, dict):
+    #                 continue
+    #             bbox = _mode1_parse_bbox_dict(detection.get("bbox_norm"))
+    #             if bbox is None:
+    #                 bbox = _mode1_parse_bbox_dict(detection.get("bbox"))
+    #             if bbox is not None:
+    #                 object_bboxes.append(bbox)
+
+    return object_bboxes
+
+
+def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
+    """Estimate dynamic crop multipliers using body landmarks plus object bbox extents.
+
+    Object extents are measured from face-bbox center in face-height units and then
+    unioned with body-only extents so objects can only expand the crop.
+    """
+
+    body_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, padding, PERCENTILE)
+    if df_segment is None or not isinstance(df_segment, pd.DataFrame) or df_segment.empty:
+        return body_multiplier
+
+    if "bbox" not in df_segment.columns:
+        print("[mode1 bbox-aware] no face bbox column available; using body-only multiplier")
+        return body_multiplier
+
+    obj_top_extent_samples = []
+    obj_right_extent_samples = []
+    obj_bottom_extent_samples = []
+    obj_left_extent_samples = []
+    rows_with_object_bboxes = 0
+
+
+    print(f"_mode1_calc_dynamic_multiplier_bbox_aware, columns:", df_segment.columns)
+    for _, row in df_segment.iterrows():
+        # print(f"_mode1_calc_dynamic_multiplier_bbox_aware Processing row: {row}")
+        face_bbox = _mode1_parse_bbox_dict(row.get("bbox"))
+        if face_bbox is None:
+            continue
+
+        face_height = abs(face_bbox["bottom"] - face_bbox["top"])
+        if face_height <= 0:
+            continue
+
+        # cx = (face_bbox["left"] + face_bbox["right"]) / 2.0
+        # cy = (face_bbox["top"] + face_bbox["bottom"]) / 2.0
+
+        object_bboxes = _mode1_collect_object_bboxes_for_row(row)
+        if not object_bboxes:
+            continue
+
+        rows_with_object_bboxes += 1
+        for obj_bbox in object_bboxes:
+            # bbox_norm values are nose-origin signed offsets in face-height units.
+            # Convert to extension extents in multiplier units (always non-negative).
+            obj_top_extent = max(0.0, -float(obj_bbox["top"]))
+            obj_right_extent = max(0.0, float(obj_bbox["right"]))
+            obj_bottom_extent = max(0.0, float(obj_bbox["bottom"]))
+            obj_left_extent = max(0.0, -float(obj_bbox["left"]))
+
+            obj_top_extent_samples.append(obj_top_extent)
+            obj_right_extent_samples.append(obj_right_extent)
+            obj_bottom_extent_samples.append(obj_bottom_extent)
+            obj_left_extent_samples.append(obj_left_extent)
+
+    if not obj_top_extent_samples:
+        print("[mode1 bbox-aware] no usable object bbox samples; using body-only multiplier")
+        return body_multiplier
+
+    # if there are not a significant number of obj bboxes, then just return the body_multiplier
+    MIN_OBJ_BBOX_PCT_FOR_MULTIPLIER = .5
+    if len(obj_top_extent_samples) < MIN_OBJ_BBOX_PCT_FOR_MULTIPLIER * len(df_segment):
+        print(
+            f"[mode1 bbox-aware] only {len(obj_top_extent_samples)} usable object bbox samples "
+            f"out of {len(df_segment)} rows ({len(obj_top_extent_samples)/len(df_segment):.2%}); "
+            f"using body-only multiplier"
+        )
+        return body_multiplier
+
+    # sort each list of samples:
+    obj_top_extent_samples.sort()
+    obj_right_extent_samples.sort()
+    obj_bottom_extent_samples.sort()
+    obj_left_extent_samples.sort()
+
+    # print each list of samples:
+    print(f"[mode1 bbox-aware] obj_top_extent_samples: {obj_top_extent_samples}")
+    print(f"[mode1 bbox-aware] obj_right_extent_samples: {obj_right_extent_samples}")
+    print(f"[mode1 bbox-aware] obj_bottom_extent_samples: {obj_bottom_extent_samples}")
+    print(f"[mode1 bbox-aware] obj_left_extent_samples: {obj_left_extent_samples}")
+    
+    # Use a high percentile so large held objects (bike/barbell) influence framing.
+    obj_multiplier = [
+        max(abs(float(np.percentile(obj_top_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[0])),
+        max(abs(float(np.percentile(obj_right_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[1])),
+        max(abs(float(np.percentile(obj_bottom_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[2])),
+        max(abs(float(np.percentile(obj_left_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[3])),
+    ]
+
+    # body_multiplier is the amount that the image needs to be extended
+    # negative and positive have already been accounted for in the body_multiplier calculation.
+
+    # obj_multiplier is the relative position of each edge of the object bbox. 
+    # when top is positive, it actually means that the object is below the nose, so we don't extend higher
+    # when the top is negative, it means the object is above the nose, and we need to extend
+    # when the bottom is is negative, it means the object is above the head, so we don't extend lower.
+    # when the right side is negative, it mean we don't extend to the right
+    # when the left is negative, it means the object is to the left of the nose, and we need to extend
+    # when the left is positive, it mean we don't extend to the right
+
+    
+
+    merged_multiplier = [
+    # round multiplier to confirm with merge_step using this pattern:
+    #  top_extent = max(self.round_up_step((top_raw + padding), self.ROUND_STEP), self.MIN_DYN_BBOX_DIM[0])
+        # already padded the body multiplier, but need to pad the obj now
+        max(sort.round_up_step(float(body_multiplier[i]), padding = 0), sort.round_up_step(float(obj_multiplier[i]), padding = padding))
+        for i in range(4)
+    ]
+
+
+
+    print(
+        "[mode1 bbox-aware] merged dynamic multiplier "
+        f"rows_with_object_bboxes={rows_with_object_bboxes} "
+        f"body={body_multiplier} obj={obj_multiplier} merged={merged_multiplier}"
+    )
+    return merged_multiplier
+
+
 def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """Standalone set_multiplier_and_dims for pool workers (no main() closures).
 
@@ -3862,6 +4072,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     pose_no = _mode1_normalize_token(pose_no)
     use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
     canonical_multiplier = None
+    learned_record = None
     if not use_pose_crop:
         canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
     if canonical_multiplier is not None:
@@ -3885,12 +4096,32 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
         if crop_dict_index is not None:
             sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
     elif image_edge_multiplier is None:
-        print("No multiplier found in canonical registry or pose crop dict; calculating dynamic multiplier from body landmarks")
-        # dynamic fallback — populate_image_dims not available at module level;
-        # fall back to landmark-based calculation (no closure required).
-        sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
+        # Dynamic fallback with object-bbox awareness.
+        sort.image_edge_multiplier = _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, MULTIPLIER_PADDING)
+        print(
+            "No multiplier found in canonical registry or pose crop dict; "
+            "calculating dynamic multiplier with bbox-aware estimator:",
+            sort.image_edge_multiplier,
+        )
+        if (
+            MODE == 1
+            and CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion"
+            and cluster_no is not None
+            and pose_no is not None
+            and not use_pose_crop
+        ):
+            learned_record = {
+                "arms_cluster_id": int(cluster_no),
+                "object_signature_cluster_id": int(pose_no),
+                "multiplier": [float(value) for value in sort.image_edge_multiplier],
+            }
+            print(
+                "[canonical multipliers][worker] learned candidate "
+                f"arms={cluster_no} object_signature={pose_no} mult={learned_record['multiplier']}"
+            )
     sort.face_height_output = face_height_output
     sort.set_output_dims()
+    return learned_record
 
 
 def _mode1_load_df(csv_path: str, timing: dict):
@@ -3919,6 +4150,8 @@ def _mode1_load_df(csv_path: str, timing: dict):
         df["face_landmarks"] = df["face_landmarks"].apply(sort.str_to_landmarks)
     if "bbox" in df.columns:
         df["bbox"] = df["bbox"].apply(lambda x: io.unstring_json(x) if isinstance(x, str) else x)
+    if "bbox_norm" in df.columns:
+        df["bbox_norm"] = df["bbox_norm"].apply(lambda x: io.unstring_json(x) if isinstance(x, str) else x)
     df["folder"] = df["folder"].apply(lambda x: os.path.join(io.ROOT, os.path.basename(x)))
     df["face_encodings68"] = df["face_encodings68"].apply(lambda x: eval(x) if isinstance(x, str) else x)
     df["body_landmarks_array"] = df["body_landmarks_array"].apply(lambda x: eval(x) if isinstance(x, str) else x)
@@ -4141,6 +4374,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
 
     timing: dict = {}
     file_start = time.perf_counter()
+    learned_multipliers = []
 
     try:
         parts = csv_file.replace(".csv", "").split("_")
@@ -4175,8 +4409,8 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "early_return": "empty_df",
                 "error": "empty df",
                 "timing": timing,
+                "learned_multipliers": learned_multipliers,
             }
-
         df_sorted = _mode1_run_db_dedupe(
             df_sorted,
             db_session,
@@ -4196,10 +4430,13 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "early_return": "purging_dupes",
                 "error": None,
                 "timing": timing,
+                "learned_multipliers": learned_multipliers,
             }
 
         multiplier_start = time.perf_counter()
-        _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        learned_multiplier = _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        if learned_multiplier is not None:
+            learned_multipliers.append(learned_multiplier)
         timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (
             time.perf_counter() - multiplier_start
         )
@@ -4212,6 +4449,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "early_return": "calibrating",
                 "error": None,
                 "timing": timing,
+                "learned_multipliers": learned_multipliers,
             }
 
         assembly_start = time.perf_counter()
@@ -4227,6 +4465,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             "early_return": None,
             "error": None,
             "timing": timing,
+            "learned_multipliers": learned_multipliers,
         }
     except Exception as exc:
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
@@ -4236,6 +4475,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             "early_return": None,
             "error": str(exc),
             "timing": timing,
+            "learned_multipliers": learned_multipliers,
         }
 
 
@@ -4914,11 +5154,11 @@ def main():
                 print("DYN_BBOX_FROM_IMAGE_DIMS enabled: computing multiplier from image pixel dimensions")
                 df_segment, n_ok = populate_image_dims(df_segment)
                 if n_ok > 10:
-                    sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0)
+                    sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0, PERCENTILE)
                 else:
                     print(f"Not enough valid image dimensions ({n_ok}) to compute dynamic multiplier; using default {sort.image_edge_multiplier}")
             else:
-                sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
+                sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0, PERCENTILE)
 
         if canonical_multiplier is None and not use_pose_crop:
             register_canonical_multiplier(cluster_no, pose_no, sort.image_edge_multiplier)
@@ -4938,6 +5178,15 @@ def main():
         if row_count <= max_rows_per_csv:
             return [df_segment]
 
+        # chop the df down to the key dimensions to send that in to kmeans for partitioning
+        cols_to_cluster = ["pitch", "yaw", "roll", "left_pointer_knuckle_norm", "right_pointer_knuckle_norm", "is_feet"]
+        # print(f"first row of df_segment:", df_segment.iloc[0]['body_landmarks_array'])
+        # create an is_feet bool column and set it to True if any of the feet lms [27-32] have a visibility greater than .5
+        feet_vis_items = [(i*4+3) for i in range(27, 33)]
+        # for item in feet_vis_items:
+        #     print(f"checking feet visibility item index {item} for row 0: {df_segment.iloc[0]['body_landmarks_array'][item]}")
+        df_segment['is_feet'] = df_segment.apply(lambda row: any(row['body_landmarks_array'][i] > 0.5 for i in feet_vis_items), axis=1)
+        
         n_clusters = compute_partition_cluster_count(row_count, max_rows_per_csv)
         if n_clusters >= row_count:
             # Degenerate case fallback: one-row groups in deterministic index order.
@@ -4948,8 +5197,9 @@ def main():
             f"and max_rows_per_csv={max_rows_per_csv}"
         )
 
+        # only send in the cols_to_cluster
         labels = cl.kmeans_cluster(
-            df_segment,
+            df_segment[cols_to_cluster],
             n_clusters=n_clusters,
             fit_scaler=True,
             random_state=42,
@@ -5301,6 +5551,8 @@ def main():
             "file_total": 0.0,
         }
         mode1_processed_files = 0
+        mode1_learned_multiplier_new = 0
+        mode1_learned_multiplier_duplicates = 0
 
         def add_mode1_timing(stage, elapsed):
             if not mode1_timing_enabled:
@@ -5351,6 +5603,52 @@ def main():
                 print(f"[MODE1 TIMING] {stage}: {stage_time:.2f}s ({pct_wall:.1f}% of wall)")
             print("[MODE1 TIMING] ============================\n")
 
+        def merge_mode1_learned_multiplier_records(records, source_csv):
+            nonlocal mode1_learned_multiplier_new
+            nonlocal mode1_learned_multiplier_duplicates
+
+            if not records:
+                return
+
+            for record in records:
+                arms_cluster_id = normalize_cluster_token(record.get("arms_cluster_id"))
+                object_signature_cluster_id = normalize_cluster_token(record.get("object_signature_cluster_id"))
+                multiplier_values = record.get("multiplier")
+
+                if arms_cluster_id is None or object_signature_cluster_id is None:
+                    continue
+                if not isinstance(multiplier_values, (list, tuple)) or len(multiplier_values) != 4:
+                    continue
+
+                try:
+                    parsed_values = [float(value) for value in multiplier_values]
+                except (TypeError, ValueError):
+                    continue
+
+                key = (arms_cluster_id, object_signature_cluster_id)
+                existing = canonical_multiplier_registry.get(key)
+                if existing is not None:
+                    try:
+                        existing_values = [float(value) for value in existing]
+                    except (TypeError, ValueError):
+                        existing_values = existing
+                    if existing_values != parsed_values:
+                        mode1_learned_multiplier_duplicates += 1
+                        print(
+                            "[canonical multipliers][mode1] duplicate learned key ignored (first-write-wins) "
+                            f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
+                            f"existing={existing_values} candidate={parsed_values}"
+                        )
+                    continue
+
+                canonical_multiplier_registry[key] = parsed_values
+                mode1_learned_multiplier_new += 1
+                print(
+                    "[canonical multipliers][mode1] accepted learned key "
+                    f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
+                    f"mult={parsed_values}"
+                )
+
         load_canonical_multiplier_registry_once()
         mode1_enable_db_dedupe = bool(globals().get("MODE1_ENABLE_DB_DEDUPE", True))
         print(f"[MODE1 DEDUPE] MODE1_ENABLE_DB_DEDUPE={mode1_enable_db_dedupe}")
@@ -5393,6 +5691,10 @@ def main():
                 for result in pool.imap_unordered(_mode1_csv_worker, csv_files_to_process):
                     for stage, elapsed in result.get("timing", {}).items():
                         add_mode1_timing(stage, elapsed)
+                    merge_mode1_learned_multiplier_records(
+                        result.get("learned_multipliers", []),
+                        result.get("csv_file"),
+                    )
                     if not result.get("success"):
                         print(
                             f"[MODE1 WORKER] error in {result.get('csv_file')}: "
@@ -5409,11 +5711,27 @@ def main():
                 )
                 for stage, elapsed in result.get("timing", {}).items():
                     add_mode1_timing(stage, elapsed)
+                merge_mode1_learned_multiplier_records(
+                    result.get("learned_multipliers", []),
+                    result.get("csv_file"),
+                )
                 if not result.get("success"):
                     print(
                         f"[MODE1 SERIAL] error in {result.get('csv_file')}: "
                         f"{result.get('error')}"
                     )
+
+        if should_use_canonical_multiplier_registry() and mode1_learned_multiplier_new > 0:
+            print(
+                "[canonical multipliers][mode1] persisting learned registry updates "
+                f"new={mode1_learned_multiplier_new} duplicate_ignored={mode1_learned_multiplier_duplicates}"
+            )
+            write_canonical_multiplier_registry()
+        elif should_use_canonical_multiplier_registry():
+            print(
+                "[canonical multipliers][mode1] no new learned keys to persist "
+                f"duplicate_ignored={mode1_learned_multiplier_duplicates}"
+            )
 
         print_mode1_timing_summary(total_csv_candidates)
         MODE1_ASSEMBLY_TIMING_CALLBACK = None

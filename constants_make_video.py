@@ -964,7 +964,7 @@ AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_bod
 TEMP_FOCUS_CLUSTER_HACK_LIST = OBJECT_NONE_CLUSTERS = OBJECT_KEEP_CLUSTERS = []
 
 
-
+DETECTION_COLS = ["left_hand_object", "right_hand_object", "top_face_object", "left_eye_object", "right_eye_object", "mouth_object", "shoulder_object", "waist_object", "feet_object"]
 
 
 
