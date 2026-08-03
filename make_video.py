@@ -814,7 +814,7 @@ elif IS_SEGONLY and io.platform == "darwin":
         FROM += f" JOIN {ImagesTopics} it ON s.image_id = it.image_id "
         if not N_TOPICS == 100:
             WHERE += " AND it.topic_score > .1"
-            SELECT += ", it.topic_score" # add description here, after resegmenting
+            SELECT += ", it.topic_id, it.topic_score" # add description here, after resegmenting
 
     if IS_HAND_POSE_FUSION:
         # handle META situation, where ArmsPoses3D needs to look for meta clusters
@@ -951,7 +951,7 @@ elif IS_SEGONLY and io.platform == "win32":
     if IS_TOPICS or IS_ONE_TOPIC:
         FROM += " JOIN ImagesTopics it ON s.image_id = it.image_id "
         WHERE += " AND it.topic_score > .3"
-        SELECT += ", it.topic_score" # add description here, after resegmenting
+        SELECT += ", it.topic_id, it.topic_score" # add description here, after resegmenting
     # if NO_KIDS:
     #     WHERE += " AND s.age_id NOT IN (1,2,3) "
     if HSV_BOUNDS:
@@ -2644,8 +2644,10 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         image_id = row['image_id']
         if row['description']: description = row['description']
         else: description = None
-        try: topic_score = row['topic_score']
-        except: topic_score = 0
+        topic_score =row.get('topic_score', 0)
+        topic_id =row.get('topic_id', None)
+        # try: topic_score = row['topic_score']
+        # except: topic_score = 0
         try: detection_count = row['detection_count']
         except: detection_count = 0
         try: detections_json = row['detections_json']
@@ -2664,7 +2666,8 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 description = None
             else:
                 description = description
-            metas = [image_id, description, topic_score, detection_count, detections_json]
+            # puttling topic_id all the way at the end to not mess up existing col order in CSV
+            metas = [image_id, description, topic_score, detection_count, detections_json, topic_id]
             
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)
