@@ -74,7 +74,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -106,7 +106,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_debug_metatest" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_known_good_fulllength" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -316,7 +316,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
 
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEGYM"
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
@@ -409,7 +409,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = True # take all files, based off the very first sort order. (turn on for testing/speed)
+        ONE_SHOT = False # take all files, based off the very first sort order. (turn on for testing/speed)
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         KNN_LARGE_CLUSTERS = True
@@ -417,12 +417,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
-            GENERATE_FUSION_PAIRS = True 
+            GENERATE_FUSION_PAIRS = False 
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
-            ONE_SHOT = True
+            # ONE_SHOT = True # use this to override during testing
         else:
             print(f"in second condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
 
@@ -489,10 +489,15 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # get cutoff for this class_id from constants dict
     cutoff = ID_CUTOFF_DICT.get(class_id, None)
 
-    if not USE_HSV and cutoff is not None:
-        # this is for testing all cluster-poses for a keyword
-        MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
-        MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
+    if not USE_HSV:
+        if cutoff is not None:
+            # this is for testing all cluster-poses for a class_id
+            MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
+            MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
+        else:
+            # for fusion clusters that don't run on class_id, just take the MAX_ROWS_PER_OUTPUT_CSV
+            MIN_VIDEO_FUSION_COUNT = MAX_ROWS_PER_OUTPUT_CSV # this is the cut off for the CSV fusion pairs
+            MIN_CYCLE_COUNT = 100 # at least 100 in the cluster 
     elif PURGING_DUPES:
         MIN_VIDEO_FUSION_COUNT = 100
         MIN_CYCLE_COUNT = 200
