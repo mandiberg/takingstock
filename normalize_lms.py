@@ -38,7 +38,7 @@ NOSE_ID=0
 Base = declarative_base()
 VERBOSE = False
 IS_SSD = True
-SSD_PATH = "/Volumes/OWC5/segment_images_book_clock_bowl"
+SSD_PATH = "/Volumes/OWC5/segment_images_newbig"
 
 ### this code is set up you can only REPROCESS_HANDS OR USE_OBJ in one run ###
 USE_OBJ = True # do objet detections?

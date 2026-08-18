@@ -40,7 +40,7 @@ if REPO_ROOT not in sys.path:
 from mp_db_io import DataIO  # noqa: E402
 from mp_sort_pose import SortPose  # noqa: E402
 from tools_clustering import ToolsClustering  # noqa: E402
-DEFAULT_HELPER_TABLE = "SegmentHelper_may26_deleteme_missingArms3D"
+DEFAULT_HELPER_TABLE = "SegmentHelper_TheGym"
 DEFAULT_CHUNK_SIZE = 1000
 DEFAULT_DELETE_CHUNK_SIZE = 5000
 DEFAULT_OUTPUT_ROOT = (

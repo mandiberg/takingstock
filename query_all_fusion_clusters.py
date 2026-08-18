@@ -40,7 +40,11 @@ OBJECTFUSION_CLUSTER_COUNT = None
 COLUMN_NAME = "topic_id"
 HACK_LIST_SKIP_DETECTIONS = []
 CLUSTER_COUNT = 768
-MODE = "ObjectSignatures" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D or ObjectSignatures to 
+MODE = "ObjectSignatures" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D  or ObjectSignatures to 
+FULL_BODY = True # this is an override to force the use of BodyPoses3D instead of ArmsPoses3D for the fusion matrix
+if FULL_BODY: matrix_family = "BodyPoses3D"
+else: matrix_family = "ArmsPoses3D"
+
 if MODE == "Topics": 
     MODE_ID = "topic_id" 
     CLUSTER_TYPE = "TK" # needs to be reworked next time it is used
@@ -51,14 +55,14 @@ elif "ObjectFusion_DetectionsOnly" in MODE:
     # doing ObjectFusion_DetectionsOnly requires OBJECT_HSV_EXPORT_CLASS_IDS to be set to something
     OBJECT_HSV_EXPORT_CLASS_IDS = [i for i in range(128) if i not in HACK_LIST_SKIP_DETECTIONS] # for testing, export all but the ones in the hack list
     CLUSTER_COUNT = 96 # or is this 23? 
-elif MODE == "ArmsPoses3D": 
+elif "Poses3D" in MODE: 
     MODE_ID = COLUMN_NAME = "cluster_id"
-    CLUSTER_TYPE = "ArmsPoses3D_MetaHSV" # key to CLUSTER_DATA dict
+    CLUSTER_TYPE = f"{matrix_family}_MetaHSV" # key to CLUSTER_DATA dict
     CLUSTER_COUNT = 768
 elif MODE == "ObjectSignatures": 
     # produces the dense massive armsposes x objectsignature required by make_video
     MODE_ID = COLUMN_NAME = "cluster_id"
-    CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion" # key to CLUSTER_DATA dict
+    CLUSTER_TYPE = f"{matrix_family}_ObjectFusion" # key to CLUSTER_DATA dict
     CLUSTER_COUNT = 768
     # "ArmsPoses3D_MetaHSV" or "BodyPoses3D_MetaHSV" or "MetaBodyPoses3D" or "BodyPoses3D_HSV" or "body3D" or "hand_gesture_position" - determines whether it checks hand poses or body3D
 elif MODE == "TopicsObjectSignatures": 
@@ -99,6 +103,14 @@ CLUSTER_DATA = {
         "cluster_count": ARMS_CLUSTER_COUNT,
         # folder_name to be set dynamically based on the resolved OBJECTFUSION_CLUSTER_COUNT
     },
+    "BodyPoses3D_ObjectFusion": {
+        "sql_template": None,
+        "cluster_table_name": "ImagesBodyPoses3D",
+        "object_cluster_table_name": "ImagesObjectSignatures",
+        "hsv_type": None,
+        "cluster_count": ARMS_CLUSTER_COUNT,
+        # folder_name to be set dynamically based on the resolved OBJECTFUSION_CLUSTER_COUNT
+    },
     "Topics_ObjectFusion": {
         "sql_template": None,
         "cluster_table_name": "ImagesTopics",
@@ -122,7 +134,7 @@ THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
 if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
-else: HELPER_TABLE = 'SegmentHelper_T0_sport'
+else: HELPER_TABLE = 'SegmentHelper_TheGym'
 # else: HELPER_TABLE = 'SegmentBig_isface'
 
 
@@ -145,10 +157,11 @@ def resolve_dense_cluster_count(table_name, id_column="cluster_id"):
 
 def resolve_object_cluster_table_name(mode, cluster_type):
     id_column = "cluster_id"  # default
-    if cluster_type == "ArmsPoses3D_ObjectFusion" and mode == "ObjectSignatures":
-        return "ImagesObjectSignatures", id_column
-    if cluster_type == "ArmsPoses3D_ObjectFusion":
-        return "ImagesObjectFusion", id_column
+    if "ObjectFusion" in cluster_type:
+        if mode == "ObjectSignatures":
+            return "ImagesObjectSignatures", id_column
+        else:
+            return "ImagesObjectFusion", id_column
     if cluster_type == "Topics_Objects":
         return "Detections", "class_id"
     return CLUSTER_DATA.get(cluster_type, {}).get("object_cluster_table_name", "ImagesObjectFusion"), id_column
@@ -159,7 +172,7 @@ if "ObjectFusion" in CLUSTER_TYPE or "Topics_Objects" in CLUSTER_TYPE:
     OBJECTFUSION_CLUSTER_COUNT = resolve_dense_cluster_count(object_cluster_table_name, id_column)
     CLUSTER_DATA[CLUSTER_TYPE]["object_cluster_table_name"] = object_cluster_table_name
     CLUSTER_DATA[CLUSTER_TYPE]["folder_name"] = (
-        f"heft_ArmsPoses3D_{ARMS_CLUSTER_COUNT}_ObjectFusion_{OBJECTFUSION_CLUSTER_COUNT}"
+        f"heft_{matrix_family}_{ARMS_CLUSTER_COUNT}_ObjectFusion_{OBJECTFUSION_CLUSTER_COUNT}"
     )
     ROOT_FOLDER_PATH = os.path.join(ROOT_DATA_PATH, CLUSTER_DATA[CLUSTER_TYPE]["folder_name"])
     print(
@@ -818,7 +831,7 @@ def export_armsposes3d_objectfusion_csvs(
     if ARMS_OBJECT_FOCUS_CLUSTER_IDS:
         focus_where = f" AND ia.{row_mode_id} IN ({_in_sql_list(ARMS_OBJECT_FOCUS_CLUSTER_IDS)}) "
 
-    print("Running ArmsPoses3D/ObjectFusion matrix query (class-agnostic)...")
+    print(f"Running {matrix_family}/ObjectFusion matrix query (class-agnostic)...")
     matrix_query = f"""
     SELECT
         ia.{row_mode_id} AS arms_cluster_id,
@@ -837,7 +850,7 @@ def export_armsposes3d_objectfusion_csvs(
 
     df_long = pd.read_sql(matrix_query, engine)
     if df_long.empty:
-        print("No rows for ArmsPoses3D/ObjectFusion global matrix; writing zero matrix.")
+        print(f"Warning: No rows for {matrix_family}/ObjectFusion global matrix; writing zero matrix.")
         matrix = pd.DataFrame(0, index=range(row_cluster_count), columns=range(col_cluster_count))
         matrix.index.name = "arms_cluster_id"
         matrix.columns.name = "object_cluster_id"
@@ -858,9 +871,9 @@ def export_armsposes3d_objectfusion_csvs(
     ]
     matrix_reset["total"] = matrix_reset.drop(columns=["arms_cluster_id"]).sum(axis=1)
 
-    csv_file_path = os.path.join(root_folder_path, "ArmsPoses3D_all.csv")
+    csv_file_path = os.path.join(root_folder_path, f"{matrix_family}_all.csv")
     matrix_reset.to_csv(csv_file_path, index=False)
-    print(f"Saved Arms/ObjectFusion matrix: {csv_file_path}")
+    print(f"Saved {matrix_family}/ObjectFusion matrix: {csv_file_path}")
     update_fusion_manifest(
         csv_file_path,
         None,
@@ -973,7 +986,7 @@ def export_objectfusion_object_hsv_csvs(root_folder_path, class_ids, focus_clust
 
 # Adjust the query template based on MODE
 if "ObjectFusion" in CLUSTER_TYPE or "Topics_Objects" in CLUSTER_TYPE:
-    print("Running ArmsPoses3D/ObjectFusion matrix CSV exports...")
+    print(f"Running {matrix_family}/ObjectFusion matrix CSV exports...")
     export_armsposes3d_objectfusion_csvs(
         root_base_folder=os.path.join(os.path.dirname(__file__), "utilities", "data"),
         helper_table=HELPER_TABLE,

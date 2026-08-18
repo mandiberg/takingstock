@@ -67,14 +67,14 @@ SegmentHelper_name = 'SegmentHelper_TheGym'
 IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
 SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
-# DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -128,7 +128,7 @@ def resolve_arms_object_fusion_folder(
 ):
     pattern = os.path.join(
         root_data_path,
-        f"heft_ArmsPoses3D_{arms_cluster_dim}_ObjectFusion_*",
+        f"heft_{matrix_family}_{arms_cluster_dim}_ObjectFusion_*",
         "fusion_manifest.json",
     )
     manifest_paths = glob.glob(pattern)
@@ -146,6 +146,7 @@ def resolve_arms_object_fusion_folder(
 
     matching_manifests = []
     for manifest_path in manifest_paths:
+        print(f"opening {manifest_path}")
         with open(manifest_path, "r", encoding="utf-8") as manifest_file:
             manifest = json.load(manifest_file)
 
@@ -312,6 +313,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     FULL_BODY = True
+    if FULL_BODY: matrix_family = "BodyPoses3D" 
+    else: matrix_family = "ArmsPoses3D"
 
     # turning off face pair testing, as it was misbehaving
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
@@ -336,10 +339,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # USE_HSV = True
 
     # current obj sort
-    CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
+    CLUSTER_TYPE = f"{matrix_family}_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
     SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
     SORT_TYPE_NONEOBJECT = "object_fusion" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
+    # Use a single-topic filter for the active topic run; bump TOPIC_NO to [45] for a different topic.
+    IS_ONE_TOPIC = True
+    TOPIC_NO = [0]
     # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
 
     if HAND_POSE_GESTURE_FUSION:
@@ -497,8 +503,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
         else:
             # for fusion clusters that don't run on class_id, just take the MAX_ROWS_PER_OUTPUT_CSV
-            MIN_VIDEO_FUSION_COUNT = MAX_ROWS_PER_OUTPUT_CSV # this is the cut off for the CSV fusion pairs
-            MIN_CYCLE_COUNT = 20 # at least 100 in the cluster 
+            MIN_VIDEO_FUSION_COUNT = 100 # this is the cut off for the CSV fusion pairs
+            MIN_CYCLE_COUNT = 64 # at least 100 in the cluster 
     elif PURGING_DUPES:
         MIN_VIDEO_FUSION_COUNT = 100
         MIN_CYCLE_COUNT = 200
@@ -569,7 +575,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     if CLUSTER_TYPE == "object_fusion":
         folder = "objectfusion_object_hsv"
-    elif CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
+    elif CLUSTER_TYPE in ["ArmsPoses3D_ObjectFusion", "BodyPoses3D_ObjectFusion"]:
         folder, OBJECT_CLUSTER_DIM = resolve_arms_object_fusion_folder(
             os.path.join(os.getcwd(), "utilities", "data"),
             ARMS_CLUSTER_DIM,
@@ -577,7 +583,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             expected_cluster_type=CLUSTER_TYPE,
         )
     elif META: folder = "heft_keyword_fusion_clusters_hsv_meta"
-    else: folder = "heft_clusters_ArmsPoses3D_768/"
+    else: folder = f"heft_clusters_{matrix_family}_768/"
 
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
     # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
@@ -685,7 +691,8 @@ IS_ANGLE_SORT = False
 
 
 # gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER1 and TOPIC_NO (which is a list of one keyword)
-if TOPIC_NO is not None and IS_ONE_TOPIC and (IS_HAND_POSE_FUSION or USE_FUSION_PAIR_DICT) and not PURGING_DUPES:
+# skip for CURRENT_MODE == 'heft_torso_keywords'
+if TOPIC_NO is not None and IS_ONE_TOPIC and (IS_HAND_POSE_FUSION or USE_FUSION_PAIR_DICT) and not PURGING_DUPES and CURRENT_MODE != 'heft_torso_keywords':
     print("setting FOCUS_CLUSTER_HACK_LIST for TOPIC_NO", TOPIC_NO, "with CLUSTER1", CLUSTER1)
     # FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
     FOCUS_CLUSTER_HACK_DICT = FOCUS_CLUSTER_DICT.get(CLUSTER1, {})
@@ -4895,7 +4902,7 @@ def main():
         return df_segment, n_ok
     
     def build_route_counts_from_fusion_matrix(folder_path):
-        matrix_path = os.path.join(folder_path, "ArmsPoses3D_all.csv")
+        matrix_path = os.path.join(folder_path, f"{matrix_family}_all.csv")
         if not os.path.exists(matrix_path):
             raise FileNotFoundError(f"Missing fusion matrix CSV: {matrix_path}")
 

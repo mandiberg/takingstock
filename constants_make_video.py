@@ -19,6 +19,7 @@ CLUSTER_MAP = {
     "obj_bbox": ["ArmsPoses3D", None],
     "obj_bbox_fusion": ["ObjectFusion", None],
     "ArmsPoses3D_ObjectFusion": ["ArmsPoses3D", "ObjectSignatures"],
+    "BodyPoses3D_ObjectFusion": ["BodyPoses3D", "ObjectSignatures"],
     "planar_hands_ObjectFusion": ["HandsPositions", "HandsGestures"], # set ObjectSignatures manually
 }
 
@@ -979,7 +980,7 @@ MIN_CYCLE_COUNT = 1
 AUTO_EDGE_CROP = False # this triggers the dynamic cropping based on min_max_body_landmarks_for_crop
 # TRUST_FACE_PAIR_CACHE = True # set False to force re-test all face pairs, ignoring cached pass/fail results
 TEMP_FOCUS_CLUSTER_HACK_LIST = OBJECT_NONE_CLUSTERS = OBJECT_KEEP_CLUSTERS = []
-
+matrix_family = None
 
 DETECTION_COLS = ["left_hand_object", "right_hand_object", "top_face_object", "left_eye_object", "right_eye_object", "mouth_object", "shoulder_object", "waist_object", "feet_object"]
 

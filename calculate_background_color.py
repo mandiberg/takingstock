@@ -60,7 +60,7 @@ SHOULDER_THRESH=.75
 # HelperTable_name = "SegmentHelperApril12_2x2x33x27"
 
 # for fingerpoint
-HelperTable_name = "SegmentHelper_TheGym"
+HelperTable_name = "SegmentHelperObject_86_dumbbell"
 # MM controlling which folder to use
 IS_SSD = True
 SSD_PATH = "/Volumes/LaCie/segment_images_thegym"

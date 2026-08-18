@@ -40,7 +40,7 @@ WRITE_CSV_LIST = False
 # PATH = "/Volumes/SSD4green/images_shutterstock2"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Volumes/LaCie/segment_images_15_muscle"
+PATH = "/Volumes/LaCie/segment_images_45_nature"
 NEWPATH = "/Volumes/LaCie/segment_images_0_sport"
 
 ALL_IN_ONE_FOLDER = False # if False it will walk through all folders inside of PATH
