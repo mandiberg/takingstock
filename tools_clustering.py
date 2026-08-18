@@ -100,7 +100,7 @@ class ToolsClustering:
             'waist_object',
             'feet_object',
         )
-        all_class_ids = set(range(0, 141))
+        all_class_ids = set(range(0, 158))
         self._allowlist_slots = tuple(self.COMPATIBILITY_SLOT_COLUMNS)
         self._allowlist_reject_counts = {slot: 0 for slot in self._allowlist_slots}
         self.compatibility_matrix = self._load_compatibility_matrix_from_csv(all_class_ids)
