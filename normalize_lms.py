@@ -37,15 +37,18 @@ NOSE_ID=0
 
 Base = declarative_base()
 VERBOSE = False
-IS_SSD = False
+IS_SSD = True
 SSD_PATH = "/Volumes/OWC5/segment_images_book_clock_bowl"
 
 ### this code is set up you can only REPROCESS_HANDS OR USE_OBJ in one run ###
-SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
 USE_OBJ = True # do objet detections?
-SKIP_BODY = False # skip body landmarks. mostly you want to skip when doing obj bbox
-                # or are just redoing hands
-REPROCESS_HANDS = False # do hands
+if USE_OBJ: 
+    REPROCESS_HANDS = False # do hands
+    SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox or are just redoing hands
+else: 
+    REPROCESS_HANDS = True # do hands
+    SKIP_BODY = False
+SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
 ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to true
 REPROCESSED_BODY = True 
 REPROCESSED_BODY_DIFF_THRESH = -1.0
@@ -70,7 +73,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 5000000
+LIMIT= 2000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -94,10 +97,10 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # overrides THIS_CLASS_ID
-    SegmentHelper_name = 'SegmentBig_isface'
+    SegmentHelper_name = 'SegmentHelper_TheGym'
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
-    SegmentFolder = SSD_PATH
-    # SegmentFolder = None
+    # SegmentFolder = SSD_PATH
+    SegmentFolder = None
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
     # INNER_JOIN_TABLE = "SegmentHelperObject_100_tulip"
 
@@ -152,7 +155,7 @@ if db['unix_socket']:
     ), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
 else:
     engine = create_engine("mysql+pymysql://{user}:{pw}@{host}/{db}"
-                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=600, poolclass=NullPool)
+                                .format(host=db['host'], db=db['name'], user=db['user'], pw=db['pass']), pool_pre_ping=True, pool_recycle=280, poolclass=NullPool)
 
 
 image_edge_multiplier = [1.5,1.5,2,1.5] # bigger portrait
@@ -197,7 +200,7 @@ if SegmentHelper_name:
 
 # Number of threads
 #num_threads = io.NUMBER_OF_PROCESSES
-num_threads = 1
+num_threads = 4
 
 # Batch configuration for efficient bulk updates
 BATCH_SIZE = 200  # Commit every N images instead of per-image
@@ -291,7 +294,7 @@ def get_shape(target_image_id):
 
 def normalize_obj_bbox(obj_bbox,nose_pos,face_height,shape):
     height,width = shape[:2]
-    print("obj_bbox type",type(obj_bbox))
+    if VERBOSE: print("obj_bbox type",type(obj_bbox))
     n_obj_bbox=io.unstring_json(obj_bbox)
     n_obj_bbox["right"]=(n_obj_bbox["right"] -nose_pos["x"])/face_height
     n_obj_bbox["left"]=(n_obj_bbox["left"] -nose_pos["x"])/face_height
@@ -374,40 +377,6 @@ def has_existing_hand_landmarks_norm(image_id):
         print("has_existing_hand_landmarks_norm no docs for", image_id, "candidate_ids", candidate_ids)
 
     return False
-    
-# def get_hand_landmarks_mongo(image_id):
-#     if image_id:
-#         results = mongo_hand_collection.find_one({"image_id": image_id})
-#         if results:
-#             hand_landmarks = results['nlms']
-#             # print("got encodings from mongo, types are: ", type(face_encodings68), type(face_landmarks), type(body_landmarks))
-#             return unpickle_array(hand_landmarks)
-#         else:
-#             return None
-#     else:
-#         return None
-    
-# def insert_n_landmarks(image_id,n_landmarks):
-#     nlms_dict = { "image_id": image_id, "nlms": pickle.dumps(n_landmarks) }
-#     x = bboxnormed_collection.insert_one(nlms_dict)
-#     print("inserted id",x.inserted_id)
-#     return
-
-
-# def insert_n_landmarks(image_id, n_landmarks):
-#     start = time.time()
-#     nlms_dict = {"image_id": image_id, "nlms": pickle.dumps(n_landmarks)}
-#     result = bboxnormed_collection.update_one(
-#         {"image_id": image_id},  # filter
-#         {"$set": nlms_dict},     # update
-#         upsert=True              # insert if not exists
-#     )
-#     if result.upserted_id:
-#         print("Inserted new document with id:", result.upserted_id)
-#     else:
-#         print("Updated existing document")
-#     print("Time to insert:", time.time()-start)
-#     return
 
 
 def insert_n_phone_bbox(image_id, n_phone_bbox, batch_updates):
@@ -605,6 +574,7 @@ def calc_nlm(image_id_to_shape, batch_updates):
 
     # TK this needs to be ported to calc body code
     height, width, bbox, face_height, nose_pixel_x, nose_pixel_y = image_id_to_shape[target_image_id]
+    if VERBOSE: print(f"height, width, bbox, face_height, nose_pixel_x, nose_pixel_y for {target_image_id}: {height}, {width}, {bbox}, {face_height}, {nose_pixel_x}, {nose_pixel_y}")
     bbox = io.unstring_json(bbox) if type(bbox)==str else bbox
     # get the shape of the image if no height in db
     if height and width:
@@ -634,7 +604,7 @@ def calc_nlm(image_id_to_shape, batch_updates):
         and nose_pixel_x is not None
         and nose_pixel_y is not None
     )
-
+    if VERBOSE: print("has_stored_face_geom", has_stored_face_geom)
     if has_stored_face_geom:
         xB, yB = int(nose_pixel_x), int(nose_pixel_y)
         xF, yF = xB, yB
@@ -644,12 +614,10 @@ def calc_nlm(image_id_to_shape, batch_updates):
         # Keep body normalization path alive even when skipping full face fetch.
         body_landmarks = get_landmarks_mongo(target_image_id)
         hand_results = None
+        if VERBOSE: print(f" ✅ -- ✅ Using cached face geometry for image_id {target_image_id}: nose_pixel_pos_face={nose_pixel_pos_face}, nose_pixel_pos_body={nose_pixel_pos_body}")
     else:
-
-
         # get all the landmarks
         face_encodings68, face_landmarks, body_landmarks, body_landmarks_normalized, body_landmarks_3D, hand_results = io.get_encodings_mongo(target_image_id)
-
         if face_landmarks is None:
             print("FACE LANDMARK NOT FOUND 404, bailing for this one ", target_image_id)
             return
@@ -795,9 +763,11 @@ def calc_nlm(image_id_to_shape, batch_updates):
                 'image_id': target_image_id,
                 'mongo_hand_landmarks_norm': 1
             })    
-        
-    if body_landmarks:
-        if VERBOSE: print("has body_landmarks")
+    
+    print(f"USE_OBJ={USE_OBJ}, SKIP_BODY={SKIP_BODY}, has_stored_face_geom={has_stored_face_geom}, body_landmarks exists={body_landmarks is not None} for image_id {target_image_id}")
+    if body_landmarks or (USE_OBJ and SKIP_BODY and has_stored_face_geom):
+        if VERBOSE: print("has body_landmarks, or USE_OBJ and SKIP_BODY and has_stored_face_geom")
+        # edge case where some obj norm have norm body lms, but not regular body lms. or something 
 
         ### NORMALIZE LANDMARKS ###
         if VERBOSE: print("nose_pixel_pos",nose_pixel_pos_body)
@@ -877,7 +847,7 @@ def calc_nlm(image_id_to_shape, batch_updates):
             print("obj_results",obj_results)
             for detection_id, obj_bbox, class_id, conf in obj_results:
                 if obj_bbox and (obj_bbox != 'null' or conf > 0):
-                    print("going to normalize obj_bbox",obj_bbox)
+                    if VERBOSE: print("going to normalize obj_bbox",obj_bbox)
                     n_obj_bbox=normalize_obj_bbox(obj_bbox,nose_pixel_pos_body,face_height,[height,width])
                     # temp comment
                     print(" 📦 n_obj_bbox for detection_id",detection_id, n_obj_bbox)
@@ -1115,18 +1085,8 @@ for result in results:
     image_id_to_shape[image_id] = (height, width, bbox, face_height, nose_pixel_x, nose_pixel_y)
 
     ### temp single thread for debugging
-    # calc_nlm(image_id_to_shape, lock=None, session=session)
     if VERBOSE: print("image_id_to_shape", image_id_to_shape)
-    # print(" ")
-    # print(" ")
     work_queue.put(image_id_to_shape)        
-
-# distinct_image_ids = [row[0] for row in session.execute(distinct_image_ids_query).fetchall()]
-# if VERBOSE: print("query length",len(distinct_image_ids))
-# if VERBOSE: print("distinct_image_ids",(distinct_image_ids))
-# for counter,target_image_id in enumerate(distinct_image_ids):
-#     if counter%1000==0:print("###########"+str(counter)+"images processed ##########")
-    # work_queue.put(target_image_id)        
 
 if VERBOSE: print("queue filled")
 

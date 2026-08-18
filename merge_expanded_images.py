@@ -28,12 +28,12 @@ SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
-ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/'
+# ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "redux1"
-# FOLDER_NAME = "output_folder/redux1"
+# FOLDER_NAME = "T37_final_looping_video_source_files"
+FOLDER_NAME = "output_folder/_fullset_600s_aug5"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -42,16 +42,17 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 6  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 1  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = None
+CROP_AFTER_COUNT = 120
 
 # if you borked the installation file, turn this on to JUST rebuilt it
 DO_INSTALLATION_ONLY = False
 
 LOOPING = False # defaults
-REPEAT = 6 # will repeat the entire sequence this many times, for looping videos
+REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
+EXPORT_GIF = False # if true, it will save still jpg and animated gif for each subfolder
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
 BLEND_END_TO_FIRST = True
 OFFSET_ON_BUILD = True
@@ -61,6 +62,7 @@ pending_offset_frames = []
 # these have separate overrides for "osc" mode below
 MERGE_PERIOD = 1  # repeats each merge-size level during ramp up/down
 FULL_MERGE_PERIOD = 0  # explicit hold-at-peak frames per cycle
+FULL_MERGE_PERIOD_GIF = None  # None -> reuse FULL_MERGE_PERIOD for GIF cycle length
 AUTO_DISTRIBUTE_CYCLE_PERIOD = False  # optionally spread images into near-even full cycles
 SINGLETON_MODE = "blended_singleton"  # blended_singleton preserves the current soft singleton behavior
 # Preserve full frame budget by default: do not drop boundary singletons.
@@ -71,12 +73,32 @@ STRICT_UNIQUE_SEAM_EXTRA_FRAMES = False
 # Keeping this at 1 preserves a clean transition without changing frame count.
 TRANSITION_SINGLETON_TARGET = 1
 
+# GIF export tuning (size/quality/speed tradeoffs).
+GIF_EXPORT_MAX_DIM = 512  # max of width/height, preserving aspect ratio
+GIF_FRAME_DELAY_SECONDS = None  # set explicit per-frame delay in seconds, e.g. 0.024
+GIF_FRAME_DELAY_MULTIPLIER = 3.0  # used when GIF_FRAME_DELAY_SECONDS is None
+GIF_QUANTIZE_COLORS = 160  # 2-256, smaller means smaller file and less color detail
+GIF_DITHER = True
+GIF_OPTIMIZE = True
+GIF_LOOP_COUNT = 0  # 0 means infinite loop
+GIF_CREATION_COUNT = 3 # number of times to create the GIF, to get a better result. Save all three
+GIF_DO_OSC = False # if True, will do an oscillating merge from START_MERGE up to MERGE_COUNT and back down to START_MERGE
+GIF_USE_SMOOTH_MERGE_COUNT = False # if True, creates tweens between keyframes
+if GIF_USE_SMOOTH_MERGE_COUNT:
+    GIF_FRAME_DELAY_MULTIPLIER = 1.0  # use the same frame delay as the smooth merge count
+
+# control if it limits work to just preview image creation. Only one of these can be true. skip video takes precedence
+GIF_SO_SKIP_VIDEO = False # if True, will skip the video merge and just do the GIF merge
+GIF_SO_STOP_VIDEO_AFTER_JPG = False # if True, will stop the video merge after the first JPG is written
 
 singleton_skip_counts = {
     "leading_non_first": 0,
     "terminal_non_final": 0,
     "terminal_final": 0,
 }
+EXPORT_FIRST_CYCLE_STILL_ENABLED = False
+EXPORT_STILL_COUNT = 0
+EXPORT_FIRST_CYCLE_STILL_PATH = None
 last_image_written = None
 first_image_written = None
 run_counter = 0
@@ -123,15 +145,16 @@ elif "make_video" in CURRENT_MODE:
         PERIOD = 30 # how many images in each merge cycle
         MERGE_COUNT = 8 # largest number of merged images 
         START_MERGE = 1 # number of images merged into the first image. Can be 1 (no merges) or >1 (two or more images merged)
-        
+        MERGE_PERIOD = 1 
+        FULL_MERGE_PERIOD_GIF = 6  # None -> reuse FULL_MERGE_PERIOD for GIF cycle length
+        MERGE_COUNT_GIF = 6
         if REPEAT > 1: 
             # if more than 100 frames (e.g. 60s video) make longer loop cycles that progress through images
             # longer ramp up/down, produce min period of 42
-            MERGE_PERIOD = 2  # set to 2 to double ramp duration
-            FULL_MERGE_PERIOD = 10  # set >0 to hold at MERGE_COUNT for N frames
+            # MERGE_PERIOD = 2  # set to 2 to double ramp duration
+            FULL_MERGE_PERIOD = 19  # set >0 to hold at MERGE_COUNT for N frames
         else: 
             # shorter ramp up/down, produce period of 30, which will round up to 33 or 34, to loop 3x per 100
-            MERGE_PERIOD = 1 
             FULL_MERGE_PERIOD = 14
         AUTO_DISTRIBUTE_CYCLE_PERIOD = True # this controls whether the period is calculated from total count
         SMOOTH_MERGE_COUNT = 2 # how many transition tween frames betwen each keyframe. 2 is standard (3 frames per image/10 img per second). I slowed it down with 3 (4 frames per image)
@@ -240,7 +263,7 @@ def smooth_merge_transition(image1, image2, blend_steps):
     # exclude the start one, as that is not needed
     useful_alphas = total_alphas[1:]
     for alpha in useful_alphas:
-        print(f"alpha: {alpha:.2f}")
+        # print(f"alpha: {alpha:.2f}")
         blended = cv2.addWeighted(image1, 1 - alpha, image2, alpha, 0)
         blended_uint8 = np.clip(blended, 0, 255).astype(np.uint8)
         transition_images.append(blended_uint8)
@@ -294,7 +317,7 @@ def merge_images_numpy(image_list, make_first_image=False):
             last_image_written = image_list[0].astype(np.float32)
             return last_image_written
         return [image_list[0]]
-    print("image_list[0].shape", image_list[0].shape)
+    # print("image_list[0].shape", image_list[0].shape)
     if len(image_list[0].shape) == 2:
         print("removed item 0 from the list - i think for non-images?")
         image_list.pop(0)
@@ -393,8 +416,8 @@ def crop_scale_giga(img1, DIMS=GIGA_DIMS):
                     resize_width = DIMS[1]
                 else: print("DIMS not changed for 9x16")
 
-                DIMS = [DIMS[1]*9//16, DIMS[1]]
-                print("DIMS set to", DIMS)
+                # DIMS = [DIMS[1]*9//16, DIMS[1]]
+                print(f"DIMS set to resize_height: {resize_height}, resize_width: {resize_width}")
                 # DIMS = [DIMS[1]*9//16, DIMS[1]]
             # if the image is not square, establish a DIMS ratio based on the larger dimension
             elif img1.shape[0] > img1.shape[1]:
@@ -405,6 +428,12 @@ def crop_scale_giga(img1, DIMS=GIGA_DIMS):
                 ratio = DIMS[1] / img1.shape[1]
                 resize_height = int(img1.shape[0] * ratio)
                 resize_width = DIMS[1]
+        elif abs(img1.shape[0] - img1.shape[1]) < img1.shape[0] // 10:
+            # catch the square ones for video merge
+            if DIMS == [1080, 1080]:
+                if VERBOSE: print("scaling to 1920,1920")
+                resize_width = 1920
+                resize_height = 1920
         else:
             resize_width = DIMS[1]
             resize_height = DIMS[0]
@@ -661,15 +690,6 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
                 "topic_no", topic_no,
             )
                 
-            # if "None" in image_folder:
-            #     cluster_no = None_counter
-            #     None_counter += 1
-            #     print("cluster_no is None, incrementing None_counter to", None_counter)
-            # else:
-            #     print("cluster found", image_folder)
-            #     cluster_no = int(image_folder.split("_")[0].replace("cluster",""))
-            #     try: handpose_no = int(image_folder.split("_")[1])
-            #     except: print("handpose_no = None")
         count = len(images_to_build)
         print("about to iterate_image_list with ", len(images_to_build), "images")
         if len(images_to_build) == 0: 
@@ -865,64 +885,16 @@ def shift_video_frames(video_path):
     # Replace original video with reordered video
     os.remove(video_path)
     os.rename(temp_video_path, video_path)
-    print("reordered video saved")
-
-def construct_incrementor(merge_count, current_pos, this_period, total_images):
-    '''
-    the leading image speeds through the remaining merge_count images in half the time
-    the trailing image super-speeds through the images to get to the last this_second_merge_count images
-    once it gets to there, it will do normal increments to the end
-    '''
-    print(f"constructing incrementor from merge_count, current_pos, this_period, total_images")
-    print(f"{merge_count}, {current_pos}, {this_period}, {total_images}")
-    this_first_merge_count = math.floor(merge_count / 2)
-    this_second_merge_count = merge_count - this_first_merge_count
-    print("this_first_merge_count", this_first_merge_count, "this_second_merge_count", this_second_merge_count)
-    if this_first_merge_count < 1 or this_second_merge_count < 1:
-        print(f"construct_incrementor: merge_count={merge_count} too small (first={this_first_merge_count}, second={this_second_merge_count}), returning empty incrementors")
-        return [], [], current_pos + merge_count + 1, current_pos + (merge_count * 2)
-    leading_incrementor = []
-    trailing_incrementor = []
-    end_image = min(current_pos + this_period + 1, total_images)
-    current_image_no = current_pos+(merge_count*2)
-    trailing_start_image = current_pos + merge_count + 1
-    print("trailing_start_image", trailing_start_image, "current_image_no", current_image_no, "end_image", end_image)
-
-    print(f"this_first_merge_count: {this_first_merge_count}, this_second_merge_count: {this_second_merge_count}")
-    # construct leading incrementor to cover the full distance in 1/2 of the merge_count (this_first_merge_count)
-    leading_increment = (end_image - current_image_no) // this_first_merge_count # might need to be merge_count -1 TBD
-    leading_remainder = (end_image - current_image_no) - (leading_increment * this_first_merge_count)
-    print("leading_increment", leading_increment, "leading_remainder", leading_remainder)
-    # first append remainder
-    leading_incrementor.append(leading_increment+leading_remainder)
-    for i in range(this_first_merge_count-1):
-        leading_incrementor.append(leading_increment)
-    print(f"len {len(leading_incrementor)} leading_incrementor:", this_first_merge_count)
-
-    # construct trailing incrementor to cover 
-    images_to_speed_through = (end_image-trailing_start_image) - this_first_merge_count
-    print("images_to_speed_through", images_to_speed_through)
-    trailing_increment_speedy = images_to_speed_through // this_second_merge_count
-    trailing_remainder = images_to_speed_through - (trailing_increment_speedy * this_second_merge_count)
-    print("trailing_increment_speedy", trailing_increment_speedy, "trailing_remainder", trailing_remainder)
-    # first append remainder
-    trailing_incrementor.append(trailing_increment_speedy + trailing_remainder)
-    for i in range(this_second_merge_count - 1):
-        trailing_incrementor.append(trailing_increment_speedy)
-    print(f"len {len(trailing_incrementor)} trailing_incrementor:", this_second_merge_count)
-    for i in range(end_image - (trailing_start_image + sum(trailing_incrementor))):
-        trailing_incrementor.append(1)
-    print(f"final len {len(trailing_incrementor)} trailing_incrementor:", len(trailing_incrementor))
-
-    return leading_incrementor, trailing_incrementor, trailing_start_image, current_image_no
-
-     
+    print("reordered video saved")     
 
 def save_images_to_video(images_to_return, video_writer, debug_meta=None):
     global last_image_written
     global first_image_written
     global run_counter
     global pending_offset_frames
+    global EXPORT_FIRST_CYCLE_STILL_ENABLED
+    global EXPORT_STILL_COUNT
+    global EXPORT_FIRST_CYCLE_STILL_PATH
     # print("save_images_to_video called with", len(images_to_return) if images_to_return is not None else 0, "images")
     if images_to_return is not None: 
         if isinstance(images_to_return, np.ndarray):
@@ -948,6 +920,39 @@ def save_images_to_video(images_to_return, video_writer, debug_meta=None):
                 if debug_meta.get("skipped"):
                     debug_lines.append(f"skipped={debug_meta['skipped']}")
                 img = overlay_debug_lines(img, debug_lines)
+            this_cycle = run_counter // debug_meta.get('schedule_len', 0) if debug_meta else 0
+            print(f"considering whether to save still jpg for run_counter {run_counter}, EXPORT_STILL_COUNT={EXPORT_STILL_COUNT}, batch_index={batch_index}, len(image_batch)={len(image_batch)}, debug_meta={debug_meta}")
+            # Export one still frame when first cycle first reaches MERGE_COUNT.
+            if (
+                EXPORT_FIRST_CYCLE_STILL_ENABLED
+                and (not this_cycle > GIF_CREATION_COUNT)
+                and EXPORT_FIRST_CYCLE_STILL_PATH
+                and debug_meta is not None
+                and int(debug_meta.get("current_pos", -1)) == 0
+                and int(debug_meta.get("size", -1)) == int(MERGE_COUNT)
+                and batch_index == (len(image_batch) - 1)
+            ):
+                still_frame = img
+                if still_frame.dtype != np.uint8:
+                    still_frame = np.clip(still_frame, 0, 255).astype(np.uint8)
+                if len(still_frame.shape) == 2:
+                    still_frame = cv2.cvtColor(still_frame, cv2.COLOR_GRAY2BGR)
+                this_still_path = EXPORT_FIRST_CYCLE_STILL_PATH.replace(".jpg", f"_v{this_cycle}.jpg")
+                saved = cv2.imwrite(this_still_path, still_frame)
+                print(
+                    "first-cycle still export",
+                    f"saved={saved}",
+                    f"path={EXPORT_FIRST_CYCLE_STILL_PATH}",
+                    f"frame={run_counter}",
+                    f"size={debug_meta.get('size')}",
+                    f"current_pos={debug_meta.get('current_pos')}",
+                )
+                if GIF_SO_STOP_VIDEO_AFTER_JPG:
+                    print("GIF_SO_SKIP_VIDEO is True, and jpg just written, so bailing out")
+                    return
+                
+                EXPORT_STILL_COUNT += 1 if bool(saved) else 0
+
             # save this image for testing
             # cv2.imwrite(os.path.join(FOLDER_PATH, f"test_{run_counter}.png"), img)
             # print(f"save_images_to_video test_{run_counter}.png", img.shape)
@@ -1001,6 +1006,8 @@ def get_osc_target_cycle_steps(merge_count=MERGE_COUNT, start_merge=START_MERGE)
     levels = (local_merge_count - local_start_merge) + 1
     ramp_steps = levels * max(1, int(MERGE_PERIOD))
     hold_frames = max(0, int(FULL_MERGE_PERIOD))
+    print(f"get_osc_target_cycle_steps: merge_count={merge_count}, start_merge={start_merge}, levels={levels}, ramp_steps={ramp_steps}, hold_frames={hold_frames}")
+    print(f" will return rampe_steps * 2 + hold_frames = {(ramp_steps * 2) + hold_frames}")
     return (ramp_steps * 2) + hold_frames
 
 
@@ -1052,6 +1059,7 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
     Returns a list of dicts with keys: step, size, start_idx, end_idx.
     end_idx is exclusive to support Python slicing.
     """
+    print(f"build_osc_schedule: current_pos={current_pos}, this_period={this_period}, total_images={total_images}, merge_count={merge_count}, start_merge={start_merge}")
     if this_period <= 0:
         return []
 
@@ -1062,53 +1070,488 @@ def build_osc_schedule(current_pos, this_period, total_images, merge_count, star
     if max_available < local_start_merge:
         return []
 
-    # Use the full period budget in strict mode so cycles do not share boundary frames.
     if STRICT_UNIQUE_IMAGE_PLACEMENT:
         cycle_steps = min(max_available, max(1, int(this_period)))
     else:
-        # Legacy mode: one shared boundary frame omitted.
         cycle_steps = min(max_available, max(1, int(this_period) - 1))
 
     peak_size = min(local_merge_count, max_available)
-    size_sequence = build_osc_size_sequence(
-        start_merge=local_start_merge,
-        peak_size=peak_size,
-        merge_period=MERGE_PERIOD,
-        full_merge_period=FULL_MERGE_PERIOD,
-    )
 
-    if AUTO_DISTRIBUTE_CYCLE_PERIOD:
-        size_sequence = fit_osc_size_sequence(size_sequence, cycle_steps)
+    # Strict-unique mode uses a deterministic 3-phase schedule:
+    # 1) ramp up from singleton to peak,
+    # 2) hold at peak while start/end indices are spread across the period,
+    # 3) ramp down toward the next cycle boundary (next singleton anchor).
+    if STRICT_UNIQUE_IMAGE_PLACEMENT and cycle_steps > 0:
+        merge_period = max(1, int(MERGE_PERIOD))
+
+        up_sizes = []
+        for size in range(local_start_merge, peak_size + 1):
+            up_sizes.extend([size] * merge_period)
+
+        # Descend to start_merge + 1 so the singleton belongs to the next cycle.
+        down_sizes = []
+        if peak_size > local_start_merge:
+            for size in range(peak_size, local_start_merge, -1):
+                down_sizes.extend([size] * merge_period)
+
+        base_steps = len(up_sizes) + len(down_sizes)
+        hold_steps = cycle_steps - base_steps
+
+        if hold_steps < 0:
+            # If the requested cycle is too short, time-compress the legacy schedule.
+            # This preserves bounded behavior for short trailing cycles.
+            size_sequence = build_osc_size_sequence(
+                start_merge=local_start_merge,
+                peak_size=peak_size,
+                merge_period=merge_period,
+                full_merge_period=FULL_MERGE_PERIOD,
+            )
+            size_sequence = fit_osc_size_sequence(size_sequence, cycle_steps)
+            schedule = []
+            for step, size in enumerate(size_sequence[:cycle_steps]):
+                end_idx = current_pos + step + 1
+                if end_idx > total_images:
+                    break
+                start_idx = max(current_pos, end_idx - int(size))
+                if start_idx >= end_idx:
+                    continue
+                schedule.append(
+                    {
+                        "step": step,
+                        "size": int(size),
+                        "start_idx": int(start_idx),
+                        "end_idx": int(end_idx),
+                    }
+                )
+            print(f"build_osc_schedule: built schedule with {len(schedule)} steps, cycle_steps={cycle_steps}, size_sequence={size_sequence[:cycle_steps]}")
+            return schedule
+
+        hold_sizes = [peak_size] * hold_steps
+        size_sequence = up_sizes + hold_sizes + down_sizes
+
+        def _spread_ints(start_value, end_value, count):
+            if count <= 0:
+                return []
+            if count == 1:
+                return [int(end_value)]
+            span = end_value - start_value
+            if span <= 0:
+                return [int(start_value)] * count
+            return [
+                int(start_value + (i * span) // (count - 1))
+                for i in range(count)
+            ]
+
+        schedule = []
+        cycle_anchor = current_pos + cycle_steps
+        up_len = len(up_sizes)
+        hold_len = len(hold_sizes)
+
+        # Build ramp-up windows with local adjacency.
+        for step in range(up_len):
+            size = int(size_sequence[step])
+            end_idx = current_pos + step + 1
+            if end_idx > total_images:
+                break
+            start_idx = max(current_pos, end_idx - size)
+            if start_idx >= end_idx:
+                continue
+            schedule.append(
+                {
+                    "step": step,
+                    "size": size,
+                    "start_idx": int(start_idx),
+                    "end_idx": int(end_idx),
+                }
+            )
+
+        # Spread peak windows across the cycle so they can "cover distance"
+        # and arrive at the descent handoff point near (period - merge_count).
+        hold_start_step = len(schedule)
+        if hold_len > 0:
+            hold_first_end = current_pos + up_len + 1
+            # Let the hold phase reach cycle_anchor so the last hold window
+            # lands one step further before descending.
+            hold_last_end = max(hold_first_end, cycle_anchor)
+            hold_end_indices = _spread_ints(hold_first_end, hold_last_end, hold_len)
+            for i, end_idx in enumerate(hold_end_indices):
+                step = hold_start_step + i
+                size = peak_size
+                end_idx = min(end_idx, total_images)
+                start_idx = max(current_pos, end_idx - size)
+                if start_idx >= end_idx:
+                    continue
+                schedule.append(
+                    {
+                        "step": step,
+                        "size": int(size),
+                        "start_idx": int(start_idx),
+                        "end_idx": int(end_idx),
+                    }
+                )
+
+        # Keep descending windows anchored to the next cycle boundary.
+        down_start_step = len(schedule)
+        for i, size in enumerate(down_sizes):
+            step = down_start_step + i
+            # Use one-step lookahead (exclusive) so tail windows can include
+            # the next-cycle singleton image. On final cycle this can overflow
+            # by exactly 1 and is resolved via wrap-aware slicing.
+            end_idx = cycle_anchor + 1
+            start_idx = max(current_pos, end_idx - int(size))
+            if start_idx >= end_idx:
+                continue
+            schedule.append(
+                {
+                    "step": step,
+                    "size": int(size),
+                    "start_idx": int(start_idx),
+                    "end_idx": int(end_idx),
+                }
+            )
     else:
-        if cycle_steps > len(size_sequence):
-            cycle_steps = len(size_sequence)
-        elif cycle_steps < len(size_sequence):
-            size_sequence = size_sequence[:cycle_steps]
-
-    schedule = []
-    for step, size in enumerate(size_sequence[:cycle_steps]):
-        end_idx = current_pos + step + 1
-
-        if end_idx > total_images:
-            break
-
-        start_idx = end_idx - size
-        if start_idx < current_pos:
-            start_idx = current_pos
-
-        if start_idx >= end_idx:
-            continue
-
-        schedule.append(
-            {
-                "step": step,
-                "size": int(size),
-                "start_idx": int(start_idx),
-                "end_idx": int(end_idx),
-            }
+        size_sequence = build_osc_size_sequence(
+            start_merge=local_start_merge,
+            peak_size=peak_size,
+            merge_period=MERGE_PERIOD,
+            full_merge_period=FULL_MERGE_PERIOD,
         )
 
+        if AUTO_DISTRIBUTE_CYCLE_PERIOD:
+            size_sequence = fit_osc_size_sequence(size_sequence, cycle_steps)
+        else:
+            if cycle_steps > len(size_sequence):
+                cycle_steps = len(size_sequence)
+            elif cycle_steps < len(size_sequence):
+                size_sequence = size_sequence[:cycle_steps]
+
+        schedule = []
+        for step, size in enumerate(size_sequence[:cycle_steps]):
+            end_idx = current_pos + step + 1
+
+            if end_idx > total_images:
+                break
+
+            start_idx = end_idx - size
+            if start_idx < current_pos:
+                start_idx = current_pos
+
+            if start_idx >= end_idx:
+                continue
+
+            schedule.append(
+                {
+                    "step": step,
+                    "size": int(size),
+                    "start_idx": int(start_idx),
+                    "end_idx": int(end_idx),
+                }
+            )
+    print(f"build_osc_schedule: built schedule with {len(schedule)} steps, cycle_steps={cycle_steps}, size_sequence={size_sequence[:cycle_steps]}")
     return schedule
+
+
+def merge_images_keyframe_numpy(image_list):
+    """Merge a window into a single keyframe without smooth tween expansion."""
+    if not image_list:
+        return None
+
+    first = image_list[0]
+    if len(first.shape) == 2:
+        first = cv2.cvtColor(first, cv2.COLOR_GRAY2BGR)
+    h, w = first.shape[:2]
+
+    processed_images = []
+    for img in image_list:
+        if len(img.shape) == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        if img.shape[0] != h or img.shape[1] != w:
+            img = cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+        processed_images.append(img.astype(np.float32))
+
+    merged_img = np.mean(np.stack(processed_images, axis=0), axis=0)
+    return np.clip(merged_img, 0, 255).astype(np.uint8)
+
+
+def build_first_cycle_loop_keyframes(images_to_build, cycle_period, merge_count, include_tweens=False):
+    """Build one repeatable GIF cycle using oscillating or fixed-window schedule."""
+    local_period = int(max(1, cycle_period))
+    if len(images_to_build) < local_period:
+        print(
+            "first-cycle gif: not enough preprocessed images for requested period",
+            f"need={local_period}",
+            f"have={len(images_to_build)}",
+        )
+        return []
+
+    # Slice first-cycle source images only.
+    cycle_images = list(images_to_build[:local_period])
+    total_images = len(cycle_images)
+    if total_images <= 0:
+        return []
+
+    if GIF_DO_OSC:
+        schedule = build_osc_schedule(
+            current_pos=0,
+            this_period=local_period,
+            total_images=total_images,
+            merge_count=merge_count,
+            start_merge=START_MERGE,
+        )
+    else:
+        local_merge_count = max(1, int(merge_count))
+        schedule = []
+        for step in range(local_period):
+            schedule.append(
+                {
+                    "step": step,
+                    "size": local_merge_count,
+                    "start_idx": int(step),
+                    # Exclusive bound; overflow is resolved by wrap-aware slicing below.
+                    "end_idx": int(step + local_merge_count),
+                }
+            )
+
+    if not schedule:
+        print("first-cycle gif: empty schedule")
+        return []
+
+    # Keep strict-unique singleton normalization consistent with process_images_osc.
+    if GIF_DO_OSC and STRICT_UNIQUE_IMAGE_PLACEMENT and schedule:
+        target_singletons = max(0, int(TRANSITION_SINGLETON_TARGET))
+
+        def _promote_singleton_step(step):
+            if step["size"] != 1:
+                return
+            promoted_size = min(2, step["end_idx"])
+            if promoted_size > 1:
+                step["size"] = promoted_size
+                step["start_idx"] = max(0, step["end_idx"] - promoted_size)
+                return
+            if step["end_idx"] < total_images:
+                step["size"] = 2
+                step["start_idx"] = step["end_idx"] - 1
+                step["end_idx"] = step["end_idx"] + 1
+
+        singleton_idxs = [i for i, step in enumerate(schedule) if step["size"] == 1]
+        keep_idx_set = set(singleton_idxs[: min(target_singletons, len(singleton_idxs))])
+        for idx in singleton_idxs:
+            if idx not in keep_idx_set:
+                _promote_singleton_step(schedule[idx])
+
+    def _slice_with_cycle_handoff(start_exclusive_idx, end_exclusive_idx):
+        if end_exclusive_idx <= total_images:
+            return cycle_images[start_exclusive_idx:end_exclusive_idx]
+        base = cycle_images[start_exclusive_idx:total_images]
+        overflow = end_exclusive_idx - total_images
+        if overflow > 0:
+            base = list(base) + list(cycle_images[:overflow])
+        return base
+
+    keyframes_bgr = []
+    prev_keyframe = None
+    for step in schedule:
+        start_idx = step["start_idx"]
+        end_idx = step["end_idx"]
+        if end_idx - start_idx <= 0:
+            continue
+        window_images = _slice_with_cycle_handoff(start_idx, end_idx)
+        merged_frame = merge_images_keyframe_numpy(window_images)
+        if merged_frame is not None:
+            if include_tweens and prev_keyframe is not None:
+                keyframes_bgr.extend(
+                    smooth_merge_transition(prev_keyframe, merged_frame, SMOOTH_MERGE_COUNT)
+                )
+            else:
+                keyframes_bgr.append(merged_frame)
+            prev_keyframe = merged_frame
+
+    print(
+        "first-cycle gif keyframes",
+        f"count={len(keyframes_bgr)}",
+        f"target_period={local_period}",
+    )
+    return keyframes_bgr
+
+
+def resize_gif_frames_max_dim(frames_bgr, max_dim):
+    """Resize frames so max(width, height) <= max_dim while preserving aspect ratio."""
+    if not frames_bgr:
+        return []
+    if max_dim is None:
+        return frames_bgr
+    local_max_dim = int(max_dim)
+    if local_max_dim <= 0:
+        return frames_bgr
+
+    resized = []
+    for frame in frames_bgr:
+        h, w = frame.shape[:2]
+        longest = max(h, w)
+        if longest <= local_max_dim:
+            resized.append(frame)
+            continue
+
+        scale = float(local_max_dim) / float(longest)
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+        resized.append(cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA))
+    return resized
+
+
+def save_first_cycle_loop_gif(images_to_build, gif_path, merge_count, source_start_idx=0):
+    """Save one seamless looping GIF cycle next to the MP4 output."""
+    if GIF_DO_OSC:
+        
+        gif_merge_count = MERGE_COUNT if MERGE_COUNT_GIF is None else MERGE_COUNT_GIF
+        gif_hold_period = FULL_MERGE_PERIOD if FULL_MERGE_PERIOD_GIF is None else FULL_MERGE_PERIOD_GIF
+        gif_period = int(max(1, (int(gif_merge_count) * 2) + int(gif_hold_period)))
+    else:
+        gif_hold_period = 0
+        gif_period = int(max(1, int(merge_count) * 2))
+
+    local_source_start = max(0, int(source_start_idx))
+    local_source_end = local_source_start + gif_period
+    if local_source_end > len(images_to_build):
+        print(
+            "first-cycle gif: not enough source images for requested window",
+            f"start={local_source_start}",
+            f"end={local_source_end}",
+            f"have={len(images_to_build)}",
+        )
+        return False
+
+    source_images = list(images_to_build[local_source_start:local_source_end])
+
+    keyframes_bgr = build_first_cycle_loop_keyframes(
+        source_images,
+        gif_period,
+        merge_count,
+        include_tweens=bool(GIF_USE_SMOOTH_MERGE_COUNT),
+    )
+    if not keyframes_bgr:
+        print("first-cycle gif: no keyframes generated, skipping export")
+        return False
+
+    keyframes_bgr = resize_gif_frames_max_dim(keyframes_bgr, GIF_EXPORT_MAX_DIM)
+
+    base_delay_s = 1.0 / max(1, int(FRAMERATE or 30))
+    if GIF_FRAME_DELAY_SECONDS is not None:
+        frame_delay_s = max(0.001, float(GIF_FRAME_DELAY_SECONDS))
+    else:
+        frame_delay_s = max(0.001, base_delay_s * float(GIF_FRAME_DELAY_MULTIPLIER))
+    duration_ms = max(1, int(round(frame_delay_s * 1000.0)))
+
+    keyframes_rgb = [cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) for frame in keyframes_bgr]
+
+    try:
+        from PIL import Image
+
+        pil_frames = [Image.fromarray(frame) for frame in keyframes_rgb]
+
+        palette_colors = int(max(2, min(256, int(GIF_QUANTIZE_COLORS))))
+        dither_mode = Image.Dither.FLOYDSTEINBERG if GIF_DITHER else Image.Dither.NONE
+
+        # Build a shared palette from the first frame for consistency and smaller files.
+        first_q = pil_frames[0].convert("RGB").quantize(
+            colors=palette_colors,
+            method=Image.Quantize.MEDIANCUT,
+            dither=dither_mode,
+        )
+        quantized_frames = [first_q]
+        for frame in pil_frames[1:]:
+            quantized_frames.append(
+                frame.convert("RGB").quantize(
+                    palette=first_q,
+                    dither=dither_mode,
+                )
+            )
+
+        quantized_frames[0].save(
+            gif_path,
+            save_all=True,
+            append_images=quantized_frames[1:],
+            duration=duration_ms,
+            loop=int(GIF_LOOP_COUNT),
+            optimize=bool(GIF_OPTIMIZE),
+            disposal=2,
+        )
+    except Exception as exc:
+        # Fallback path if PIL is unavailable.
+        try:
+            import imageio.v2 as imageio
+            imageio.mimsave(gif_path, keyframes_rgb, duration=frame_delay_s, loop=int(GIF_LOOP_COUNT))
+        except Exception as exc2:
+            print(f"first-cycle gif: export failed (PIL and imageio): {exc} | {exc2}")
+            return False
+
+    print(
+        "first-cycle gif export",
+        f"path={gif_path}",
+        f"source_start={local_source_start}",
+        f"frames={len(keyframes_bgr)}",
+        f"period={gif_period}",
+        f"hold_period={gif_hold_period}",
+        f"gif_do_osc={GIF_DO_OSC}",
+        f"include_tweens={GIF_USE_SMOOTH_MERGE_COUNT}",
+        f"smooth_merge_count={SMOOTH_MERGE_COUNT if GIF_USE_SMOOTH_MERGE_COUNT else 0}",
+        f"max_dim={GIF_EXPORT_MAX_DIM}",
+        f"delay_s={frame_delay_s:.6f}",
+        f"delay_ms={duration_ms}",
+        f"colors={GIF_QUANTIZE_COLORS}",
+        f"dither={GIF_DITHER}",
+        f"optimize={GIF_OPTIMIZE}",
+    )
+    return True
+
+
+def save_first_cycle_loop_gif_variants(images_to_build, gif_path, merge_count, creation_count=1):
+    """Save one or more GIF variants from consecutive source windows.
+
+    Variant naming:
+    - first: base gif_path unchanged
+    - second+: append _vN before extension
+    """
+    local_creation_count = max(1, int(creation_count or 1))
+    root, ext = os.path.splitext(gif_path)
+
+    if GIF_DO_OSC:
+        gif_hold_period = FULL_MERGE_PERIOD if FULL_MERGE_PERIOD_GIF is None else FULL_MERGE_PERIOD_GIF
+        gif_period = int(max(1, (int(merge_count) * 2) + int(gif_hold_period)))
+    else:
+        gif_period = int(max(1, int(merge_count) * 2))
+
+    saved_paths = []
+    for variant_idx in range(local_creation_count):
+        source_start_idx = variant_idx * gif_period
+        if variant_idx == 0:
+            variant_path = gif_path
+        else:
+            variant_path = f"{root}_v{variant_idx + 1}{ext}"
+
+        saved = save_first_cycle_loop_gif(
+            images_to_build=images_to_build,
+            gif_path=variant_path,
+            merge_count=merge_count,
+            source_start_idx=source_start_idx,
+        )
+        if not saved:
+            print(
+                "first-cycle gif variants: stopping early",
+                f"requested={local_creation_count}",
+                f"saved={len(saved_paths)}",
+                f"failed_variant={variant_idx + 1}",
+            )
+            break
+        saved_paths.append(variant_path)
+
+    print(
+        "first-cycle gif variants summary",
+        f"requested={local_creation_count}",
+        f"saved={len(saved_paths)}",
+        f"period={gif_period}",
+    )
+    return saved_paths
 
 
 def debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle, skipped_reason=None):
@@ -1141,7 +1584,7 @@ def debug_osc_step(step_i, step, schedule, current_pos, period, this_period, tot
         f"phase={phase}",
         f"size={size}",
         f"start_idx={step['start_idx']}",
-        f"end_idx={step['end_idx']}",
+        f"end_idx={step['end_idx'] - 1}",
         f"period={period}",
         f"this_period={this_period}",
         f"target_merge_count={merge_count}",
@@ -1253,6 +1696,17 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         print("empty oscillating schedule, skipping cycle")
         return
 
+    # Prime smooth state so the first emitted singleton also returns a full smooth batch.
+    # Without this, the first step can return a single frame when last_image_written is None.
+    # if SMOOTH_MERGE and last_image_written is None:
+    #     for step in schedule:
+    #         if step["end_idx"] - step["start_idx"] > 0:
+    #             _ = merge_images_numpy(
+    #                 images_to_build[step["start_idx"]:step["end_idx"]],
+    #                 make_first_image=True,
+    #             )
+    #             break
+
     schedule_sizes = [step["size"] for step in schedule]
     print(
         "osc schedule summary:",
@@ -1317,6 +1771,17 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
         end_idx = step["end_idx"]
         if end_idx - start_idx <= 0:
             continue
+
+        def _slice_with_cycle_handoff(start_exclusive_idx, end_exclusive_idx):
+            """Return a window using exclusive bounds with +1 overflow wrap support."""
+            if end_exclusive_idx <= total_images:
+                return images_to_build[start_exclusive_idx:end_exclusive_idx]
+
+            base = images_to_build[start_exclusive_idx:total_images]
+            overflow = end_exclusive_idx - total_images
+            if overflow > 0:
+                base = list(base) + list(images_to_build[:overflow])
+            return base
 
         visible_indices = list(range(start_idx, end_idx))
         if SHOW_BLEND_POSITION:
@@ -1385,7 +1850,8 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
                     debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle, skipped_reason="final_boundary_singleton")
                     continue
 
-        images_to_return = merge_images_numpy(images_to_build[start_idx:end_idx])
+        window_images = _slice_with_cycle_handoff(start_idx, end_idx)
+        images_to_return = merge_images_numpy(window_images)
         # if is_final_cycle and step["size"] == 1 and first_image_written is not None and step_i == max(keep_idx_set) if 'keep_idx_set' in locals() and keep_idx_set else False:
         #     images_to_return = first_image_written.copy()
         debug_osc_step(step_i, step, schedule, current_pos, period, this_period, total_images, merge_count, is_final_cycle, last_cycle)
@@ -1417,29 +1883,14 @@ def process_images_osc(images_to_build, video_writer, total_images, period, curr
             "start_idx",
             start_idx,
             "end_idx",
-            end_idx,
+            end_idx - 1,
             "last_cycle",
             last_cycle,
         )
-        save_images_to_video(images_to_return, video_writer, debug_meta=debug_meta)
-
-def build_even_merge(images_to_build, video_writer, current_pos, merge_count, this_period):
-    for i in range(MERGE_COUNT + 1, this_period - MERGE_COUNT + 1):
-            # Load and merge images from current_pos + i to current_pos + i + MERGE_COUNT
-            # start counting at the second image in the set, because I want to only add on one new image at a time
-            # as I enter the middle section
-            # (START_MERGE-1)+(i - MERGE_COUNT):(START_MERGE-1)+(i)
-            # current_pos + i:current_pos + i + MERGE_COUNT
-        images_to_return = merge_images_numpy(images_to_build[(current_pos)+(i - MERGE_COUNT):(current_pos)+(i)])
-        save_images_to_video(images_to_return, video_writer)
-        print("merged middle img {current_pos+i}", current_pos+i, "len images_to_build", len(images_to_build), MERGE_COUNT)
-    return
-            # if merged_img is not None: video_writer.write(merged_img)
-
-    
+        save_images_to_video(images_to_return, video_writer, debug_meta=debug_meta)    
 
 def calculate_period(images_to_build):
-    image_count = len(images_to_build)-1 # subtract one for the duplicate first image at the end
+    image_count = len(images_to_build) # subtract one for the duplicate first image at the end
     if image_count <= 0:
         return 0
 
@@ -1463,7 +1914,7 @@ def calculate_period(images_to_build):
     while cycle_count > 1 and (image_count / cycle_count) < target_period:
         cycle_count -= 1
 
-    calculated_period = int(math.ceil(image_count / cycle_count))
+    calculated_period = int(math.floor(image_count / cycle_count))
     min_required = target_period
     if calculated_period < min_required:
         calculated_period = min_required
@@ -1479,6 +1930,29 @@ def calculate_period(images_to_build):
     )
     return calculated_period
 
+
+def build_cycle_lengths(image_count, target_period):
+    """Split image_count into near-even cycle lengths.
+
+    Example: 100 with target around 30 -> [33, 33, 34].
+    """
+    if image_count <= 0:
+        return []
+
+    if target_period is None or target_period <= 0:
+        return [image_count]
+
+    cycle_count = max(1, int(round(image_count / target_period)))
+    base = image_count // cycle_count
+    remainder = image_count % cycle_count
+
+    lengths = [base] * cycle_count
+    # Put remainder at the end so 100 -> 33,33,34 (not 34,33,33).
+    for i in range(remainder):
+        lengths[-(i + 1)] += 1
+
+    return lengths
+
 def write_video(img_array, subfolder_path=None):
     global last_image_written
     global first_image_written
@@ -1487,6 +1961,10 @@ def write_video(img_array, subfolder_path=None):
     global START_FRAME_OFFSET
     global pending_offset_frames
     global singleton_skip_counts
+    global EXPORT_FIRST_CYCLE_STILL_ENABLED
+    global EXPORT_STILL_COUNT
+    global EXPORT_FIRST_CYCLE_STILL_PATH
+    export_first_cycle_gif_path = None
     last_image_written = None
     first_image_written = None
     run_counter = 0
@@ -1498,6 +1976,9 @@ def write_video(img_array, subfolder_path=None):
         "terminal_non_final": 0,
         "terminal_final": 0,
     }
+    EXPORT_FIRST_CYCLE_STILL_ENABLED = False
+    EXPORT_STILL_COUNT = 0
+    EXPORT_FIRST_CYCLE_STILL_PATH = None
     img_array = [img for img in img_array if img.endswith(".jpg")]
     if CROP_AFTER_COUNT is not None and len(img_array) > CROP_AFTER_COUNT:
         img_array = img_array[:CROP_AFTER_COUNT]
@@ -1511,9 +1992,9 @@ def write_video(img_array, subfolder_path=None):
     elif len(img_array) < PERIOD/2:
         print(f"not enough images to fill half a period ({PERIOD/2}), skipping this folder")
         return
-    if IS_VIDEO_MERGE:
-        # this had a "and not STRICT_UNIQUE_IMAGE_PLACEMENT" condition but I think it needs to be removed July 1 2026
-        img_array.append(img_array[0]) # add the first image to the end to make a loop
+    # if IS_VIDEO_MERGE:
+    #     # this had a "and not STRICT_UNIQUE_IMAGE_PLACEMENT" condition but I think it needs to be removed July 1 2026
+    #     img_array.append(img_array[0]) # add the first image to the end to make a loop
     images_to_build = load_images(img_array, subfolder_path)
     # print("img_array", img_array)
     print("len images_to_build", len(images_to_build))
@@ -1555,11 +2036,39 @@ def write_video(img_array, subfolder_path=None):
 
     # Define the codec and create VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}_fr{len(images_to_build)-1}"
+    if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}_fr{len(images_to_build)}"
     else: merge_info = ""
     scale_info = f"_scale_{VID_DIMS_TEST[0]}" if USE_CANONICAL_RATIOS else ""
     video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+scale_info+".mp4")
     print("video_path", video_path)
+
+    if GIF_SO_SKIP_VIDEO:
+        if not EXPORT_GIF:
+            print("GIF_SO_SKIP_VIDEO is True but EXPORT_GIF is False; skipping all exports for this folder")
+            return None
+
+        export_first_cycle_gif_path = os.path.splitext(video_path)[0] + "_preview.gif"
+        print("GIF_SO_SKIP_VIDEO enabled: skipping mp4 writer and exporting GIF only")
+        gif_paths = save_first_cycle_loop_gif_variants(
+            images_to_build=images_to_build,
+            gif_path=export_first_cycle_gif_path,
+            merge_count=MERGE_COUNT,
+            creation_count=GIF_CREATION_COUNT,
+        )
+        if not gif_paths:
+            print("GIF_SO_SKIP_VIDEO: gif export failed")
+            return None
+        print("GIF variants saved:", gif_paths)
+        return gif_paths[0]
+
+    if EXPORT_GIF and LOOPING and IS_VIDEO_MERGE and SMOOTH_MERGE and OSCILATING_MERGE:
+        EXPORT_FIRST_CYCLE_STILL_ENABLED = True
+        EXPORT_STILL_COUNT = 0
+        EXPORT_FIRST_CYCLE_STILL_PATH = os.path.splitext(video_path)[0] + "_preview.jpg"
+        export_first_cycle_gif_path = os.path.splitext(video_path)[0] + "_preview.gif"
+        print("first-cycle still export armed", EXPORT_FIRST_CYCLE_STILL_PATH)
+        print("first-cycle gif export armed", export_first_cycle_gif_path)
+
     video_writer = cv2.VideoWriter(video_path, fourcc, FRAMERATE, (width, height))
     if not video_writer.isOpened():
         raise RuntimeError(
@@ -1586,69 +2095,92 @@ def write_video(img_array, subfolder_path=None):
 
         if SMOOTH_MERGE and OSCILATING_MERGE:
             merge_count = MERGE_COUNT
-            target_cycle_steps = get_osc_target_cycle_steps(merge_count, START_MERGE)
-            if period < target_cycle_steps:
-                print(
-                    "warning: period shorter than target oscillation cycle; schedule will be time-compressed",
-                    f"period={period}",
-                    f"target_cycle_steps={target_cycle_steps}",
-                )
-            print(
-                "osc controls:",
-                f"MERGE_PERIOD={MERGE_PERIOD}",
-                f"FULL_MERGE_PERIOD={FULL_MERGE_PERIOD}",
-                f"target_cycle_steps={target_cycle_steps}",
-                f"auto_distribute={AUTO_DISTRIBUTE_CYCLE_PERIOD}",
-                f"cycle_seconds={period / FRAMERATE:.3f}",
-            )
+            # this code was replaced by build_cycle_lengths() I believe
+            # target_cycle_steps = get_osc_target_cycle_steps(merge_count, START_MERGE)
+            # if period < target_cycle_steps:
+            #     print(
+            #         "warning: period shorter than target oscillation cycle; schedule will be time-compressed",
+            #         f"period={period}",
+            #         f"target_cycle_steps={target_cycle_steps}",
+            #     )
+            # print(
+            #     "osc controls:",
+            #     f"MERGE_PERIOD={MERGE_PERIOD}",
+            #     f"FULL_MERGE_PERIOD={FULL_MERGE_PERIOD}",
+            #     f"target_cycle_steps={target_cycle_steps}",
+            #     f"auto_distribute={AUTO_DISTRIBUTE_CYCLE_PERIOD}",
+            #     f"cycle_seconds={period / FRAMERATE:.3f}",
+            # )
                 
-            if STRICT_UNIQUE_IMAGE_PLACEMENT:
-                cycle_advance = max(1, int(period))
-                cycle_overlap_step = max(1, cycle_advance - 1)
-            else:
-                cycle_advance = max(1, merge_count - START_MERGE)
+            # if STRICT_UNIQUE_IMAGE_PLACEMENT:
+            #     cycle_advance = max(1, int(period))
+            #     cycle_overlap_step = max(1, cycle_advance - 1)
+            # else:
+            #     cycle_advance = max(1, merge_count - START_MERGE)
 
             # Process only if there are enough images to build at least one peak merge.
             if total_images >= max(merge_count, START_MERGE):
-                
-                while current_pos < total_images:
-                    if STRICT_UNIQUE_IMAGE_PLACEMENT:
-                        next_pos = current_pos + cycle_overlap_step
-                    else:
-                        next_pos = current_pos + cycle_advance
-                    is_final_cycle = next_pos >= total_images
+                # Use only real source images for cycle accounting (exclude appended duplicate tail).
+                image_count = max(0, total_images)
+
+                if AUTO_DISTRIBUTE_CYCLE_PERIOD:
+                    cycle_lengths = build_cycle_lengths(image_count, period)
+                else:
+                    fixed = max(1, int(period))
+                    cycle_lengths = []
+                    remaining_steps = image_count
+                    while remaining_steps > 0:
+                        step_len = min(fixed, remaining_steps)
+                        cycle_lengths.append(step_len)
+                        remaining_steps -= step_len
+
+                print("cycle_lengths", cycle_lengths, "sum", sum(cycle_lengths), "image_count", image_count)
+
+                current_pos = 0
+                for idx, cycle_len in enumerate(cycle_lengths):
+                    if cycle_len <= 0:
+                        continue
+                    is_final_cycle = idx == len(cycle_lengths) - 1
                     process_images_osc(
                         images_to_build,
                         video_writer,
-                        total_images,
-                        period,
+                        image_count,
+                        cycle_len,
                         current_pos,
                         merge_count,
                         is_final_cycle=is_final_cycle,
                     )
-                    # Move to next cycle. In strict mode this overlaps one shared boundary frame.
-                    current_pos = next_pos
+                    current_pos += cycle_len
                     print("current_pos", current_pos)
 
-                # Handle remaining images because there are not enough for a full cycle
-                # make sure to merge up to the last image, and then discard it, since it's a duplicate of the first image
-                remaining = total_images - current_pos
+                # No tail pass needed; cycles explicitly partition image_count.
+                remaining = image_count - current_pos
+                print("remaining after explicit cycle plan", remaining)
                 if "smooth_osc" in CURRENT_MODE:
                     if remaining > START_MERGE:
                         print("remaining", remaining)
                         tail_merge_count = min(merge_count, remaining)
-                        process_images_osc(images_to_build, video_writer, total_images, remaining, current_pos, tail_merge_count)
+                        process_images_osc(images_to_build, video_writer, image_count, remaining, current_pos, tail_merge_count)
 
                     if BLEND_END_TO_FIRST:
                         # Coda: bridge last rendered frame back toward first rendered frame.
                         # Excludes endpoints, so this adds only in-between blend frames.
-                        if STRICT_UNIQUE_IMAGE_PLACEMENT and not STRICT_UNIQUE_SEAM_EXTRA_FRAMES:
-                            print("strict unique seam extra frames disabled, skipping seam blend")
-                            seam_blend_steps = 0
+                        if STRICT_UNIQUE_IMAGE_PLACEMENT:
+                            # Preserve a minimal closing bridge so the final frame blends
+                            # toward the first image of the loop. This restores the missing
+                            # MERGE_PERIOD seam stages (e.g. 2 when MERGE_PERIOD=2).
+                            seam_blend_steps = max(1, int(MERGE_PERIOD))
+                            if STRICT_UNIQUE_SEAM_EXTRA_FRAMES:
+                                seam_blend_steps = max(seam_blend_steps, int(LOOP_SEAM_BLEND_STEPS))
+                            print(
+                                "strict unique seam blend",
+                                f"steps={seam_blend_steps}",
+                                f"extra_frames={STRICT_UNIQUE_SEAM_EXTRA_FRAMES}",
+                            )
                         else:
-                            print("strict unique seam extra frames enabled, adding seam blend")
-                            print("last_image_written", type(last_image_written), last_image_written.shape if last_image_written is not None else None)
-                            seam_blend_steps = 2 if STRICT_UNIQUE_IMAGE_PLACEMENT else LOOP_SEAM_BLEND_STEPS
+                            print("non-strict seam blend, adding seam blend")
+                            seam_blend_steps = LOOP_SEAM_BLEND_STEPS
+                        print("last_image_written", type(last_image_written), last_image_written.shape if last_image_written is not None else None)
                         seam_frames = build_loop_seam_transition(
                             last_image_written,
                             first_image_written,
@@ -1734,6 +2266,14 @@ def write_video(img_array, subfolder_path=None):
     print("outfile size", os.path.getsize(video_path))
 
     print(f"Video saved at: {video_path}")
+
+    if export_first_cycle_gif_path:
+        save_first_cycle_loop_gif_variants(
+            images_to_build=images_to_build,
+            gif_path=export_first_cycle_gif_path,
+            merge_count=MERGE_COUNT,
+            creation_count=GIF_CREATION_COUNT,
+        )
 
 
 
@@ -1907,56 +2447,56 @@ def save_installation_metas(subfolders, output_path, csv_file):
         )
         return None
 
-    def _normalize_cluster_token(value):
-        if value is None or pd.isna(value):
-            return None
-        if isinstance(value, str):
-            token = value.strip()
-            if not token or token.lower() in ("none", "nan"):
-                return None
-            value = token
-        try:
-            return int(float(value))
-        except (TypeError, ValueError):
-            return None
+    # def _normalize_cluster_token(value):
+    #     if value is None or pd.isna(value):
+    #         return None
+    #     if isinstance(value, str):
+    #         token = value.strip()
+    #         if not token or token.lower() in ("none", "nan"):
+    #             return None
+    #         value = token
+    #     try:
+    #         return int(float(value))
+    #     except (TypeError, ValueError):
+    #         return None
 
-    def _load_object_signature_registry():
-        slot_cols = ["LH", "RH", "TF", "LE", "RE", "MO", "SH", "WA", "FT"]
-        if not os.path.exists(OBJECT_SIGNATURE_EXPORT_PATH):
-            print(
-                f"[save_installation_metas] object signature export missing: {OBJECT_SIGNATURE_EXPORT_PATH}"
-            )
-            return {}
+    # def _load_object_signature_registry():
+    #     slot_cols = ["LH", "RH", "TF", "LE", "RE", "MO", "SH", "WA", "FT"]
+    #     if not os.path.exists(OBJECT_SIGNATURE_EXPORT_PATH):
+    #         print(
+    #             f"[save_installation_metas] object signature export missing: {OBJECT_SIGNATURE_EXPORT_PATH}"
+    #         )
+    #         return {}
 
-        try:
-            signature_df = pd.read_csv(OBJECT_SIGNATURE_EXPORT_PATH)
-        except Exception as exc:
-            print(f"[save_installation_metas] failed to load object signature export: {exc}")
-            return {}
+    #     try:
+    #         signature_df = pd.read_csv(OBJECT_SIGNATURE_EXPORT_PATH)
+    #     except Exception as exc:
+    #         print(f"[save_installation_metas] failed to load object signature export: {exc}")
+    #         return {}
 
-        missing_cols = [col for col in ["cluster_id", *slot_cols] if col not in signature_df.columns]
-        if missing_cols:
-            print(
-                f"[save_installation_metas] object signature export missing columns: {missing_cols}"
-            )
-            return {}
+    #     missing_cols = [col for col in ["cluster_id", *slot_cols] if col not in signature_df.columns]
+    #     if missing_cols:
+    #         print(
+    #             f"[save_installation_metas] object signature export missing columns: {missing_cols}"
+    #         )
+    #         return {}
 
-        registry = {}
-        for _, row in signature_df.iterrows():
-            cluster_id = _normalize_cluster_token(row.get("cluster_id"))
-            if cluster_id is None:
-                continue
-            object_ids = []
-            for col in slot_cols:
-                obj_id = _normalize_cluster_token(row.get(col))
-                if obj_id is not None and obj_id != 0:
-                    object_ids.append(obj_id)
-            registry[cluster_id] = json.dumps(sorted(set(object_ids)))
+    #     registry = {}
+    #     for _, row in signature_df.iterrows():
+    #         cluster_id = _normalize_cluster_token(row.get("cluster_id"))
+    #         if cluster_id is None:
+    #             continue
+    #         object_ids = []
+    #         for col in slot_cols:
+    #             obj_id = _normalize_cluster_token(row.get(col))
+    #             if obj_id is not None and obj_id != 0:
+    #                 object_ids.append(obj_id)
+    #         registry[cluster_id] = json.dumps(sorted(set(object_ids)))
 
-        print(
-            f"[save_installation_metas] loaded object signature registry: {len(registry)} rows"
-        )
-        return registry
+    #     print(
+    #         f"[save_installation_metas] loaded object signature registry: {len(registry)} rows"
+    #     )
+    #     return registry
 
     # Check each cluster subfolder for its own installation.csv
     any_missing = False
@@ -2027,7 +2567,7 @@ def save_installation_metas(subfolders, output_path, csv_file):
     if dropped:
         print(f"[save_installation_metas] dropped {dropped} row(s) with no matching video")
 
-    object_signature_registry = _load_object_signature_registry()
+    object_signature_registry = io.load_object_signature_registry(OBJECT_SIGNATURE_EXPORT_PATH)
 
     # Expand each row into N rows — one per matched mp4 (scale variant)
     expanded_rows = []
@@ -2046,7 +2586,7 @@ def save_installation_metas(subfolders, output_path, csv_file):
     # drop the internal tracking column before saving
     installation_metas = installation_metas.drop(columns=["_subfolder_basename"])
     installation_metas["object"] = installation_metas["pose_no"].apply(
-        lambda x: object_signature_registry.get(_normalize_cluster_token(x), "[]")
+        lambda x: object_signature_registry.get(io.normalize_cluster_token(x), "[]")
     )
 
     print(f"\n[save_installation_metas] final DataFrame:\n{installation_metas}")

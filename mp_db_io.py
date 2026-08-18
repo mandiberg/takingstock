@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import ast
+import re
 import pandas as pd
 import pickle
 import numpy as np
@@ -221,36 +222,126 @@ class DataIO:
             ]
         # print("folder_list is ", self.folder_list)
 
-    def capitalize_directory(self,path):
-        dirname, filename = os.path.split(path)
-        parts = dirname.split('/')
-        capitalized_parts = [part if i < len(parts) - 2 else part.upper() for i, part in enumerate(parts)]
-        capitalized_dirname = '/'.join(capitalized_parts)
-        return os.path.join(capitalized_dirname, filename)
+    @staticmethod
+    def get_mode_index_from_cli(args, max_index=None):
+        """Parse a single mode flag in the form --N and return N, else None.
+
+        Raises ValueError if multiple mode flags are passed or if N is out of range
+        when max_index is provided.
+        """
+        mode_indices = []
+        for arg in args:
+            match = re.match(r"^--(\d+)$", arg)
+            if match:
+                mode_indices.append(int(match.group(1)))
+
+        if len(mode_indices) > 1:
+            raise ValueError("Please pass only one mode flag in the form --N")
+
+        if not mode_indices:
+            return None
+
+        mode_index = mode_indices[0]
+        if max_index is not None and (mode_index < 0 or mode_index > max_index):
+            raise ValueError(f"Invalid mode flag --{mode_index}; expected 0..{max_index}")
+        return mode_index
+
+    @staticmethod
+    def select_mode(options, title, args, pick_fn):
+        """Select mode from CLI flag (--N) or interactive picker fallback."""
+        mode_index = DataIO.get_mode_index_from_cli(args, max_index=len(options) - 1)
+        if mode_index is not None:
+            option = options[mode_index]
+            print(f"Mode selected via CLI: {mode_index} ({option})")
+            return option, mode_index
+        return pick_fn(options, title)
 
     @staticmethod
     def extract_fusion_cluster(name):
-        name = name.replace("_ct", "_")
-        folder_arms_pose = folder_signature = folder_hsv = None
-        if "wav" in name:
-            # handle audio file format: multitrack_mixdown_offset_cc183_p1_t0_1781177644.763904.wav
-            folder_arms_pose = name.split("cc")[1].split("_")[0]
-            folder_signature = name.split("p")[1].split("_")[0]
-        elif "cc" in name:
-            folder_arms_pose = name.split("cc")[1].split("_")[0]
-        elif "_cluster" in name:
-            folder_arms_pose = name.split("_cluster")[1].split("_")[0]
-        elif "_c" in name:
-            folder_arms_pose = name.split("_c")[1].split("_")[0]
-        if "_p" in name:
-            folder_signature = name.split("_p")[1].split("_")[0]
-        if "_om" in name:
-            folder_hsv = name.split("_om")[1].split("_")[0]
-        if folder_arms_pose is not None and folder_signature is not None:
-            folder_arms_pose = int(folder_arms_pose)
-            folder_signature = int(folder_signature)
-        return folder_arms_pose, folder_signature, folder_hsv
+        name = name.replace("_ct", "_").replace("hsv", "")
+        # establish variables to hold the extracted values, defaulting to None
+        folder_arms_pose = folder_hands_gesture = folder_signature = folder_hsv = topic_id = frame_count =None
+        # construct dict to hold the extracted values, and make it easier to test Nonetype and return all
+        data = {
+            "folder_arms_pose": folder_arms_pose,
+            "folder_hands_gesture": folder_hands_gesture,
+            "folder_signature": folder_signature,
+            "folder_hsv": folder_hsv,
+            "topic_id": topic_id,
+            "frame_count": frame_count
+        }
 
+        # all_fields = [folder_arms_pose, folder_hands_gesture, folder_signature, folder_hsv, topic_id, frame_count]
+        print(f"extract_fusion_cluster: name: {name}")
+        # needs to be able to handle the formatted filenamas that are produced by rename_finished_files.py, which are of the form:
+        #         new_name = f"TakingStock_T{TOPIC}_p{folder_arms_pose}_g{folder_hands_gesture}_s{folder_signature}_obj{obj_str}_h{folder_hsv}.{original_suffixc}"
+
+        if name.startswith("TakingStock_T"):
+            name = name.split(".")[0].replace("TakingStock_", "")
+            parts = name.split("_")
+            for part in parts:
+                if part.startswith("p"):
+                    data["folder_arms_pose"] = part[1:]
+                elif part.startswith("g"):
+                    data["folder_hands_gesture"] = part[1:]
+                elif part.startswith("s"):
+                    data["folder_signature"] = part[1:]
+                elif part.startswith("h"):
+                    data["folder_hsv"] = part[1:]
+                elif part.startswith("T"):
+                    data["topic_id"] = part[1:]
+                elif part.startswith("fr"):
+                    data["frame_count"] = part[2:]
+        else:
+            try:
+                t = name.split("_t")[1].split("_")[0]
+            except IndexError:
+                print(f"  ❌  ❌ WARNING: Could not extract 't' from name: {name}. setting to None.")
+                t = None
+            if t is not None:
+                t = int(t)
+            if "wav" in name:
+                # handle audio file format: multitrack_mixdown_offset_cc183_p1_t0_1781177644.763904.wav
+                data["folder_arms_pose"] = name.split("cc")[1].split("_")[0]
+                data["folder_signature"] = name.split("p")[1].split("_")[0]
+            elif "cc" in name:
+                # these are the hands positions x gestures 
+                # img: clustercc15_p92_t1685_h3-22_1782990020.168832_p34_st1_ct8.mp4
+                data["folder_arms_pose"] = name.split("cc")[1].split("_")[0]
+                if t is not None and t > 0:
+                    data["folder_hands_gesture"] = name.split("_p")[1].split("_")[0]
+                    data["folder_signature"] = name.split("_t")[1].split("_")[0]
+            elif "_cluster" in name:
+                data["folder_arms_pose"] = name.split("_cluster")[1].split("_")[0]
+            elif "_c" in name:
+                data["folder_arms_pose"] = name.split("_c")[1].split("_")[0]
+            if "_p" in name and data["folder_signature"] is None:
+                data["folder_signature"] = name.split("_p")[1].split("_")[0]
+            if "_h" in name:
+                data["folder_hsv"] = name.split("_h")[1].split("_")[0]
+            elif "_om" in name:
+                data["folder_hsv"] = name.split("_om")[1].split("_")[0]
+            if "_fr" in name:
+                data["frame_count"] = name.split("_fr")[1].split("_")[0].split(".")[0]
+        
+        for key, val in data.items():
+            if val is None or str(val).lower() in ["none", "nan"]:
+                data[key] = None
+
+
+        # now convert to int if not None    
+        if data["folder_arms_pose"] is not None and data["folder_signature"] is not None:
+            data["folder_arms_pose"] = int(data["folder_arms_pose"])
+            data["folder_signature"] = int(data["folder_signature"])
+        if data["folder_hands_gesture"] is not None:
+            data["folder_hands_gesture"] = int(data["folder_hands_gesture"])
+        if data["topic_id"] is not None:
+            data["topic_id"] = int(data["topic_id"])
+        if data["frame_count"] is not None:
+            data["frame_count"] = int(data["frame_count"])
+        print(f"extract_fusion_cluster: folder_arms_pose: {data['folder_arms_pose']}, folder_hands_gesture: {data['folder_hands_gesture']}, folder_signature: {data['folder_signature']}, folder_hsv: {data['folder_hsv']}, topic_id: {data['topic_id']}, frame_count: {data['frame_count']}")
+        return data
+    
     def get_counter(self,CSV_COUNTOUT_PATH):
         # read last completed file
         try:
@@ -303,6 +394,7 @@ class DataIO:
         print("Saving image list for folder:", folder)
         if walk:
             for root, dirs, files in os.walk(folder):
+                print(f"Walking through {root}, found {len(files)} files")
                 if "_x" in root:
                     continue  # skip any _x folders
                 filtered = [
@@ -313,6 +405,7 @@ class DataIO:
             img_list.extend(filtered)
         else:
             img_list = [
+                # this will break if it is walking folders and the last folder is an empty folder, will return empty
                 f.replace('\\', '/')
                 for f in os.listdir(folder)
                 if os.path.isfile(os.path.join(folder, f)) and not f.startswith('.') and not f.endswith(('.csv', '.txt', '.json'))
@@ -327,7 +420,7 @@ class DataIO:
         json_path = os.path.join(folder, 'img_list.json')
         print("getting image list from", json_path)
         if os.path.exists(json_path) and not force_ls:
-            print("Image list exists, loading from", json_path)
+            # print("Image list exists, loading from", json_path)
             with open(json_path, 'r') as f:
                 img_list = json.load(f)
         else:
@@ -340,6 +433,15 @@ class DataIO:
     def get_existing_image_ids_from_wavs(self,folder):
         existing_files = self.get_img_list(folder)
         existing_image_ids = [int(f.split("_")[0]) for f in existing_files if f.endswith(".wav")]
+        return existing_image_ids
+
+    def get_existing_image_ids_from_jpgs(self,folder):
+        existing_files = self.get_img_list(folder, force_ls=True, sort=True, walk=False)
+        print("existing_files", existing_files)
+        existing_file_basenames = [f.replace(".jpg", "").replace(".jpeg", "").replace(" copy", "") for f in existing_files if f.endswith(".jpg") or f.endswith(".jpeg")]
+        existing_image_ids = [f.split("_")[-1] for f in existing_file_basenames]
+
+        print("existing_image_ids", existing_image_ids)
         return existing_image_ids
 
 
@@ -543,7 +645,6 @@ class DataIO:
     #     else:
     #         return Lms2d
 
-
     def make_float(self, value):
         try:
             return float(value)
@@ -588,3 +689,54 @@ class DataIO:
         migration_class = getattr(AutomapBase.classes, new_table_name)
         
         return migration_class
+
+    def normalize_cluster_token(self, value):
+        if value is None or pd.isna(value):
+            return None
+        if isinstance(value, str):
+            token = value.strip()
+            if not token or token.lower() in ("none", "nan"):
+                return None
+            value = token
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
+
+    def load_object_signature_registry(self, signature_path):
+        slot_cols = ["LH", "RH", "TF", "LE", "RE", "MO", "SH", "WA", "FT"]
+        if not os.path.exists(signature_path):
+            print(
+                f"[save_installation_metas] object signature export missing: {signature_path}"
+            )
+            return {}
+
+        try:
+            signature_df = pd.read_csv(signature_path)
+        except Exception as exc:
+            print(f"[save_installation_metas] failed to load object signature export: {exc}")
+            return {}
+
+        missing_cols = [col for col in ["cluster_id", *slot_cols] if col not in signature_df.columns]
+        if missing_cols:
+            print(
+                f"[save_installation_metas] object signature export missing columns: {missing_cols}"
+            )
+            return {}
+
+        registry = {}
+        for _, row in signature_df.iterrows():
+            cluster_id = self.normalize_cluster_token(row.get("cluster_id"))
+            if cluster_id is None:
+                continue
+            object_ids = []
+            for col in slot_cols:
+                obj_id = self.normalize_cluster_token(row.get(col))
+                if obj_id is not None and obj_id != 0:
+                    object_ids.append(obj_id)
+            registry[cluster_id] = json.dumps(sorted(set(object_ids)))
+
+        print(
+            f"[save_installation_metas] loaded object signature registry: {len(registry)} rows"
+        )
+        return registry

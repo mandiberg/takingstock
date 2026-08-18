@@ -45,9 +45,9 @@ def main():
         if "DS_Store" in folder: continue
         folderpath = os.path.join(FOLDER,folder)
         # print(f"Processing file: {folderpath}")
-        this_arms_pose, this_signature, this_hsv = DataIO.extract_fusion_cluster(folder)
+        this_arms_pose, this_hands_gesture, this_signature, this_hsv = DataIO.extract_fusion_cluster(folder)
         image_list, folder_list = get_list(folderpath)
-        print(this_arms_pose, this_signature, len(image_list))
+        print(this_arms_pose, this_hands_gesture, this_signature, len(image_list))
 
 
 

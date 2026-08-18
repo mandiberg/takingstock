@@ -57,23 +57,24 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T3_player'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-# SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
-SSD_PATH = "/Volumes/LaCie/segment_images_45_nature"
+SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+# DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 16  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -105,7 +106,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_TheGym_3Dbodies_T45nature_select/" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_known_good_fulllength" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -191,7 +192,7 @@ MULTIPOLICY = False
 MODES = {0:'paris_photo_torso_images_topics', 1:'paris_photo_torso_videos_topics', 
          2:'3D_bodies_topics', 3:'3D_full_bodies_topics', 4:'3D_arms', 5:'3D_arms_meta',
          6:'heft_torso_keywords'}
-MODE_CHOICE = 3
+MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
@@ -199,6 +200,10 @@ CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
+MULTIPLIER_PADDING = 1 # this is how much extra padding every multiplier gets
+# percentile is what point you take the upper/lower bounds of the dimensions for multiplier
+# 5 was leaving too many anomalies in there. 
+PERCENTILE = 80
 
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if "paris" in CURRENT_MODE:
@@ -273,8 +278,8 @@ elif "3D" in CURRENT_MODE:
     TOPIC_NO = [0]
     IS_ONE_TOPIC = True
 
-    # only for print production, for file sorting
-    ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
+    # # only for print production, for file sorting
+    # ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
 
     IS_CLUSTER = True
     # this is for IS_ONE_CLUSTER to only run on a specific CLUSTER_NO
@@ -404,7 +409,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = True # take all files, based off the very first sort order. (turn on for testing/speed)
+        ONE_SHOT = False # take all files, based off the very first sort order. (turn on for testing/speed)
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         KNN_LARGE_CLUSTERS = True
@@ -417,6 +422,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
+            # ONE_SHOT = True # use this to override during testing
         else:
             print(f"in second condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
 
@@ -442,6 +448,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         CHOP_ITTER_TSP_SORT = False
         ONE_SHOT = False # take all files, based off the very first sort order.
         ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
+        DO_ENRICH_IMAGE_METAS = False # don't bother getting topics/detections because it isn't used.
 
     if DO_SMALL_CLUSTER_FUSION_BUCKET:
         # set above, going to override fusion pairs, MULTIPOLICY and set keep clusters
@@ -482,10 +489,15 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # get cutoff for this class_id from constants dict
     cutoff = ID_CUTOFF_DICT.get(class_id, None)
 
-    if not USE_HSV and cutoff is not None:
-        # this is for testing all cluster-poses for a keyword
-        MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
-        MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
+    if not USE_HSV:
+        if cutoff is not None:
+            # this is for testing all cluster-poses for a class_id
+            MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
+            MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
+        else:
+            # for fusion clusters that don't run on class_id, just take the MAX_ROWS_PER_OUTPUT_CSV
+            MIN_VIDEO_FUSION_COUNT = MAX_ROWS_PER_OUTPUT_CSV # this is the cut off for the CSV fusion pairs
+            MIN_CYCLE_COUNT = 100 # at least 100 in the cluster 
     elif PURGING_DUPES:
         MIN_VIDEO_FUSION_COUNT = 100
         MIN_CYCLE_COUNT = 200
@@ -1777,11 +1789,6 @@ def expand_vector_column(df, vector_col="face_encodings68", prefix="enc", expect
         )
     return vector_df
 
-
-def expand_face_encodings(df,encoding_col= "face_encodings68",):
-    """Backward-compatible wrapper for face encoding expansion."""
-    return expand_vector_column(df, vector_col=encoding_col, prefix="enc", expected_len=128)
-
 def get_closest_knn_or_break(df_enc, df_sorted):
     # send in both dfs, and return same dfs with 1+ rows sorted
     print(" -- BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
@@ -1965,54 +1972,6 @@ def tsp_sort(df_enc):
     # Then map back 
     df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
     return df_sorted
-
-def cycling_order(CYCLECOUNT, sort):
-    img_array = []
-    cycle = 0 
-    # metamedian = get_metamedian(angle_list)
-    metamedian = sort.metamedian
-    d = sort.d
-
-    print("CYCLE to test: ",cycle)
-
-    while cycle < CYCLECOUNT:
-        print("CYCLE: ",cycle)
-        for angle in sort.angle_list:
-            print("angle: ",str(angle))
-            # # print(d[angle].iloc[(d[angle][SECOND_SORT]-metamedian).abs().argsort()[:2]])
-            # # print(d[angle].size)
-            try:
-                # I don't remember exactly how this segments the data...!!!
-                # [:CYCLECOUNT] gets the first [:0] value on first cycle?
-                # or does it limit the total number of values to the number of cycles?
-                print(d[angle])
-                
-                #this is a way of finding the image with closest second sort (Y)
-                #mystery value is the image to be matched? 
-                print("second sort, metamedian ",d[angle][sort.SECOND_SORT],sort.metamedian)
-                mysteryvalue = (d[angle][sort.SECOND_SORT]-sort.metamedian)
-                print('mysteryvalue ',mysteryvalue)
-                #is mystery value a df?
-                #this is finding the 
-                mysterykey = mysteryvalue.abs().argsort()[:CYCLECOUNT]
-                print('mysterykey: ',mysterykey)
-                closest = d[angle].iloc[mysterykey]
-                closest_file = closest.iloc[cycle]['imagename']
-                closest_mouth = closest.iloc[cycle]['mouth_gap']
-                print('closest: ')
-                print(closest_file)
-                img = cv2.imread(closest_file)
-                height, width, layers = img.shape
-                size = (width, height)
-                img_array.append(img)
-            except:
-                print('failed cycle angle:')
-                # print('failed:',row['imagename'])
-        print('finished a cycle')
-        sort.angle_list.reverse()
-        cycle = cycle +1
-        # print(angle_list)
-    return img_array, size
 
 def prep_encodings_NN(df_segment, effective_sort_type=None):
     _sort_type = effective_sort_type if effective_sort_type is not None else SORT_TYPE
@@ -2238,114 +2197,6 @@ def generate_cropped_image(img, context):
     if is_inpaint:
         return None, "needs_inpaint"
     return cropped_image, "ok"
-
-# this seems deprecated?????
-# def compare_images(last_image, img, face_landmarks_or_df, bbox_or_index, current_image_id=None):
-#     # for some reason the function is called with either a df and index, or face_landmarks and bbox
-#     # rw to handle both here. 
-#     if isinstance(face_landmarks_or_df, pd.DataFrame):
-#         df_sorted = face_landmarks_or_df
-#         index = bbox_or_index
-#         face_landmarks, bbox = df_sorted.iloc[index]['face_landmarks'], df_sorted.iloc[index]['bbox']
-#         current_image_id = df_sorted.iloc[index].get('image_id', current_image_id)
-#         current_yaw = df_sorted.iloc[index].get('yaw', None)
-#         current_roll = df_sorted.iloc[index].get('roll', None)
-#         current_pitch = df_sorted.iloc[index].get('pitch', None)
-#         is_df = True
-#     else:
-#         face_landmarks = face_landmarks_or_df
-#         bbox = bbox_or_index
-#         current_yaw = current_roll = current_pitch = None
-#         is_df = False
-
-#     is_face = None
-#     skip_face = False
-#     #crop image here:
-    
-#     print(f". ---  compare_images with is_df {is_df} for {SORT_TYPE} with EXPAND {sort.EXPAND} and FULL_BODY {FULL_BODY} and self.mult {sort.image_edge_multiplier}")
-#     if sort.counter_dict["first_run"] is False and last_image is None: print(" ><><>< YIKES, last_image is None ><><>< ")
-#     crop_context = {
-#         "is_valid": True,
-#         "face_landmarks": face_landmarks,
-#         "bbox": bbox,
-#         "current_image_id": current_image_id,
-#         "yaw": current_yaw,
-#         "roll": current_roll,
-#         "pitch": current_pitch,
-#     }
-#     cropped_image, crop_status = generate_cropped_image(img, crop_context)
-#     is_inpaint = crop_status == "needs_inpaint"
-
-
-#     # this code takes image i, and blends it with the subsequent image
-#     # next step is to test to see if mp can recognize a face in the image
-#     # if no face, a bad blend, try again with i+2, etc. 
-#     if cropped_image is not None and not is_inpaint:
-#         if VERBOSE: print("have a cropped image trying to save", cropped_image.shape)
-#         try:
-#             if sort.counter_dict["first_run"] is False:
-#                 if VERBOSE:  print("testing is_face")
-#                 if SORT_TYPE not in ("planar_body", "body3D"):
-#                 #     # check to see if the two faces make one
-#                     if VERBOSE:
-#                         print("testing is_face to see if the two make a face")
-#                         print("last_image shape:", last_image.shape)
-#                         print("cropped_image shape:", cropped_image.shape)
-#                     is_face = sort.test_or_lookup_face_pair(last_image, cropped_image, current_image_id)
-#                     print("test_or_lookup_face_pair is_face result:", is_face)
-#                 # sept 2025 dedupe used to happen here, but removing this, as it is now handled in separate dedupe process
-#                 else:
-#                     print("failed is_face test")
-#             else:
-#                 print("first round, skipping the pair test")
-#         except:
-#             print("last_image try failed")
-#         # if is_face or first_run and sort.resize_factor < sort.resize_max:
-#         if is_face or sort.counter_dict["first_run"]:
-#             # if successful, prepare for the next round
-#             sort.counter_dict["first_run"] = False
-#             last_image = cropped_image
-#             sort.counter_dict["good_count"] += 1
-#         else: 
-#             sort.counter_dict["isnot_face_count"] += 1
-#             print("pair do not make a face, skipping <<< is this really true? Isn't this for dupes?")
-#             return None, True
-        
-#     elif cropped_image is None and sort.counter_dict["first_run"]:
-#         print("first run, but bad first image")
-#         last_image = cropped_image
-#         sort.counter_dict["cropfail_count"] += 1
-#     elif is_inpaint:
-#         print("bad crop, will try inpainting and try again")
-#         sort.counter_dict["inpaint_count"] += 1
-#     elif cropped_image is None:
-#         print("no image or resize to great, trying next")
-#         sort.counter_dict["cropfail_count"] += 1
-#         skip_face = True
-#     # print(type(cropped_image),"$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
-
-#     return cropped_image, skip_face
-
-
-def print_counters(counter_state=None):
-    counter_state = counter_state if counter_state is not None else sort.counter_dict
-    print("good_count")
-    print(counter_state["good_count"])
-    print("isnot_face_count")
-    print(counter_state["isnot_face_count"])
-    print("cropfail_count")
-    print(counter_state["cropfail_count"])
-    print("sort.negmargin_count")
-    print(sort.negmargin_count)
-    print("sort.toosmall_count")
-    print(sort.toosmall_count)
-    print("failed_dist_count")
-    print(counter_state["failed_dist_count"])
-    print("total count")
-    print(counter_state["counter"])
-    print("inpaint count")
-    print(counter_state["inpaint_count"])
-
 
 def const_imgfilename_NN(UID, df, imgfileprefix, counter_state=None):
     # print("filename", filename)
@@ -2656,7 +2507,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         # sort internals continue reading sort.counter_dict.
         sort.counter_dict = counter_state
 
-    df_sorted = enrich_image_metas(df_sorted)
+    if DO_ENRICH_IMAGE_METAS: df_sorted = enrich_image_metas(df_sorted)
 
     linear_test_start = time.perf_counter()
     assembly_stats = {
@@ -2805,12 +2656,10 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         image_id = row['image_id']
         if row['description']: description = row['description']
         else: description = None
-        try: topic_score = row['topic_score']
-        except: topic_score = 0
-        try: detection_count = row['detection_count']
-        except: detection_count = 0
-        try: detections_json = row['detections_json']
-        except: detections_json = "[]"
+        topic_id = row.get('topic_id', None)
+        topic_score = row.get('topic_score', 0)
+        detection_count = row.get('detection_count', 0)    
+        detections_json = row.get('detections_json', 0)   
         # use image_id to retrieve description from mysql database 
         # this is temporary until I resegment the images with description in the segment
         # try:
@@ -2825,7 +2674,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
                 description = None
             else:
                 description = description
-            metas = [image_id, description, topic_score, detection_count, detections_json]
+            metas = [image_id, description, topic_score, detection_count, detections_json, topic_id]
             
             metas_path = os.path.join(sort.counter_dict["outfolder"],METAS_FILE)
             io.write_csv(metas_path, metas)
@@ -3457,15 +3306,14 @@ def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
     return {"generated": generated, "skipped": skipped, "failed": failed, "total": total}
 
 
-def write_images(img_list):
-    for path_img in img_list:
-        cv2.imwrite(path_img[0],path_img[1])
 
 
 def enrich_image_metas(df):
     print("enriching image metas")
     KEYWORD_TO_SCORE_DIVISOR = 4
     RANDOM_DIVISOR = 5
+    if 'description' not in df.columns:
+        df['description'] = None
     def count_keywords_in_description(description, keywords):
         print("count_keywords_in_description called with description:", description)
         keywords = ["banknote", "money", "dollar", "euro", "pounds", "credit", "financ", "card", "currenc", "cash", "rupee", "yen", "yuan", 'ruble', "mark", "rupee", "peso", "franc", "lira", "shekel", "ether", "crypto", "bitcoin"]
@@ -3483,46 +3331,34 @@ def enrich_image_metas(df):
 
     parts = SegmentHelper_name.split("_")
     topic_id = None
-    for part in parts:
-        # Only parse tokens like "T11" (or T-prefixed numeric values), not names like "TheOffice".
-        if isinstance(part, str) and part.startswith("T") and len(part) > 1:
-            topic_token = part[1:]
+    if 'topic_score' not in df.columns:
+        image_ids = df['image_id'].dropna().tolist()
+        topic_scores = {}
+        if image_ids:
             try:
-                topic_id = int(float(topic_token))
-                break
-            except (TypeError, ValueError):
-                continue
-    if topic_id is None:
-        if SegmentHelper_name == "SegmentHelper_TheOffice":
-            # default to T11 but change to T37 for money 82, and credit card 95
-            topic_id = 37
-            print(f"Parsed topic_id=11 from SegmentHelper_name: {SegmentHelper_name}")
-        else:
-            print(f"Could not parse topic_id from SegmentHelper_name: {SegmentHelper_name}")
-    if 'description' not in df.columns:
-        df['description'] = None
-    if topic_id is not None:
-        if 'topic_score' not in df.columns:
-            image_ids = df['image_id'].dropna().tolist()
-            topic_scores = {}
-            if image_ids:
-                try:
-                    score_rows = session.query(ImagesTopics.image_id, ImagesTopics.topic_score).filter(
-                        ImagesTopics.topic_id == topic_id,
-                        ImagesTopics.image_id.in_(image_ids),
-                    ).all()
-                    topic_scores = {image_id: topic_score for image_id, topic_score in score_rows}
-                except Exception as e:
-                    traceback.print_exc()
-                    print(str(e))
-                    topic_scores = {}
-            df['topic_score'] = df['image_id'].map(topic_scores)
-            print(
-                f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
-                f"using topic_id={topic_id}"
-            )
-    # go back through and count_keywords_in_description for each row, and add a column for that count
-    df['topic_score'] = df['description'].apply(lambda desc: count_keywords_in_description(desc, []))
+                score_rows = session.query(ImagesTopics.image_id, ImagesTopics.topic_id, ImagesTopics.topic_score).filter(
+                    ImagesTopics.image_id.in_(image_ids),
+                ).all()
+                topic_scores = {image_id: (topic_id,topic_score) for image_id, topic_id, topic_score in score_rows}
+            except Exception as e:
+                traceback.print_exc()
+                print(str(e))
+                topic_scores = {}
+        print(f"going to unpack score_rows with tuples")
+        # df[['New_Col1', 'New_Col2']] = pd.DataFrame(df['A'].map(my_map).tolist(), index=df.index)
+
+        df[['topic_id', 'topic_score']] = df['image_id'].map(topic_scores).tolist()
+        print(
+            f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
+            f"using topic_id={topic_id}"
+        )
+            
+    # Only backfill topic_score from description when no usable score already exists.
+    topic_score_missing_mask = df['topic_score'].isna() | (pd.to_numeric(df['topic_score'], errors='coerce') == 0)
+    if topic_score_missing_mask.any():
+        df.loc[topic_score_missing_mask, 'topic_score'] = df.loc[
+            topic_score_missing_mask, 'description'
+        ].apply(lambda desc: count_keywords_in_description(desc, []))
     
     image_ids = df['image_id'].dropna().tolist()
     detection_payloads = {}
@@ -3731,11 +3567,6 @@ def process_linear(start_img_name, df_segment, file_prefix, sort, effective_sort
             print(f"sorting by face distance took {lap_time:.2f} seconds for {segment_count} segments")
     finally:
         sort.SORT_TYPE = original_sort_type
-
-        # test to see if they make good faces
-        # write_images(img_list)
-        # write_images(sort.not_make_face)
-        # print_counters()
 
 def parse_cluster_no(this_cluster):
     # if this_cluster is a list, then assign the first one to cluster_no
@@ -4016,6 +3847,211 @@ def _mode1_normalize_token(value):
         return None
 
 
+def _mode1_parse_bbox_dict(value):
+    """Parse bbox-like payloads into a dict with top/right/bottom/left floats.
+    needs to be able to handle this format too: 
+    {'detection_id': 27270362, 'class_id': 1.0, 'conf': 0.79, 'top': 2.611940298507463, 'left': -1.9440298507462688, 'right': 2.078358208955224, 'bottom': 3.3470149253731343}
+    """
+    if value is None:
+        return None
+    # print(f"_mode1_parse_bbox_dict: {value}")
+    parsed = value
+    if isinstance(parsed, str):
+        text = parsed.strip()
+        if not text or text.lower() in ("none", "nan"):
+            return None
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            try:
+                parsed = ast.literal_eval(text)
+            except Exception:
+                return None
+
+    if isinstance(parsed, (list, tuple)) and len(parsed) >= 4:
+        parsed = {
+            "top": parsed[0],
+            "right": parsed[1],
+            "bottom": parsed[2],
+            "left": parsed[3],
+        }
+
+    if not isinstance(parsed, dict):
+        return None
+
+    if not all(k in parsed for k in ("top", "right", "bottom", "left")):
+        return None
+
+    try:
+        bbox = {
+            "top": float(parsed["top"]),
+            "right": float(parsed["right"]),
+            "bottom": float(parsed["bottom"]),
+            "left": float(parsed["left"]),
+        }
+    except (TypeError, ValueError):
+        return None
+
+    if not all(np.isfinite(v) for v in bbox.values()):
+        return None
+    return bbox
+
+
+def _mode1_collect_object_bboxes_for_row(row):
+    """Collect object bbox candidates from known row payload fields."""
+    object_bboxes = []
+
+    # print("_mode1_collect_object_bboxes_for_row", row)
+    # direct_cols = ["bbox_norm", "obj_bbox", "object_bbox", "obj_bbox_list"]
+    for col_name in DETECTION_COLS:
+        if col_name not in row.index:
+            continue
+        bbox = _mode1_parse_bbox_dict(row.get(col_name))
+        if bbox is not None:
+            object_bboxes.append(bbox)
+    # if bool(object_bboxes): print("object_bboxes", object_bboxes)
+    # else: print("no object bboxes found in row")
+    # when obj bboxes exist, object_bboxes looks like this: 
+    # object_bboxes [{'top': 3.3057851239669422, 'right': 2.347107438016529, 'bottom': 5.545454545454546, 'left': -2.6115702479338845}, {'top': 3.3057851239669422, 'right': 2.347107438016529, 'bottom': 5.545454545454546, 'left': -2.6115702479338845}]
+
+    # detections_payload = row.get("detections_json") if "detections_json" in row.index else None
+    # if isinstance(detections_payload, str) and detections_payload.strip():
+    #     try:
+    #         detections = json.loads(detections_payload)
+    #     except Exception:
+    #         detections = None
+    #     if isinstance(detections, list):
+    #         for detection in detections:
+    #             if not isinstance(detection, dict):
+    #                 continue
+    #             bbox = _mode1_parse_bbox_dict(detection.get("bbox_norm"))
+    #             if bbox is None:
+    #                 bbox = _mode1_parse_bbox_dict(detection.get("bbox"))
+    #             if bbox is not None:
+    #                 object_bboxes.append(bbox)
+
+    return object_bboxes
+
+
+def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
+    """Estimate dynamic crop multipliers using body landmarks plus object bbox extents.
+
+    Object extents are measured from face-bbox center in face-height units and then
+    unioned with body-only extents so objects can only expand the crop.
+    """
+
+    body_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, padding, PERCENTILE)
+    if df_segment is None or not isinstance(df_segment, pd.DataFrame) or df_segment.empty:
+        return body_multiplier
+
+    if "bbox" not in df_segment.columns:
+        print("[mode1 bbox-aware] no face bbox column available; using body-only multiplier")
+        return body_multiplier
+
+    obj_top_extent_samples = []
+    obj_right_extent_samples = []
+    obj_bottom_extent_samples = []
+    obj_left_extent_samples = []
+    rows_with_object_bboxes = 0
+
+
+    print(f"_mode1_calc_dynamic_multiplier_bbox_aware, columns:", df_segment.columns)
+    for _, row in df_segment.iterrows():
+        # print(f"_mode1_calc_dynamic_multiplier_bbox_aware Processing row: {row}")
+        face_bbox = _mode1_parse_bbox_dict(row.get("bbox"))
+        if face_bbox is None:
+            continue
+
+        face_height = abs(face_bbox["bottom"] - face_bbox["top"])
+        if face_height <= 0:
+            continue
+
+        # cx = (face_bbox["left"] + face_bbox["right"]) / 2.0
+        # cy = (face_bbox["top"] + face_bbox["bottom"]) / 2.0
+
+        object_bboxes = _mode1_collect_object_bboxes_for_row(row)
+        if not object_bboxes:
+            continue
+
+        rows_with_object_bboxes += 1
+        for obj_bbox in object_bboxes:
+            # bbox_norm values are nose-origin signed offsets in face-height units.
+            # Convert to extension extents in multiplier units (always non-negative).
+            obj_top_extent = max(0.0, -float(obj_bbox["top"]))
+            obj_right_extent = max(0.0, float(obj_bbox["right"]))
+            obj_bottom_extent = max(0.0, float(obj_bbox["bottom"]))
+            obj_left_extent = max(0.0, -float(obj_bbox["left"]))
+
+            obj_top_extent_samples.append(obj_top_extent)
+            obj_right_extent_samples.append(obj_right_extent)
+            obj_bottom_extent_samples.append(obj_bottom_extent)
+            obj_left_extent_samples.append(obj_left_extent)
+
+    if not obj_top_extent_samples:
+        print("[mode1 bbox-aware] no usable object bbox samples; using body-only multiplier")
+        return body_multiplier
+
+    # if there are not a significant number of obj bboxes, then just return the body_multiplier
+    MIN_OBJ_BBOX_PCT_FOR_MULTIPLIER = .5
+    if len(obj_top_extent_samples) < MIN_OBJ_BBOX_PCT_FOR_MULTIPLIER * len(df_segment):
+        print(
+            f"[mode1 bbox-aware] only {len(obj_top_extent_samples)} usable object bbox samples "
+            f"out of {len(df_segment)} rows ({len(obj_top_extent_samples)/len(df_segment):.2%}); "
+            f"using body-only multiplier"
+        )
+        return body_multiplier
+
+    # sort each list of samples:
+    obj_top_extent_samples.sort()
+    obj_right_extent_samples.sort()
+    obj_bottom_extent_samples.sort()
+    obj_left_extent_samples.sort()
+
+    # print each list of samples:
+    print(f"[mode1 bbox-aware] obj_top_extent_samples: {obj_top_extent_samples}")
+    print(f"[mode1 bbox-aware] obj_right_extent_samples: {obj_right_extent_samples}")
+    print(f"[mode1 bbox-aware] obj_bottom_extent_samples: {obj_bottom_extent_samples}")
+    print(f"[mode1 bbox-aware] obj_left_extent_samples: {obj_left_extent_samples}")
+    
+    # Use a high percentile so large held objects (bike/barbell) influence framing.
+    obj_multiplier = [
+        max(abs(float(np.percentile(obj_top_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[0])),
+        max(abs(float(np.percentile(obj_right_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[1])),
+        max(abs(float(np.percentile(obj_bottom_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[2])),
+        max(abs(float(np.percentile(obj_left_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[3])),
+    ]
+
+    # body_multiplier is the amount that the image needs to be extended
+    # negative and positive have already been accounted for in the body_multiplier calculation.
+
+    # obj_multiplier is the relative position of each edge of the object bbox. 
+    # when top is positive, it actually means that the object is below the nose, so we don't extend higher
+    # when the top is negative, it means the object is above the nose, and we need to extend
+    # when the bottom is is negative, it means the object is above the head, so we don't extend lower.
+    # when the right side is negative, it mean we don't extend to the right
+    # when the left is negative, it means the object is to the left of the nose, and we need to extend
+    # when the left is positive, it mean we don't extend to the right
+
+    
+
+    merged_multiplier = [
+    # round multiplier to confirm with merge_step using this pattern:
+    #  top_extent = max(self.round_up_step((top_raw + padding), self.ROUND_STEP), self.MIN_DYN_BBOX_DIM[0])
+        # already padded the body multiplier, but need to pad the obj now
+        max(sort.round_up_step(float(body_multiplier[i]), padding = 0), sort.round_up_step(float(obj_multiplier[i]), padding = padding))
+        for i in range(4)
+    ]
+
+
+
+    print(
+        "[mode1 bbox-aware] merged dynamic multiplier "
+        f"rows_with_object_bboxes={rows_with_object_bboxes} "
+        f"body={body_multiplier} obj={obj_multiplier} merged={merged_multiplier}"
+    )
+    return merged_multiplier
+
+
 def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """Standalone set_multiplier_and_dims for pool workers (no main() closures).
 
@@ -4028,6 +4064,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     pose_no = _mode1_normalize_token(pose_no)
     use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
     canonical_multiplier = None
+    learned_record = None
     if not use_pose_crop:
         canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
     if canonical_multiplier is not None:
@@ -4051,12 +4088,32 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
         if crop_dict_index is not None:
             sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
     elif image_edge_multiplier is None:
-        print("No multiplier found in canonical registry or pose crop dict; calculating dynamic multiplier from body landmarks")
-        # dynamic fallback — populate_image_dims not available at module level;
-        # fall back to landmark-based calculation (no closure required).
-        sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
+        # Dynamic fallback with object-bbox awareness.
+        sort.image_edge_multiplier = _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, MULTIPLIER_PADDING)
+        print(
+            "No multiplier found in canonical registry or pose crop dict; "
+            "calculating dynamic multiplier with bbox-aware estimator:",
+            sort.image_edge_multiplier,
+        )
+        if (
+            MODE == 1
+            and CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion"
+            and cluster_no is not None
+            and pose_no is not None
+            and not use_pose_crop
+        ):
+            learned_record = {
+                "arms_cluster_id": int(cluster_no),
+                "object_signature_cluster_id": int(pose_no),
+                "multiplier": [float(value) for value in sort.image_edge_multiplier],
+            }
+            print(
+                "[canonical multipliers][worker] learned candidate "
+                f"arms={cluster_no} object_signature={pose_no} mult={learned_record['multiplier']}"
+            )
     sort.face_height_output = face_height_output
     sort.set_output_dims()
+    return learned_record
 
 
 def _mode1_load_df(csv_path: str, timing: dict):
@@ -4085,6 +4142,8 @@ def _mode1_load_df(csv_path: str, timing: dict):
         df["face_landmarks"] = df["face_landmarks"].apply(sort.str_to_landmarks)
     if "bbox" in df.columns:
         df["bbox"] = df["bbox"].apply(lambda x: io.unstring_json(x) if isinstance(x, str) else x)
+    if "bbox_norm" in df.columns:
+        df["bbox_norm"] = df["bbox_norm"].apply(lambda x: io.unstring_json(x) if isinstance(x, str) else x)
     df["folder"] = df["folder"].apply(lambda x: os.path.join(io.ROOT, os.path.basename(x)))
     df["face_encodings68"] = df["face_encodings68"].apply(lambda x: eval(x) if isinstance(x, str) else x)
     df["body_landmarks_array"] = df["body_landmarks_array"].apply(lambda x: eval(x) if isinstance(x, str) else x)
@@ -4307,6 +4366,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
 
     timing: dict = {}
     file_start = time.perf_counter()
+    learned_multipliers = []
 
     try:
         parts = csv_file.replace(".csv", "").split("_")
@@ -4341,8 +4401,8 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "early_return": "empty_df",
                 "error": "empty df",
                 "timing": timing,
+                "learned_multipliers": learned_multipliers,
             }
-
         df_sorted = _mode1_run_db_dedupe(
             df_sorted,
             db_session,
@@ -4362,10 +4422,13 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "early_return": "purging_dupes",
                 "error": None,
                 "timing": timing,
+                "learned_multipliers": learned_multipliers,
             }
 
         multiplier_start = time.perf_counter()
-        _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        learned_multiplier = _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        if learned_multiplier is not None:
+            learned_multipliers.append(learned_multiplier)
         timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (
             time.perf_counter() - multiplier_start
         )
@@ -4378,6 +4441,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 "early_return": "calibrating",
                 "error": None,
                 "timing": timing,
+                "learned_multipliers": learned_multipliers,
             }
 
         assembly_start = time.perf_counter()
@@ -4393,6 +4457,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             "early_return": None,
             "error": None,
             "timing": timing,
+            "learned_multipliers": learned_multipliers,
         }
     except Exception as exc:
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
@@ -4402,6 +4467,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             "early_return": None,
             "error": str(exc),
             "timing": timing,
+            "learned_multipliers": learned_multipliers,
         }
 
 
@@ -5080,11 +5146,11 @@ def main():
                 print("DYN_BBOX_FROM_IMAGE_DIMS enabled: computing multiplier from image pixel dimensions")
                 df_segment, n_ok = populate_image_dims(df_segment)
                 if n_ok > 10:
-                    sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0)
+                    sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_image_dims(df_segment, 0, PERCENTILE)
                 else:
                     print(f"Not enough valid image dimensions ({n_ok}) to compute dynamic multiplier; using default {sort.image_edge_multiplier}")
             else:
-                sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0)
+                sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0, PERCENTILE)
 
         if canonical_multiplier is None and not use_pose_crop:
             register_canonical_multiplier(cluster_no, pose_no, sort.image_edge_multiplier)
@@ -5104,6 +5170,15 @@ def main():
         if row_count <= max_rows_per_csv:
             return [df_segment]
 
+        # chop the df down to the key dimensions to send that in to kmeans for partitioning
+        cols_to_cluster = ["pitch", "yaw", "roll", "left_pointer_knuckle_norm", "right_pointer_knuckle_norm", "is_feet"]
+        # print(f"first row of df_segment:", df_segment.iloc[0]['body_landmarks_array'])
+        # create an is_feet bool column and set it to True if any of the feet lms [27-32] have a visibility greater than .5
+        feet_vis_items = [(i*4+3) for i in range(27, 33)]
+        # for item in feet_vis_items:
+        #     print(f"checking feet visibility item index {item} for row 0: {df_segment.iloc[0]['body_landmarks_array'][item]}")
+        df_segment['is_feet'] = df_segment.apply(lambda row: any(row['body_landmarks_array'][i] > 0.5 for i in feet_vis_items), axis=1)
+        
         n_clusters = compute_partition_cluster_count(row_count, max_rows_per_csv)
         if n_clusters >= row_count:
             # Degenerate case fallback: one-row groups in deterministic index order.
@@ -5114,8 +5189,9 @@ def main():
             f"and max_rows_per_csv={max_rows_per_csv}"
         )
 
+        # only send in the cols_to_cluster
         labels = cl.kmeans_cluster(
-            df_segment,
+            df_segment[cols_to_cluster],
             n_clusters=n_clusters,
             fit_scaler=True,
             random_state=42,
@@ -5347,11 +5423,6 @@ def main():
             ### SORT THE LIST OF SELECTED IMAGES ###
             ###    THESE ARE THE VARIATIONS      ###
 
-            if motion["side_to_side"] is True and IS_ANGLE_SORT is False:
-                # this is old, hasn't been refactored.
-                img_list, size = cycling_order(CYCLECOUNT, sort)
-                # size = sort.get_cv2size(ROOT, img_list[0])
-            # ANGLE SORT USED TO BE HERE in an elif. Removed Nov 20, 2205
             else:   
                 # hard coding override to just start from median
                 # sort.counter_dict["start_img_name"] = "median"
@@ -5472,6 +5543,8 @@ def main():
             "file_total": 0.0,
         }
         mode1_processed_files = 0
+        mode1_learned_multiplier_new = 0
+        mode1_learned_multiplier_duplicates = 0
 
         def add_mode1_timing(stage, elapsed):
             if not mode1_timing_enabled:
@@ -5522,6 +5595,52 @@ def main():
                 print(f"[MODE1 TIMING] {stage}: {stage_time:.2f}s ({pct_wall:.1f}% of wall)")
             print("[MODE1 TIMING] ============================\n")
 
+        def merge_mode1_learned_multiplier_records(records, source_csv):
+            nonlocal mode1_learned_multiplier_new
+            nonlocal mode1_learned_multiplier_duplicates
+
+            if not records:
+                return
+
+            for record in records:
+                arms_cluster_id = normalize_cluster_token(record.get("arms_cluster_id"))
+                object_signature_cluster_id = normalize_cluster_token(record.get("object_signature_cluster_id"))
+                multiplier_values = record.get("multiplier")
+
+                if arms_cluster_id is None or object_signature_cluster_id is None:
+                    continue
+                if not isinstance(multiplier_values, (list, tuple)) or len(multiplier_values) != 4:
+                    continue
+
+                try:
+                    parsed_values = [float(value) for value in multiplier_values]
+                except (TypeError, ValueError):
+                    continue
+
+                key = (arms_cluster_id, object_signature_cluster_id)
+                existing = canonical_multiplier_registry.get(key)
+                if existing is not None:
+                    try:
+                        existing_values = [float(value) for value in existing]
+                    except (TypeError, ValueError):
+                        existing_values = existing
+                    if existing_values != parsed_values:
+                        mode1_learned_multiplier_duplicates += 1
+                        print(
+                            "[canonical multipliers][mode1] duplicate learned key ignored (first-write-wins) "
+                            f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
+                            f"existing={existing_values} candidate={parsed_values}"
+                        )
+                    continue
+
+                canonical_multiplier_registry[key] = parsed_values
+                mode1_learned_multiplier_new += 1
+                print(
+                    "[canonical multipliers][mode1] accepted learned key "
+                    f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
+                    f"mult={parsed_values}"
+                )
+
         load_canonical_multiplier_registry_once()
         mode1_enable_db_dedupe = bool(globals().get("MODE1_ENABLE_DB_DEDUPE", True))
         print(f"[MODE1 DEDUPE] MODE1_ENABLE_DB_DEDUPE={mode1_enable_db_dedupe}")
@@ -5564,6 +5683,10 @@ def main():
                 for result in pool.imap_unordered(_mode1_csv_worker, csv_files_to_process):
                     for stage, elapsed in result.get("timing", {}).items():
                         add_mode1_timing(stage, elapsed)
+                    merge_mode1_learned_multiplier_records(
+                        result.get("learned_multipliers", []),
+                        result.get("csv_file"),
+                    )
                     if not result.get("success"):
                         print(
                             f"[MODE1 WORKER] error in {result.get('csv_file')}: "
@@ -5580,11 +5703,27 @@ def main():
                 )
                 for stage, elapsed in result.get("timing", {}).items():
                     add_mode1_timing(stage, elapsed)
+                merge_mode1_learned_multiplier_records(
+                    result.get("learned_multipliers", []),
+                    result.get("csv_file"),
+                )
                 if not result.get("success"):
                     print(
                         f"[MODE1 SERIAL] error in {result.get('csv_file')}: "
                         f"{result.get('error')}"
                     )
+
+        if should_use_canonical_multiplier_registry() and mode1_learned_multiplier_new > 0:
+            print(
+                "[canonical multipliers][mode1] persisting learned registry updates "
+                f"new={mode1_learned_multiplier_new} duplicate_ignored={mode1_learned_multiplier_duplicates}"
+            )
+            write_canonical_multiplier_registry()
+        elif should_use_canonical_multiplier_registry():
+            print(
+                "[canonical multipliers][mode1] no new learned keys to persist "
+                f"duplicate_ignored={mode1_learned_multiplier_duplicates}"
+            )
 
         print_mode1_timing_summary(total_csv_candidates)
         MODE1_ASSEMBLY_TIMING_CALLBACK = None

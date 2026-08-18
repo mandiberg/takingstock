@@ -3904,6 +3904,29 @@ class ToolsClustering:
         if self.VERBOSE:
             shape_info = model_input.shape if hasattr(model_input, 'shape') else 'unknown'
             print(f"kmeans_cluster shared input shape: {shape_info}")
+        
+        # print("model_input", model_input)
+
+        # test to see if any values in model_input are nan
+        # Returns True if any NaN exists, otherwise False
+        has_nan = df.isna().values.any()
+        print("model_input Contains NaN:", has_nan)
+        if has_nan:
+            print(df[df.isna().any(axis=1)])
+
+            # make a df with the rows that have NaN values
+            df_nan = df[df.isna().any(axis=1)]
+
+            # print each row with a NaN value
+            print("df_nan")
+            print(df_nan)
+            
+
+        # Prints the count of NaNs for every column
+        print(df.isna().sum())
+
+
+
 
         kmeans = KMeans(
             n_clusters=n_clusters,
