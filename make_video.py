@@ -58,7 +58,7 @@ else:
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_T3_player'
-# SegmentHelper_name = 'SegmentHelper_T0_sport'
+# SegmentHelper_name = 'SegmentHelper_TheGym_object_fix_20260820'
 SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
@@ -67,14 +67,14 @@ SegmentHelper_name = 'SegmentHelper_TheGym'
 IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
 SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
-ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
-DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
+ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+# DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -106,7 +106,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_FULL_BODYtest" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_FULL_BODY_c157v3_full_list_oneshot" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
@@ -416,7 +416,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = False # take all files, based off the very first sort order. (turn on for testing/speed)
+        ONE_SHOT = True # take all files, based off the very first sort order. (turn on for testing/speed)
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         KNN_LARGE_CLUSTERS = True
@@ -425,7 +425,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
             GENERATE_FUSION_PAIRS = False 
-            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
@@ -610,7 +610,7 @@ if USE_POSE_CROP_DICT: # I'm not sure if it needs this conditional
         POSE_CROP_DICT = ALL_POSE_CROP_DICTS.get("ARMS_3D")
 
 
-print(f"doing {CURRENT_MODE}: CLUSTER_TYPE {CLUSTER_TYPE}, SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT}")
+print(f"doing {CURRENT_MODE}: CLUSTER_TYPE {CLUSTER_TYPE}, SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT},  USE_FUSION_PAIR_DICT {USE_FUSION_PAIR_DICT}, FUSION_PAIR_DICT_NAME {FUSION_PAIR_DICT_NAME}, USE_HSV {USE_HSV}, N_HSV {N_HSV}, USE_HEAD_POSE {USE_HEAD_POSE}, FULL_BODY {FULL_BODY}, EXPAND {EXPAND}, INPAINT_COLOR {INPAINT_COLOR}, AUTO_EDGE_CROP {AUTO_EDGE_CROP}, image_edge_multiplier {image_edge_multiplier}, USE_POSE_CROP_DICT {USE_POSE_CROP_DICT}, len POSE_CROP_DICT {len(POSE_CROP_DICT) if POSE_CROP_DICT else None}")
 
 if USE_AFFECT_GROUPS:
     # groupings of affect topics
@@ -1043,6 +1043,7 @@ cfg = {
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
+if FULL_BODY: sort.image_edge_multiplier = [5, 9, 13, 9]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
 
 # Keep EXPAND background fill consistent with INPAINT_COLOR.
 if INPAINT_COLOR == "black":
@@ -3352,10 +3353,16 @@ def enrich_image_metas(df):
                 traceback.print_exc()
                 print(str(e))
                 topic_scores = {}
-        print(f"going to unpack score_rows with tuples")
+        print(f"going to unpack {len(topic_scores)} rows from {len(df.index)} rows")
+        print(f"first score is {list(topic_scores.items())[0] if topic_scores else 'none'}")
         # df[['New_Col1', 'New_Col2']] = pd.DataFrame(df['A'].map(my_map).tolist(), index=df.index)
 
-        df[['topic_id', 'topic_score']] = df['image_id'].map(topic_scores).tolist()
+        # map() yields NaN (not a tuple) for unmatched image_ids, which breaks .tolist()
+        # into an inhomogeneous array; fill those with (None, None) to keep shape consistent.
+        mapped_topic_scores = df['image_id'].map(topic_scores).apply(
+            lambda value: value if isinstance(value, tuple) else (None, None)
+        )
+        df[['topic_id', 'topic_score']] = pd.DataFrame(mapped_topic_scores.tolist(), index=df.index)
         print(
             f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
             f"using topic_id={topic_id}"

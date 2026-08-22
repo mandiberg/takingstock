@@ -133,7 +133,7 @@ class SortPose:
         self.BRUTEFORCE = False
         self.LMS_DIMENSIONS = LMS_DIMENSIONS
         if self.VERBOSE: print("init LMS_DIMENSIONS",self.LMS_DIMENSIONS)
-        self.CUTOFF = 100000 # DOES factor if ONE_SHOT and TSP_SORT
+        self.CUTOFF = 20000 # DOES factor if ONE_SHOT and TSP_SORT
         self.ORIGIN = 0
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
@@ -156,7 +156,7 @@ class SortPose:
         if image_edge_multiplier is None:
             if "body3D" in self.SORT_TYPE:
                 image_edge_multiplier = [5, 9, 13, 9]  # default values for body/hand sorting
-                image_edge_multiplier = [4, 8, 12, 8]  # when doing initial sort, so I can delete easily
+                # image_edge_multiplier = [4, 8, 12, 8]  # when doing initial sort, so I can delete easily
             else:
                 image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
 

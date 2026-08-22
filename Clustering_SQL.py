@@ -44,7 +44,7 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 8000000
+LIMIT = 9000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
@@ -121,6 +121,16 @@ WHERE EXISTS (
     WHERE ImagesObjectSignatures.image_id = SegmentHelper_TheGym.image_id
 );
 
+more condensed version that doesn't have option for NOT
+
+DELETE ios
+FROM ImagesObjectSignatures ios
+INNER JOIN SegmentHelper_TheGym_object_fix151_20260821 h
+    ON h.image_id = ios.image_id;
+
+
+
+
 """
 
 
@@ -168,7 +178,7 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
-SegmentHelper_name = 'SegmentHelper_TheGym'
+SegmentHelper_name = 'SegmentHelper_TheGym_object_fix151_20260821'
 # SegmentHelper_name = 'SegmentHelper_may26_deleteme_missingArms3D' # this is a temporary helper table that is just a subset of the full SegmentHelperMar23_headon, which is too large to join to for clustering, but has the same structure and can be used for testing and for MODE 2 cluster assignment based on the subset of data it contains. It is missing the ArmsPoses3D data, so it is only useful for testing BodyPoses3D and ObjectFusion clustering and assignment, not ArmsPoses3D clustering and assignment, but it is useful for testing the overall pipeline with a smaller dataset. It has 1.1M rows, which is still large but more manageable than the full 3.8M rows in SegmentHelperMar23_headon.
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 

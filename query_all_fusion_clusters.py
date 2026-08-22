@@ -40,8 +40,17 @@ OBJECTFUSION_CLUSTER_COUNT = None
 COLUMN_NAME = "topic_id"
 HACK_LIST_SKIP_DETECTIONS = []
 CLUSTER_COUNT = 768
+
+
+###############################################
+############  IMPORTANT SWITCHES  #############
+###############################################
+
 MODE = "ObjectSignatures" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D  or ObjectSignatures to 
-FULL_BODY = True # this is an override to force the use of BodyPoses3D instead of ArmsPoses3D for the fusion matrix
+FULL_BODY = False # this is an override to force the use of BodyPoses3D instead of ArmsPoses3D for the fusion matrix
+###############################################
+
+
 if FULL_BODY: matrix_family = "BodyPoses3D"
 else: matrix_family = "ArmsPoses3D"
 

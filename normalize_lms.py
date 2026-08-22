@@ -44,7 +44,7 @@ SSD_PATH = "/Volumes/OWC5/segment_images_newbig"
 USE_OBJ = True # do objet detections?
 if USE_OBJ: 
     REPROCESS_HANDS = False # do hands
-    SKIP_BODY = True # skip body landmarks. mostly you want to skip when doing obj bbox or are just redoing hands
+    SKIP_BODY = True # skip body landmarks. 
 else: 
     REPROCESS_HANDS = True # do hands
     SKIP_BODY = False
@@ -73,7 +73,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 2000000
+LIMIT= 20000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -97,7 +97,7 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # overrides THIS_CLASS_ID
-    SegmentHelper_name = 'SegmentHelper_TheGym'
+    SegmentHelper_name = 'SegmentHelper_TheGym_bonus'
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
     # SegmentFolder = SSD_PATH
     SegmentFolder = None
