@@ -74,7 +74,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -425,7 +425,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
             GENERATE_FUSION_PAIRS = False 
-            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+
+            # use this to turn on multiplier CSV creation/augmentation
+            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
+
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
@@ -1043,7 +1047,7 @@ cfg = {
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
-if FULL_BODY: sort.image_edge_multiplier = [5, 9, 13, 9]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
+if FULL_BODY and USE_BIIIIIG_FULL_BODY_MULTIPLIER: sort.image_edge_multiplier = [5, 9, 13, 9]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
 
 # Keep EXPAND background fill consistent with INPAINT_COLOR.
 if INPAINT_COLOR == "black":
@@ -4112,7 +4116,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
         )
         if (
             MODE == 1
-            and CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion"
+            and CLUSTER_TYPE in ("ArmsPoses3D_ObjectFusion", "BodyPoses3D_ObjectFusion")
             and cluster_no is not None
             and pose_no is not None
             and not use_pose_crop
@@ -4715,7 +4719,7 @@ def main():
             return None
 
     def should_use_canonical_multiplier_registry():
-        return MODE == 1 and CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion"
+        return MODE == 1 and CLUSTER_TYPE in ("ArmsPoses3D_ObjectFusion", "BodyPoses3D_ObjectFusion")
 
     def resolve_canonical_multiplier_csv_path():
         data_dir = os.path.join(os.getcwd(), "utilities", "data")
