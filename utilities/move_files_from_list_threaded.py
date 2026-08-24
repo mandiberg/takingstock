@@ -36,18 +36,17 @@ sys.path.insert(1, ROOT_GITHUB)
 # import file
 
 from mp_db_io import DataIO
-IS_SSD =False  # if True it will use the SSD path, if False it will use the RAID path
+IS_SSD =True  # if True it will use the SSD path, if False it will use the RAID path
 
 # Define the path to the CSV file
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
 
 VERBOSE = False  
 # set origin before constructing io
-# ORIGIN_SSD = "/Volumes/OWC5/segment_images_book_clock_bowl"
-# ORIGIN_SSD = "/Volumes/OWC52/segment_images_32_sportsball"
-ORIGIN_SSD = "/Volumes/SanDiskBlack/segment_images_84_valentine"
+ORIGIN_SSD = "/Volumes/OWC52/segment_images_32_sportsball"
+# ORIGIN_SSD = "/Volumes/LaCie/output_folder"
+# ORIGIN_SSD = "/Volumes/RAID18/is_not_face18"
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
-# ORIGIN_SSD = "/Volumes/LaCie/segment_images_33_sign"
 if not IS_SSD: ORIGIN_SSD = None
 io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
@@ -64,8 +63,9 @@ if FROM_SSD_TO_SSD == False: MOVE_ORIGINAL_FILE = False  # FORCE only allow movi
 ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
-DEST = "/Volumes/LaCie/segment_images_15_muscle" 
-# DEST = "/Volumes/SSD4_Green/segment_images_detected_63_67"  # 250k for headphones
+# DEST = "/Volumes/OWC5/segment_images_newbigx"  # for testing
+# DEST = "/Volumes/OWC52/segment_images_thegym_intersect_86dumbbell"  # for testing
+DEST = "/Volumes/LaCie/segment_images_thegym"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder
@@ -77,7 +77,7 @@ START = 0
 # first csv file is restart at 2297000
 
 #############################################################################
-MOVE_ORIGINAL_FILE = False # CAREFUL!!!!!!!!! IF TRUE, DELETES ORIGINAL FILES
+MOVE_ORIGINAL_FILE = True # CAREFUL!!!!!!!!! IF TRUE, DELETES ORIGINAL FILES
 #############################################################################
 
 # check for site folders
@@ -125,6 +125,9 @@ def move_file_pair(original_path, destination_path):
     if os.path.exists(original_path):
         try:
             if not os.path.exists(destination_path):
+                destination_dir = os.path.dirname(destination_path)
+                if destination_dir and not os.path.exists(destination_dir):
+                    os.makedirs(destination_dir, exist_ok=True)
                 if VERBOSE or TESTING_PRINT_ONLY:
                     print(f" ++ Copying file: {original_path} to {destination_path}")
                 if not TESTING_PRINT_ONLY:
@@ -150,6 +153,32 @@ def move_file_pair(original_path, destination_path):
     return "moved"
 
 
+def is_cluster_files_csv(csv_path):
+    """Detect the newer cluster_files.csv export format."""
+    filename = os.path.basename(csv_path).lower()
+    if "cluster_files" in filename:
+        return True
+    try:
+        with open(csv_path, mode='r', newline='') as file:
+            header = next(file, '').strip().lower()
+        return 'path_to_cache_file' in header
+    except Exception:
+        return False
+
+
+def cluster_destination_path(cache_path):
+    """Preserve the nested cache-file structure under DEST when a full cache path is provided."""
+    path = Path(cache_path)
+    parts = path.parts
+    if 'output_folder' in parts:
+        rel_parts = parts[parts.index('output_folder') + 1:]
+    elif len(parts) > 1:
+        rel_parts = parts[1:]
+    else:
+        rel_parts = (path.name,)
+    return os.path.join(DEST, *rel_parts)
+
+
 def worker_task(row_data):
     """Worker function for thread pool"""
     # print("worker_task called with row_data:", row_data)
@@ -161,6 +190,17 @@ def worker_task(row_data):
         destination_path = os.path.join(DEST, filename)
     else:
         if VERBOSE: print(f"Processing row {row_idx}: {row}")
+        if is_cluster_files_csv(CSV_FILE_PATH):
+            if len(row) < 3:
+                if VERBOSE:
+                    print(f"Skipping malformed cluster_files row: {row}")
+                return "error"
+            original_path = str(row[2]).strip()
+            if not original_path:
+                return "error"
+            destination_path = cluster_destination_path(original_path)
+            return move_file_pair(original_path, destination_path)
+
         # if not isinstance(row[1], int): return "error"
         try:site_name_id = int(row[1]) if USE_DF_SORTED else int(row[0])
         except ValueError:
@@ -190,6 +230,8 @@ def worker_task(row_data):
 
 
 def move_files_from_csv(csv_file, start=0):
+    global CSV_FILE_PATH
+    CSV_FILE_PATH = csv_file
     global i, moved_count, exists_count, failed_count
     moved_count = 0
     exists_count = 0
@@ -244,6 +286,8 @@ def move_files_from_csv(csv_file, start=0):
         total_lines = sum(1 for _ in file)
         file.seek(0)  # Reset file pointer to the beginning
         print(f"Total lines in CSV file: {total_lines}")
+        if is_cluster_files_csv(csv_file):
+            print("Detected cluster_files.csv format: using path_to_cache_file directly.")
         reader = csv.reader(file)
         next(reader)  # Skip the header row
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:

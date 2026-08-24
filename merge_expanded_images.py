@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 3
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
@@ -28,12 +28,12 @@ SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
-ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/'
+# ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "T37_final_looping_video_source_files"
-# FOLDER_NAME = "output_folder/redux1"
+# FOLDER_NAME = "T37_final_looping_video_source_files"
+FOLDER_NAME = "output_folder/_thegym_arms_600s_oneshot2"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -45,14 +45,14 @@ IS_CLUSTER = True
 PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = None
+CROP_AFTER_COUNT = 80
 
 # if you borked the installation file, turn this on to JUST rebuilt it
 DO_INSTALLATION_ONLY = False
 
 LOOPING = False # defaults
 REPEAT = 1 # will repeat the entire sequence this many times, for looping videos
-EXPORT_GIF = True # if true, it will save still jpg and animated gif for each subfolder
+EXPORT_GIF = False # if true, it will save still jpg and animated gif for each subfolder
 STRICT_UNIQUE_IMAGE_PLACEMENT = False
 BLEND_END_TO_FIRST = True
 OFFSET_ON_BUILD = True
@@ -88,7 +88,7 @@ if GIF_USE_SMOOTH_MERGE_COUNT:
     GIF_FRAME_DELAY_MULTIPLIER = 1.0  # use the same frame delay as the smooth merge count
 
 # control if it limits work to just preview image creation. Only one of these can be true. skip video takes precedence
-GIF_SO_SKIP_VIDEO = True # if True, will skip the video merge and just do the GIF merge
+GIF_SO_SKIP_VIDEO = False # if True, will skip the video merge and just do the GIF merge
 GIF_SO_STOP_VIDEO_AFTER_JPG = False # if True, will stop the video merge after the first JPG is written
 
 singleton_skip_counts = {

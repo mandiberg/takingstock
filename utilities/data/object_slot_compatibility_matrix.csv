@@ -16,7 +16,7 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 14,2,0,0,0,0,0,0,0,bird
 15,2,0,0,0,0,0,0,1,cat
 16,2,0,0,0,0,0,0,1,dog
-17,2,0,0,0,0,0,0,0,horse
+17,1,0,0,0,0,0,2,0,horse
 18,2,0,0,0,0,0,0,0,sheep
 19,2,0,0,0,0,0,0,0,cow
 20,2,0,0,0,0,0,0,0,elephant
@@ -31,30 +31,30 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 29,2,0,0,0,0,0,0,0,frisbee
 30,2,0,0,0,0,0,0,2,skis
 31,2,0,0,0,0,0,0,2,snowboard
-32,2,1,1,1,0,1,1,2,sports ball
-33,2,0,0,2,0,0,0,2,kite
-34,2,0,0,1,0,2,1,1,baseball bat
-35,2,0,0,1,0,0,0,0,baseball glove
-36,2,0,0,1,0,0,0,2,skateboard
-37,2,0,0,0,0,0,0,2,surfboard
-38,2,0,0,1,0,1,0,1,tennis racket
-39,2,0,0,0,2,0,0,0,bottle
-40,2,0,0,0,2,0,0,0,wine glass
-41,2,0,0,0,2,0,1,0,cup
-42,2,1,1,1,2,1,1,0,fork
-43,2,1,1,1,2,1,1,0,knife
-44,2,1,1,1,2,1,1,0,spoon
-45,2,1,1,1,2,1,1,0,bowl
-46,2,1,1,1,2,1,1,0,banana
-47,2,1,1,1,2,1,1,0,apple
-48,2,1,1,1,2,1,1,0,sandwich
-49,2,1,1,1,2,1,1,0,orange
-50,2,1,1,1,2,1,1,0,brocolli
-51,2,1,1,1,2,1,1,0,carrot
-52,2,1,1,1,2,1,1,0,hot dog
-53,2,1,1,1,2,1,1,0,pizza
-54,2,1,1,1,2,1,1,0,donut
-55,2,1,1,1,2,1,1,0,cake
+32,2,0,0,0,0,0,0,2,sports ball
+33,2,0,0,1,0,0,0,2,kite
+34,2,0,0,0,0,1,0,0,baseball bat
+35,2,0,0,0,0,0,0,0,baseball glove
+36,2,0,0,0,0,0,0,2,skateboard
+37,2,0,0,0,0,0,0,1,surfboard
+38,2,0,0,0,0,1,0,0,tennis racket
+39,1,0,0,0,2,0,0,0,bottle
+40,1,0,0,0,2,0,0,0,wine glass
+41,1,0,0,0,2,0,1,0,cup
+42,2,0,0,1,2,0,0,0,fork
+43,2,0,0,1,2,0,0,0,knife
+44,2,0,0,1,2,0,0,0,spoon
+45,2,0,0,1,2,0,0,0,bowl
+46,2,0,0,1,2,0,0,0,banana
+47,2,0,0,1,2,0,0,0,apple
+48,2,0,0,1,2,0,0,0,sandwich
+49,2,0,0,1,2,0,0,0,orange
+50,2,0,0,1,2,0,0,0,brocolli
+51,2,0,0,1,2,0,0,0,carrot
+52,2,0,0,1,2,0,0,0,hot dog
+53,2,0,0,1,2,0,0,0,pizza
+54,2,0,0,1,2,0,0,0,donut
+55,2,0,0,1,2,0,0,0,cake
 56,0,0,0,0,0,0,2,1,chair
 57,0,0,0,0,0,0,2,1,couch
 58,2,0,0,0,0,0,0,1,potted plant
@@ -64,7 +64,7 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 62,2,0,0,0,0,0,1,1,tv
 63,2,0,0,0,1,0,1,1,laptop
 64,2,0,0,0,0,0,0,0,mouse
-65,2,1,1,1,0,0,1,0,remote
+65,2,0,0,1,0,0,1,0,remote
 66,2,0,0,1,0,0,1,0,keyboard
 67,2,0,0,1,1,1,2,1,cell phone
 68,2,0,0,0,0,0,0,0,microwave
@@ -85,10 +85,10 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 83,2,0,0,1,1,2,1,1,Bag
 84,2,0,0,1,0,1,2,0,valentine
 85,2,0,0,1,2,1,1,0,Salad
-86,2,0,0,1,1,2,1,1,Dumbbell
+86,2,0,0,0,0,1,1,0,Dumbbell
 87,2,0,0,0,2,1,1,0,rose
-88,1,0,0,0,1,0,2,0,Groceries
-89,2,0,0,0,1,1,0,0,mask
+88,1,0,0,0,0,0,2,0,Groceries
+89,2,0,0,0,0,1,1,0,mask
 90,0,0,0,0,1,2,1,0,Stethoscope
 91,2,0,0,0,0,1,0,0,Gun
 92,2,0,0,2,1,2,0,0,Headphones
@@ -107,18 +107,18 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 105,2,0,0,2,2,1,1,0,Daisy
 106,2,0,0,2,2,1,1,0,Daffodil
 107,2,0,0,2,2,1,1,0,Hydrangea
-108,2,0,0,0,0,1,1,1,Pistol
-109,2,0,0,0,0,1,1,1,Rifle
-110,2,0,0,0,2,1,1,0,Mask
-111,0,2,2,2,2,0,0,0,Facial
-112,0,2,2,2,2,0,0,0,Sheetmask
+108,2,0,0,0,0,1,1,0,Pistol
+109,2,0,0,0,0,1,1,0,Rifle
+110,1,0,0,0,2,0,0,0,Mask
+111,0,2,2,1,1,0,0,0,Facial
+112,0,2,2,1,1,0,0,0,Sheetmask
 113,0,2,2,0,0,0,0,0,Eyepatch
 114,0,1,1,2,0,0,0,0,Sleepmask
 115,0,2,2,1,0,0,0,0,Masquerade_mask
-116,2,2,2,1,2,0,0,0,Cucumber
-117,2,2,2,1,2,0,0,0,Kiwi
-118,2,2,2,1,2,0,0,0,Lemon_slice
-119,2,2,2,1,2,0,0,0,Avocado_half
+116,2,2,2,0,0,0,0,0,Cucumber
+117,2,2,2,0,0,0,0,0,Kiwi
+118,2,2,2,0,0,0,0,0,Lemon_slice
+119,2,2,2,0,0,0,0,0,Avocado_half
 120,0,0,0,0,0,0,0,0,None
 121,2,0,0,0,0,0,0,0,Cigarette
 122,2,0,0,0,0,0,0,0,Vape
@@ -140,3 +140,20 @@ class_id,hand,left_eye,right_eye,top_face,mouth,shoulder,waist,feet,class_name
 138,0,0,0,0,0,0,0,0,None
 139,2,0,0,0,0,0,1,0,Corded_phone
 140,2,0,0,0,0,0,0,0,Boxing_gloves
+141,2,0,0,0,0,0,0,2,Soccerball
+142,2,0,0,0,0,0,0,1,Basketball
+143,2,0,0,0,0,0,0,2,Football
+144,2,0,0,0,0,0,0,1,Volleyball
+145,2,0,0,0,0,0,0,1,Baseball
+146,2,0,0,0,0,0,0,1,Tennisball
+147,2,0,0,0,0,0,1,1,Weightball
+148,2,0,0,0,0,0,0,1,Discoball
+149,2,0,0,1,0,0,1,1,Beachball
+150,2,0,0,0,0,0,2,1,Yogaball
+151,1,0,0,0,0,0,1,2,Yogamat
+152,2,0,0,0,0,0,0,1,Golfball
+153,2,0,0,0,0,0,0,0,Tabletennisball
+154,2,0,0,0,0,0,0,0,Globe
+155,2,0,0,0,0,0,0,0,Dumbell
+156,2,0,0,0,0,1,0,0,Barbell
+157,2,0,0,0,0,0,0,0,Kettlebell

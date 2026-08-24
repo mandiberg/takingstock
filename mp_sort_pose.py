@@ -156,7 +156,7 @@ class SortPose:
         if image_edge_multiplier is None:
             if "body3D" in self.SORT_TYPE:
                 image_edge_multiplier = [5, 9, 13, 9]  # default values for body/hand sorting
-                image_edge_multiplier = [4, 8, 12, 8]  # when doing initial sort, so I can delete easily
+                # image_edge_multiplier = [4, 8, 12, 8]  # when doing initial sort, so I can delete easily
             else:
                 image_edge_multiplier = [1.5,2.6,2,2.6]  # default values if none provided
 

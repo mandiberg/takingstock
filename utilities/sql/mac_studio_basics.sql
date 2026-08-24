@@ -13,50 +13,6 @@ DELETE FROM ImagesObjectSignatures ;
 DELETE FROM ObjectSignatures ;
 
 
-SELECT COUNT(sh.image_id)
-FROM SegmentHelper_oct2025_every40 sh
-INNER JOIN SegmentHelper_T11_Oct20_COCO_Custom t on t.image_id = sh.image_id  
-;
--- 963574
-
--- Verify the changes
-DESCRIBE ImagesDetections;
-
-SELECT *
-FROM ImagesDetections 
-WHERE left_pointer_x != 0;
-
-SELECT *
-FROM ImagesDetections 
-WHERE both_hands_object_id  != 0
-OR left_hand_object_id  != 0;
-
-
-SELECT DISTINCT(s.image_id) , e.pitch, e.yaw, e.roll  ;
-
-SELECT COUNT(s.image_id)
-FROM SegmentBig_isface s  
-JOIN Encodings e ON s.image_id = e.image_id 
-INNER JOIN Detections h ON h.image_id = s.image_id  
-WHERE  e.is_dupe_of IS NULL
-AND e.two_noses IS NULL
-AND e.is_face = 1
-AND e.mongo_body_landmarks_norm = 1
-;
-
-SELECT COUNT(d.image_id)
-FROM Detections d 
-WHERE d.conf = -1
-;
-
-SELECT COUNT(d.image_id)
-FROM Detections d 
-WHERE d.bbox_norm IS NULL
-LIMIT 10
-;
-
-
-
 
 
 
