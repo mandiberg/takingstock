@@ -2,6 +2,7 @@ import os
 import shutil
 import re
 
+# use for siwin's dedupe script output
 ONLY_DUPES = False  # Set to True to only include files with "dupes" in the filename
 # BASE_FOLDER = "/Users/michaelmandiberg/Library/CloudStorage/Dropbox/Michael-Tench/deduped"  # Change this to your folder
 # DUPES_FILE = os.path.join(BASE_FOLDER, "dupes.sql")
