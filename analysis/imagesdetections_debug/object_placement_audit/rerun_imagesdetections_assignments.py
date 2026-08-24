@@ -7,12 +7,16 @@ ToolsClustering.process_detections_for_df, then rewrites ImagesDetections rows
 for only the requested helper-table image_ids.
 
 python analysis/imagesdetections_debug/object_placement_audit/rerun_imagesdetections_assignments.py \
-  --helper-table SegmentHelper_T0_sport \
+  --helper-table SegmentHelper_TheGym_object_fix151_20260821 \
   --output-root /Users/michaelmandiberg/Documents/GitHub/facemap/analysis/imagesdetections_debug/object_placement_audit \
   --skip-backup \
     --dry-run \
     --delete-chunk-size 2000 \
-  --find-checkpoint
+  --find-checkpoint \
+  --mongo-workers 16
+
+# use cleanup-checkpoint for the start of a fresh run
+  --cleanup-checkpoint
 
 At the start it will delete existing rows scoped to the helper table
 Then it creates new placements for those image_ids

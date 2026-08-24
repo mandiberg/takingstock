@@ -33,7 +33,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "T37_final_looping_video_source_files"
-FOLDER_NAME = "output_folder/_boards"
+FOLDER_NAME = "output_folder/_thegym_arms_600s_oneshot2"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -45,7 +45,7 @@ IS_CLUSTER = True
 PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = 120
+CROP_AFTER_COUNT = 80
 
 # if you borked the installation file, turn this on to JUST rebuilt it
 DO_INSTALLATION_ONLY = False

@@ -57,9 +57,9 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-# SegmentHelper_name = 'SegmentHelper_T3_player'
-# SegmentHelper_name = 'SegmentHelper_TheGym_object_fix_20260820'
-SegmentHelper_name = 'SegmentHelper_TheGym'
+# SegmentHelper_name = 'SegmentHelper_T45_nature'
+SegmentHelper_name = 'SegmentHelper_T0_sport'
+# SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
@@ -74,7 +74,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -106,8 +106,10 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_FULL_BODY_c157v3_full_list_oneshot" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_T0_sport_BB" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_FULL_BODY_c157v3_full_list_oneshot" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
+FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
 ENABLE_MODE0_TIMING = True
@@ -427,8 +429,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             GENERATE_FUSION_PAIRS = False 
 
             # use this to turn on multiplier CSV creation/augmentation
-            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
-            USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
+            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            USE_BIIIIIG_FULL_BODY_MULTIPLIER = True # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
+
+
+            # temp hack for T45 Nature
+            USE_POSE_CROP_DICT = True # override canonical multipliers for production
+            DO_ENRICH_IMAGE_METAS = False # don't bother getting topics/detections because it isn't used.
+            ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
@@ -1047,7 +1055,7 @@ cfg = {
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
-if FULL_BODY and USE_BIIIIIG_FULL_BODY_MULTIPLIER: sort.image_edge_multiplier = [5, 9, 13, 9]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
+if FULL_BODY and USE_BIIIIIG_FULL_BODY_MULTIPLIER: sort.image_edge_multiplier = [8, 11, 14, 11]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
 
 # Keep EXPAND background fill consistent with INPAINT_COLOR.
 if INPAINT_COLOR == "black":
@@ -4547,6 +4555,8 @@ def main():
 
     canonical_multiplier_registry = {}
     canonical_multiplier_csv_path = None
+    full_body_used_image_ids = set()
+    full_body_exclusion_enabled = False
 
     mode0_timing_enabled = ENABLE_MODE0_TIMING and MODE == 0
     mode0_run_start = time.perf_counter()
@@ -4717,6 +4727,98 @@ def main():
             return int(float(value))
         except (TypeError, ValueError):
             return None
+
+    def load_full_body_used_image_ids(csv_folder):
+        used_image_ids = set()
+        if not os.path.isdir(csv_folder):
+            print(
+                f"[FULL_BODY EXCLUDE] folder not found, skipping exclusion load: {csv_folder}"
+            )
+            return used_image_ids
+
+        csv_files = sorted(
+            [
+                name
+                for name in os.listdir(csv_folder)
+                if name.endswith(".csv") and name.startswith("df_sorted_")
+            ]
+        )
+        if not csv_files:
+            print(f"[FULL_BODY EXCLUDE] no df_sorted CSVs found in {csv_folder}")
+            return used_image_ids
+
+        cache_file = os.path.join(csv_folder, "full_body_used_image_ids.csv")
+        progress_every = 25
+
+        latest_source_mtime = 0.0
+        for csv_name in csv_files:
+            csv_path = os.path.join(csv_folder, csv_name)
+            try:
+                latest_source_mtime = max(latest_source_mtime, os.path.getmtime(csv_path))
+            except OSError:
+                continue
+
+        if os.path.exists(cache_file):
+            try:
+                cache_mtime = os.path.getmtime(cache_file)
+            except OSError:
+                cache_mtime = 0.0
+
+            if cache_mtime >= latest_source_mtime:
+                try:
+                    cached_df = pd.read_csv(cache_file, usecols=["image_id"])
+                    cached_ids = pd.to_numeric(cached_df["image_id"], errors="coerce").dropna().astype(int)
+                    used_image_ids = set(cached_ids.tolist())
+                    print(
+                        "[FULL_BODY EXCLUDE] loaded cache "
+                        f"{cache_file} with {len(used_image_ids)} unique image_ids"
+                    )
+                    return used_image_ids
+                except Exception as exc:
+                    print(f"[FULL_BODY EXCLUDE] cache read failed, rebuilding: {exc}")
+
+        print(
+            f"[FULL_BODY EXCLUDE] building cache from {len(csv_files)} CSVs in {csv_folder}"
+        )
+
+        readable_files = 0
+        for idx, csv_name in enumerate(csv_files, start=1):
+            csv_path = os.path.join(csv_folder, csv_name)
+            try:
+                ids_df = pd.read_csv(csv_path, usecols=["image_id"])
+            except ValueError:
+                print(
+                    f"[FULL_BODY EXCLUDE] skipping {csv_name}: missing image_id column"
+                )
+                continue
+            except Exception as exc:
+                print(f"[FULL_BODY EXCLUDE] failed reading {csv_name}: {exc}")
+                continue
+
+            parsed_ids = pd.to_numeric(ids_df["image_id"], errors="coerce").dropna()
+            if not parsed_ids.empty:
+                used_image_ids.update(parsed_ids.astype(int).tolist())
+            readable_files += 1
+            if idx % progress_every == 0 or idx == len(csv_files):
+                print(
+                    "[FULL_BODY EXCLUDE] progress "
+                    f"{idx}/{len(csv_files)} CSVs, current unique image_ids={len(used_image_ids)}"
+                )
+
+        cache_df = pd.DataFrame({"image_id": sorted(used_image_ids)})
+        cache_tmp = cache_file + ".tmp"
+        cache_df.to_csv(cache_tmp, index=False)
+        os.replace(cache_tmp, cache_file)
+        print(
+            "[FULL_BODY EXCLUDE] wrote cache "
+            f"{cache_file} with {len(used_image_ids)} unique image_ids"
+        )
+
+        print(
+            "[FULL_BODY EXCLUDE] loaded "
+            f"{len(used_image_ids)} unique image_ids from {readable_files}/{len(csv_files)} CSVs"
+        )
+        return used_image_ids
 
     def should_use_canonical_multiplier_registry():
         return MODE == 1 and CLUSTER_TYPE in ("ArmsPoses3D_ObjectFusion", "BodyPoses3D_ObjectFusion")
@@ -5300,6 +5402,24 @@ def main():
                     sys.exit()
                 return
 
+            if full_body_exclusion_enabled and full_body_used_image_ids:
+                before_exclusion_count = len(df.index)
+                image_ids = pd.to_numeric(df["image_id"], errors="coerce")
+                df = df.loc[~image_ids.isin(full_body_used_image_ids)].copy()
+                excluded_count = before_exclusion_count - len(df.index)
+                if excluded_count > 0:
+                    print(
+                        "[FULL_BODY EXCLUDE] filtered "
+                        f"{excluded_count} rows from cluster={this_cluster} topic={this_topic}; "
+                        f"remaining={len(df.index)}"
+                    )
+                if df.empty:
+                    print(
+                        "[FULL_BODY EXCLUDE] all rows removed for "
+                        f"cluster={this_cluster} topic={this_topic}; skipping"
+                    )
+                    return
+
             is_fusion_sort = (
                 SORT_TYPE == "object_fusion"
                 or ("fusion" in SORT_TYPE)
@@ -5756,6 +5876,10 @@ def main():
         save_images_from_csv_folder()
 
     else:
+        full_body_exclusion_enabled = MODE == 0 and not FULL_BODY
+        if full_body_exclusion_enabled:
+            full_body_used_image_ids = load_full_body_used_image_ids(FULL_BODY_CSV_FOLDER)
+
         # mode zero (and 2, though 2 isn't really functional
         first_loop = this_topic = this_cluster = n_cluster_topics = second_cluster_topic = None
 

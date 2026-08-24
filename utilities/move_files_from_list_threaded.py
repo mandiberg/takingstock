@@ -43,7 +43,7 @@ IS_SSD =True  # if True it will use the SSD path, if False it will use the RAID 
 
 VERBOSE = False  
 # set origin before constructing io
-ORIGIN_SSD = "/Volumes/OWC52/segment_images_86_dumbbell"
+ORIGIN_SSD = "/Volumes/OWC52/segment_images_32_sportsball"
 # ORIGIN_SSD = "/Volumes/LaCie/output_folder"
 # ORIGIN_SSD = "/Volumes/RAID18/is_not_face18"
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
@@ -64,8 +64,8 @@ ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segme
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
 # DEST = "/Volumes/OWC5/segment_images_newbigx"  # for testing
-DEST = "/Volumes/OWC52/segment_images_thegym_intersect_86dumbbell"  # for testing
-# DEST = "/Volumes/LaCie/output_folder_exclude"  # 250k for headphones
+# DEST = "/Volumes/OWC52/segment_images_thegym_intersect_86dumbbell"  # for testing
+DEST = "/Volumes/LaCie/segment_images_thegym"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder

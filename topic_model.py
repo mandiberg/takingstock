@@ -44,7 +44,7 @@ import nltk
 from gensim import corpora, models
 from pprint import pprint
 
-#nltk.download('wordnet') ##only first time
+# nltk.download('wordnet') ##only first time
 
 # MM you need to use conda activate gensim311 
 
@@ -73,7 +73,7 @@ options = ['Make Dictionary and BoW Corpus','Model topics', 'Index topics','calc
 io = DataIO()
 db = io.db
 io.db["name"] = "stock"
-io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/facemap/model_files"
+io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/takingstock/model_files"
 
 # Satyam, you want to set this to False
 USE_SEGMENT = True # only used for indexing
@@ -87,7 +87,7 @@ VERBOSE = True
 RANDOM = False # selects random image_ids from the DB. not tested. maybe runs very slow. 
 global_counter = 0
 QUERY_LIMIT = 1000
-QUERY_START_COUNTER = 0 # only used in write image topics
+QUERY_START_COUNTER = 119500000 # only used in write image topics
 ANGLE = 1 # controls x/y face angle in +/-, set to 9 for building the full model, then indexed
 MIN_TOKEN_LENGTH = 2 # minimum token length for the model
 
@@ -119,7 +119,7 @@ def read_csv(file_path):
 
 if IS_AFFECT:
     # load ALL keys
-    ALL_KEYWORDS = read_csv("/Users/michaelmandiberg/Documents/GitHub/facemap/utilities/keys/Keywords_202408151415.csv")
+    ALL_KEYWORDS = read_csv("/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/keys/Keywords_202408151415.csv")
     # load only affect keys
     AFFECT_CSV = os.path.join(io.ROOT, "go_words_affect_april2025.csv")
     # make a list of the values in the third column
