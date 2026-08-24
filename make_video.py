@@ -57,8 +57,8 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-# SegmentHelper_name = 'SegmentHelper_T45_nature'
-SegmentHelper_name = 'SegmentHelper_T0_sport'
+SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T0_sport'
 # SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
@@ -105,8 +105,9 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_T0_sport_BB" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+# CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
+CSV_MAIN_FOLDER = "/Volumes/LaCie"
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_T45_60test" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_FULL_BODY_c157v3_full_list_oneshot" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
@@ -1055,7 +1056,7 @@ cfg = {
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
-if FULL_BODY and USE_BIIIIIG_FULL_BODY_MULTIPLIER: sort.image_edge_multiplier = [8, 11, 14, 11]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
+if USE_BIIIIIG_FULL_BODY_MULTIPLIER: sort.image_edge_multiplier = [8, 11, 14, 11]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
 
 # Keep EXPAND background fill consistent with INPAINT_COLOR.
 if INPAINT_COLOR == "black":
@@ -4089,7 +4090,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """
     cluster_no = _mode1_normalize_token(cluster_no)
     pose_no = _mode1_normalize_token(pose_no)
-    use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
+    use_pose_crop = bool(USE_POSE_CROP_DICT and (pose_no is not None or cluster_no is not None))
     canonical_multiplier = None
     learned_record = None
     if not use_pose_crop:
@@ -4101,14 +4102,21 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
             f"for arms={cluster_no} object_signature={pose_no}: {sort.image_edge_multiplier}"
         )
     elif use_pose_crop:
-        print(f"Using POSE_CROP_DICT for pose_no={pose_no} cluster_no={cluster_no}")
-        if DO_SMALL_CLUSTER_FUSION_BUCKET:
-            # for small clusters, cluster is -1, so dict is keyed to pose_no
-            crop_key = POSE_CROP_DICT.get(pose_no, "sq_default")
+        if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
+            sort.image_edge_multiplier = [8, 11, 14, 11]
+            print(
+                f"Using BIG_FULL_BODY_MULTIPLIER override for pose_no={pose_no} cluster_no={cluster_no}: "
+                f"{sort.image_edge_multiplier}"
+            )
         else:
-            crop_key = POSE_CROP_DICT.get(cluster_no, "sq_default")
-        sort.image_edge_multiplier = resolve_multiplier(crop_key)
-        print(f"POSE_CROP_DICT multiplier for pose_no={pose_no} cluster_no={cluster_no}: {sort.image_edge_multiplier}")
+            print(f"Using POSE_CROP_DICT for pose_no={pose_no} cluster_no={cluster_no}")
+            if DO_SMALL_CLUSTER_FUSION_BUCKET:
+                # for small clusters, cluster is -1, so dict is keyed to pose_no
+                crop_key = POSE_CROP_DICT.get(pose_no, "sq_default")
+            else:
+                crop_key = POSE_CROP_DICT.get(cluster_no, "sq_default")
+            sort.image_edge_multiplier = resolve_multiplier(crop_key)
+            print(f"POSE_CROP_DICT multiplier for pose_no={pose_no} cluster_no={cluster_no}: {sort.image_edge_multiplier}")
     elif cluster_no is not None and USE_FUSION_PAIR_DICT and not FORCE_CANONICAL_MULT_CREATION:
         print(f"Using FUSION_PAIR_DICT for cluster_no={cluster_no} pose_no={pose_no}")
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
@@ -4728,6 +4736,29 @@ def main():
         except (TypeError, ValueError):
             return None
 
+    def resolve_pose_crop_key(cluster_no, pose_no):
+        if cluster_no is None and pose_no is None:
+            return "sq_default"
+
+        candidates = []
+        if DO_SMALL_CLUSTER_FUSION_BUCKET:
+            candidates.extend([pose_no, cluster_no])
+        else:
+            candidates.extend([cluster_no, pose_no])
+
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            if POSE_CROP_DICT is None:
+                continue
+            value = POSE_CROP_DICT.get(candidate)
+            if value is not None:
+                return value
+
+        if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
+            return "1x1_BIGHACK_5_9_13_9"
+        return "sq_default"
+
     def load_full_body_used_image_ids(csv_folder):
         used_image_ids = set()
         if not os.path.isdir(csv_folder):
@@ -5231,7 +5262,7 @@ def main():
         print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
         cluster_no = normalize_cluster_token(cluster_no)
         pose_no = normalize_cluster_token(pose_no)
-        use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
+        use_pose_crop = bool(USE_POSE_CROP_DICT and (pose_no is not None or cluster_no is not None))
 
         canonical_multiplier = None
         if not use_pose_crop:
@@ -5249,10 +5280,20 @@ def main():
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if canonical_multiplier is None and use_pose_crop:
-            print("using pose_no to set image_edge_multiplier", pose_no)
-            pose_type = POSE_CROP_DICT.get(cluster_no, "sq_default")
-            sort.image_edge_multiplier = resolve_multiplier(POSE_CROP_DICT.get(cluster_no, "sq_default"))
-            if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
+            if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
+                sort.image_edge_multiplier = [8, 11, 14, 11]
+                print(
+                    f"using BIG_FULL_BODY_MULTIPLIER override cluster_no={cluster_no} pose_no={pose_no} "
+                    f"-> {sort.image_edge_multiplier}"
+                )
+            else:
+                crop_key = resolve_pose_crop_key(cluster_no, pose_no)
+                print(
+                    f"using pose crop lookup cluster_no={cluster_no} pose_no={pose_no} "
+                    f"resolved_key={crop_key}"
+                )
+                sort.image_edge_multiplier = resolve_multiplier(crop_key)
+                if VERBOSE: print(f"using crop lookup on {cluster_no}/{pose_no}; POSE_CROP_DICT value {crop_key} -> {sort.image_edge_multiplier}")
         elif canonical_multiplier is None and cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
             print("using cluster_no to set image_edge_multiplier", cluster_no)
             # for ArmsPoses etc

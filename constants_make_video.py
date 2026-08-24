@@ -257,7 +257,7 @@ MULTIPLIER_DICT = {
     "sq_armsup_gunshow": [3.5,3.5,3.5,3.5], # 10 arms raised and gunshow 2025
     "2x3_xwide_shruggie": [1.5,3.75,3.5,3.75], # 12 extra wide 2x3 landscape (shruggie "why" pose)
 
-    "1x1_BIGHACK_5_9_13_9": [5,9.13,9], # Hack to reproduce the existing size for prints
+    "1x1_BIGHACK_5_9_13_9": [5,9,13,9], # Hack to reproduce the existing size for prints
 }
 
 # Phase 1 compat: keep legacy index IDs alive while migrating to semantic keys.
