@@ -1,10 +1,15 @@
 import os
 import shutil
 
-GOOD_IMAGES = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/dumbell_sort/exclude/labels"
-FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/dumbell_sort/86_dumbbell/images"
-NESTED_FOLDERS = False
+# folder to ls to get the UIDs for files to move
+GOOD_IMAGES = "/Users/michaelmandiberg/Documents/yolo/remove_these"
+# folder to move files in - should point to specific images or labels folder
+FOLDER = "/Users/michaelmandiberg/Documents/yolo/Final_Batch/images"
+FOLDER = "/Users/michaelmandiberg/Documents/yolo/Final_Batch/labels"
+NESTED_FOLDERS = False  
 ACCEPT_TEXT = True
+UNIFY_FOLDERS = True
+DRY_RUN = False  # Set to True to simulate the file moving without actually performing it
 # print(f"GOOD_IMAGES: {GOOD_IMAGES}")
 
 
@@ -35,8 +40,10 @@ print(f"Loaded {len(GOOD_IDS)} good image IDs from {GOOD_IMAGES}")
 if not NESTED_FOLDERS:
     NEW_FOLDER = os.path.join(FOLDER, "good_ids")
     os.makedirs(NEW_FOLDER, exist_ok=True)
+    print(f"about to load FOLDER:", FOLDER)
+    files = load_files_from_folder(FOLDER)
+    print(f"looking through this many files:", len(files))
     for uid in GOOD_IDS:
-        files = load_files_from_folder(FOLDER)
         for filename in files:
             if str(uid) in filename:
                 new_path = os.path.join(NEW_FOLDER, os.path.basename(filename))
@@ -45,7 +52,10 @@ else:
     # if folder contains folders, walk through them and do the same thing
     for root, dirs, files in os.walk(FOLDER):
         for dir in dirs:
-            this_new_folder = os.path.join(FOLDER,dir, "good_ids")
+            if UNIFY_FOLDERS:
+                this_new_folder = os.path.join(FOLDER, "good_ids")
+            else:
+                this_new_folder = os.path.join(FOLDER,dir, "good_ids")
             os.makedirs(this_new_folder, exist_ok=True)
 
             dir_path = os.path.join(root, dir)
@@ -55,7 +65,8 @@ else:
                     if str(uid) in filename:
                         new_path = os.path.join(FOLDER, this_new_folder, os.path.basename(filename))
                         print(f"Moving {filename} to {new_path}")
-                        # try:
-                        #     os.rename(filename, new_path)
-                        # except OSError as e:
-                        #     print(f"Error occurred while moving {filename}: {e}")
+                        if not DRY_RUN:
+                            try:
+                                os.rename(filename, new_path)
+                            except OSError as e:
+                                print(f"Error occurred while moving {filename}: {e}")

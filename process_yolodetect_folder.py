@@ -12,20 +12,21 @@ io = DataIO()
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 print("Using device:", device)
-yolo_custom_model = YOLO("models/takingstock_flatstuff_c5_v3_yolo26x/weights/best.pt").to(device)
+yolo_custom_model = YOLO("models/takingstock_weights_v1_yolo26x/weights/best.pt").to(device)
 yolo_model = YOLO('yolov8x.pt')  # Options: yolo26n.pt, yolo26s.pt, yolo26m.pt, yolo26x-objv1-150.pt
 
 print(yolo_custom_model.names)
 
 yolo = YOLOTools(DEBUGGING=True)
 
-
-# exit()
+# control whether we are doing COCO vs Custom
+DO_COCO_DETECTIONS = False
+DO_CUSTOM_DETECTIONS = True
 
 # Configuration
 DEBUGGING = True
 # FILE_FOLDER = "/Volumes/OWC5/segment_images_91_gun/guns_unprocessed_mar5"
-FILE_FOLDER = "/Users/michaelmandiberg/Documents/YOLO_Training_Data/sorted_images_reprocess/flowers_only"
+FILE_FOLDER = "/Users/michaelmandiberg/Documents/yolo/sorted_images_balls_yoga/misc_balls_detect_round1"
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
 INPUT_IMAGES_FOLDER = os.path.join(FILE_FOLDER, "images")
 INPUT_LABELS_FOLDER = os.path.join(FILE_FOLDER, "labels")
@@ -51,7 +52,7 @@ NEW_CLASSES_TO_ADD = None
 
 # Deterministic suppression for predicted boxes against existing labels
 # of the same class.
-IOU_SAME_CLASS_THRESHOLD = 0.65
+IOU_SAME_CLASS_THRESHOLD = 0.99
 USE_CENTER_DISTANCE_CHECK = True
 CENTER_DIST_THRESHOLD_NORM = 0.05
 
@@ -118,26 +119,23 @@ CLASSES_TO_COMBINE = [89, 90]  # merge these classes onto one label, and draw th
 
 
 # flatstuff
-custom_ids_to_global_dict = {
-  0: 124,
-  1: 127,
-  2: 93,
+# custom_ids_to_global_dict = {
+  # 0: 124,
+#   1: 127,
+#   2: 93,
 #   3: 133,
 #   4: 137,
-}
-
-
-{0: '124_Tablet', 1: '127_calculator', 2: '93_clipboard', 3: '136_Laptop', 4: '137_Phone_handheld'}
-
-# # flatstuff
-# custom_ids_to_global_dict = {
-#   0: 124,
-#   1: 135,
-#   2: 134,
-#   3: 133,
-#   4: 136,
-#   5: 137,
 # }
+
+
+# {0: '124_Tablet', 1: '127_calculator', 2: '93_clipboard', 3: '136_Laptop', 4: '137_Phone_handheld'}
+
+# weights
+custom_ids_to_global_dict = {
+  0: 155,
+  1: 156,
+  2: 157,
+}
 
 # {0: '124_Tablet', 1: '135_Computer_monitor', 2: '134_Book', 3: '133_Remote_control', 4: '136_Laptop', 5: '137_Phone_handheld'}
 
@@ -151,6 +149,56 @@ COCO_ids_to_global_dict = {
   67: 137,
   73: 123,
 }
+
+
+# # # # complete 45 class model
+# custom_ids_to_global_dict = {
+#     0: 109,
+#     1: 89,
+#     2: 133,
+#     3: 117,
+#     4: 113,
+#     5: 108,
+#     6: 124,
+#     7: 100,
+#     8: 116,
+#     9: 135,
+#     10: 114,
+#     11: 88,
+#     12: 112,
+#     13: 118,
+#     14: 90,
+#     15: 87,
+#     16: 92,
+#     17: 107,
+#     18: 127,
+#     19: 84,
+#     20: 97,
+#     21: 83,
+#     22: 81,
+#     23: 104,
+#     24: 82,
+#     25: 98,
+#     26: 94,
+#     27: 95,
+#     28: 93,
+#     29: 123,
+#     30: 86,
+#     31: 132,
+#     32: 119,
+#     33: 106,
+#     34: 80,
+#     35: 102,
+#     36: 110,
+#     37: 96,
+#     38: 101,
+#     39: 99,
+#     40: 105,
+#     41: 103,
+#     42: 115,
+#     43: 111,
+#     44: 137
+# }
 
 
 
@@ -303,7 +351,9 @@ def merge_existing_and_predictions(existing_labels, predicted_labels):
 
     for pred_idx, pred in enumerate(predicted_labels):
         pred_class = pred["class_id"]
+#         print(f"pred_class is {pred_class}")
         if pred_class not in NEW_CLASSES_TO_ADD:
+#             print(f"oops, not in {NEW_CLASSES_TO_ADD}")
             continue
 
         # Protected existing classes (money/credit-card) always overrule
@@ -386,22 +436,29 @@ def main():
 
         image_id = image_id_from_filename(img_name)
         result = type('obj', (object,), {'image_id': image_id, 'imagename': img_name, 'bbox': '{}'})
-        coco_detections = do_yolo_detections(
-            result,
-            image,
-            image_path,
-            yolo_model,
-            COCO_ids_to_global_dict,
-            model_name="COCO",
-        )
-        custom_detections = do_yolo_detections(
-            result,
-            image,
-            image_path,
-            yolo_custom_model,
-            custom_ids_to_global_dict,
-            model_name="custom",
-        )
+        if DO_COCO_DETECTIONS:
+            coco_detections = do_yolo_detections(
+                result,
+                image,
+                image_path,
+                yolo_model,
+                COCO_ids_to_global_dict,
+                model_name="COCO",
+            )
+        else:
+            coco_detections = []
+
+        if DO_CUSTOM_DETECTIONS:
+            custom_detections = do_yolo_detections(
+                result,
+                image,
+                image_path,
+                yolo_custom_model,
+                custom_ids_to_global_dict,
+                model_name="custom",
+            )
+        else:
+            custom_detections = []
         combined_detections = coco_detections + custom_detections
 
         rel_no_ext = os.path.splitext(rel_image_path)[0]

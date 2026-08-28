@@ -94,16 +94,6 @@ class ImagesArmsPoses3D(Base):
 VERBOSE = True
 yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 
-# MAIN MODE SWITCH
-MODES = {1:"custom45", 2: "thegym", 3: "something_new"}
-# custom 45 is the main custom model. COCO is turned on for that. it skips existing detections/placements
-# thegym is just the yoga/balls/weights. COCO is off, and it reruns EVERYTHING including nodetections
-MODE_CHOICE = 1
-MODE_NAME = MODES[MODE_CHOICE]
-
-# first gym detection: 221696705
-
-
 if not SALVAGE_HSV_MODE:
     openai_client = OpenAI(
         # defaults to os.environ.get("OPENAI_API_KEY")
@@ -117,13 +107,9 @@ if not SALVAGE_HSV_MODE:
 
     device = "mps" if torch.backends.mps.is_available() else "cpu"
     print("Using device:", device)
-    yolo_model = YOLO("yolo26x.pt").to(device)  # load a pretrained YOLOv8x model
-    if MODE_NAME == "custom45":
-        yolo_custom_model = YOLO("models/takingstock_c45_h200_4x_yolo26x/weights/best.pt").to(device)
-    elif MODE_NAME == "thegym":
-        yolo_custom_model = YOLO("models/takingstock_thegym_yolo26x/weights/best.pt").to(device)
-    elif MODE_NAME == "something_new":
-        pass
+    yolo_model = YOLO("yolov8x.pt").to(device)  # load a pretrained YOLOv8x model
+    yolo_custom_model = YOLO("models/takingstock_thegym_yolo26x/weights/best.pt").to(device)
+#     yolo_custom_model = YOLO("models/takingstock_c45_h200_4x_yolo26x/weights/best.pt").to(device)
     ocr = OCRTools(DEBUGGING=True)
 else:
     openai_client = None
@@ -144,54 +130,27 @@ if not SALVAGE_HSV_MODE:
 # exit()
 
 blank = False
-if MODE_NAME == "somehing_new":
-    # testing/output mode for model building/testing
-    DEBUGGING = True # saves debug images (option for bboxes drawn)
-    SAVE_NEW_LABELS = True # saves new yolo labels to feed back into training data
-    IS_SAVE_UNDETECTED = True # saves images with no detections
-    TESTING_NO_DB_WRITE = True # if True, will not write to database
-else:
-    DEBUGGING = False # saves debug images (option for bboxes drawn)
-    SAVE_NEW_LABELS = False # saves new yolo labels to feed back into training data
-    IS_SAVE_UNDETECTED = False # saves images with no detections
-    TESTING_NO_DB_WRITE = False # if True, will not write to database
-
-if MODE_NAME == "custom45": DO_COCO = True
-else: DO_COCO = False
+DEBUGGING = True # saves debug images (option for bboxes drawn)
+SAVE_NEW_LABELS = True # saves new yolo labels to feed back into training data -- also skips HSV clustering
+IS_SAVE_UNDETECTED = False # saves images with no detections
+TESTING_NO_DB_WRITE = True # if True, will not write to database
+DO_COCO = False
 DO_CUSTOM = True
 DO_OCR = False
 CLASSES_TO_COMBINE = [89,90]
 
-if MODE_NAME == "custom45": 
-    # False means reruns skip images that already have detections/no-detections state.
-    # True overrides the ignore and threshold below and does all of them
-    # the Ignore settings below modify this behavior subtly
-    OVERWRITE_EXISTING_DETECTIONS_COCO = False
-    OVERWRITE_EXISTING_DETECTIONS_CUSTOM = False
+# False means reruns skip images that already have detections/no-detections state.
+# True overrides the ignore and threshold below and does all of them
+OVERWRITE_EXISTING_DETECTIONS_COCO = True # changed this july 25 for testing
+OVERWRITE_EXISTING_DETECTIONS_CUSTOM = False
 
-    # Only factor if the above is False
-    # False means custom no-detections are treated as complete and skipped on reruns.
-    IGNORE_EXISTING_NO_DETECTIONS = True
-    # this is set up to exclude anything that has already been placed in an object signature
-    # EXCEPT for the p1 Nones, and the very common phone, tie, etc. I'm not 100% sure why those are added
-    # the effect of this is to make it so it only looks at new ones, o
-    EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = [1,58,15,7,25,113]
-    new_excludes = [i for i in range(4000) if i not in [1,58,15,7,25,113]]
-    EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = new_excludes
-
-    # FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_93" 
-    FILE_FOLDER = "/Volumes/OWC52/segment_images_80_sign"
-    # FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
-
-else:
-    # rerun everything, don't skip anything -- especially bc these won't have signatures yet.
-    OVERWRITE_EXISTING_DETECTIONS_COCO = True
-    OVERWRITE_EXISTING_DETECTIONS_CUSTOM = True
-    IGNORE_EXISTING_NO_DETECTIONS = False
-    EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = []
-
-    FILE_FOLDER = "/Volumes/OWC52/segment_images_32_sportsball"
-
+# Only factor if the above is False
+# False means custom no-detections are treated as complete and skipped on reruns.
+IGNORE_EXISTING_NO_DETECTIONS = True
+# excludes any with an existing ObjectSignature = 1
+EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = [1,58,15,7,25,113]
+new_excludes = [i for i in range(4000) if i not in [1,58,15,7,25,113]]
+EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = new_excludes
 # redo any detection below this threshold
 DET_ID_THRESHOLD_CUSTOM = 139180213 # last reset after c45 on TheOffice
 DET_ID_THRESHOLD_COCO = 12455146 # last reset was with c45, should continue with this (restarted at shutterstock B/BE)
@@ -214,6 +173,10 @@ if WRITE_NEW_OR_UPDATED_DETECTION_IDS_TABLE:
 IOU_THRESHOLD = 0.7
 ADJACENCY_THRESHOLD_PX = 10
 
+# FILE_FOLDER = "/Volumes/OWC52/segment_images_sOWC4" #halfway through
+# FILE_FOLDER = "/Volumes/OWC52/segment_images_thegym_yoga_surf_poses" 
+# FILE_FOLDER = "/Users/michaelmandiberg/Documents/yolo/segment_images_decoys"
+FILE_FOLDER = "/Volumes/LaCie/segment_images_thegym" # must be a folder holding the site folder(s)
 # MAKE_VIDEO_CSVS_PATH = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/book_csvs"
 MAKE_VIDEO_CSVS_PATH = None  # to process all images in folder
 OUTPUT_FOLDER = os.path.join(FILE_FOLDER, "test_output")
@@ -224,7 +187,7 @@ else: IMAGE_LOAD_WORKERS = 8  # concurrent cv2.imread workers before each YOLO b
 SALVAGE_QUERY_BATCH = _argv_int("--salvage-batch", 10000)
 SALVAGE_LOAD_WORKERS = _argv_int("--salvage-load-workers", IMAGE_LOAD_WORKERS)
 SALVAGE_REPORT_CLASS_ID = _argv_int("--report-class-id", 27)
-CONF_THRESHOLD = 0.40
+CONF_THRESHOLD = 0.10
 IS_DRAW_BOX = True
 MOVE_OR_COPY = "copy"  # "move" or "copy"
 CLUSTER_TYPE = "HSV" # only works with cluster save, not with assignment
@@ -232,93 +195,156 @@ META = False # to return the meta clusters (out of 23, not 96)
 cl = ToolsClustering(CLUSTER_TYPE, VERBOSE=VERBOSE)
 table_cluster_type = cl.set_table_cluster_type(META)
 
+# custom_ids_to_global_dict = {
+#   0: 89,
+#   1: 90,
+#   2: 92,
+#   3: 84,
+# }
+
+# full class
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 88,
+#   2: 97,
+#   3: 83,
+#   4: 81,
+#   5: 82,
+#   6: 98,
+#   7: 94,
+#   8: 95,
+#   9: 86,
+#   10: 80,
+#   11: 102,
+#   12: 96,
+#   13: 101,
+#   14: 99,
+#   15: 103
+
+# }
+
+# flowers 11 class
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 107,
+#   2: 97,
+#   3: 104,
+#   4: 98,
+#   5: 106,
+#   6: 102,
+#   7: 101,
+#   8: 99,
+#   9: 105,
+#   10: 103
+# }
+
+# # masks class
+# custom_ids_to_global_dict = {
+#   0: 117,
+#   1: 113,
+#   2: 116,
+#   3: 114,
+#   4: 112,
+#   5: 118,
+#   6: 119,
+#   7: 110,
+#   8: 115,
+#   9: 111,
+# }
 
 # flags 230 class
 # custom_ids_to_global_dict = {i:i for i in range(228)} # for testing, map custom ids to same global ids
 
-if MODE_NAME == "custom45":
-    # # # complete 45 class model
-    custom_ids_to_global_dict = {
-        0: 109,
-        1: 89,
-        2: 133,
-        3: 117,
-        4: 113,
-        5: 108,
-        6: 124,
-        7: 100,
-        8: 116,
-        9: 135,
-        10: 114,
-        11: 88,
-        12: 112,
-        13: 118,
-        14: 90,
-        15: 87,
-        16: 92,
-        17: 107,
-        18: 127,
-        19: 84,
-        20: 97,
-        21: 83,
-        22: 81,
-        23: 104,
-        24: 82,
-        25: 98,
-        26: 94,
-        27: 95,
-        28: 93,
-        29: 123,
-        30: 86,
-        31: 132,
-        32: 119,
-        33: 106,
-        34: 80,
-        35: 102,
-        36: 110,
-        37: 96,
-        38: 101,
-        39: 99,
-        40: 105,
-        41: 103,
-        42: 115,
-        43: 111,
-        44: 137
-    }
-
-elif MODE_NAME == "thegym":
-    ## balls and yoga and weights
-    custom_ids_to_global_dict = {
-        0: 152,
-        1: 155,
-        2: 143,
-        3: 146,
-        4: 155,
-        5: 142,
-        6: 141,
-        7: 154,
-        8: 151,
-        9: 145,
-        10: 147,
-        11: 144,
-        12: 155,
-        13: 149,
-        14: 153,
-        15: 150,
-        16: 156,
-        17: 140,
-        18: 148,
-        19: 157,
-
-    }
-
-else:
-    # empty for new developpment mode
-    custom_ids_to_global_dict = {
+# # # complete 4# 5 class model
+# custom_ids_to_global_dict = {
+#     0: 109,
+#     1: 89,
+#     2: 133,
+#     3: 117,
+#     4: 113,
+#     5: 108,
+#     6: 124,
+#     7: 100,
+#     8: 116,
+#     9: 135,
+#     10: 114,
+#     11: 88,
+#     12: 112,
+#     13: 118,
+#     14: 90,
+#     15: 87,
+#     16: 92,
+#     17: 107,
+#     18: 127,
+#     19: 84,
+#     20: 97,
+#     21: 83,
+#     22: 81,
+#     23: 104,
+#     24: 82,
+#     25: 98,
+#     26: 94,
+#     27: 95,
+#     28: 93,
+#     29: 123,
+#     30: 86,
+#     31: 132,
+#     32: 119,
+#     33: 106,
+#     34: 80,
+#     35: 102,
+#     36: 110,
+#     37: 96,
+#     38: 101,
+#     39: 99,
+#     40: 105,
+#     41: 103,
+#     42: 115,
+#     43: 111,
+#     44: 137
+# }
 
 
-    }
+## balls and yoga
+custom_ids_to_global_dict = {
+	  0: 152,
+	  1: 155,
+	  2: 143,
+	  3: 146,
+	  4: 155,
+	  5: 142,
+	  6: 141,
+	  7: 154,
+	  8: 151,
+	  9: 145,
+	  10: 147,
+	  11: 144,
+	  12: 155,
+	  13: 149,
+	  14: 153,
+	  15: 150,
+	  16: 156,
+	  17: 140,
+	  18: 148,
+	  19: 157,
 
+}
+
+
+
+
+# custom_ids_to_global_dict = {
+#     0: 85,
+# }
+
+# custom_ids_to_global_dict = {
+#   0: 100,
+#   1: 97,
+#   2: 83,
+#   3: 81,
+#   4: 86,
+#   5: 103,
+# }
 Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters = cl.construct_table_classes(table_cluster_type)
 this_cluster, this_crosswalk = cl.set_cluster_metacluster(Clusters, ImagesClusters, MetaClusters, ClustersMetaClusters)
 meta_cluster_dict = cl.get_meta_cluster_dict(session, ClustersMetaClusters)
@@ -549,7 +575,7 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     if custom:
         unrefined_detect_results = yolo.map_custom_ids_to_global(unrefined_detect_results, custom_ids_to_global_dict)
     detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=IOU_THRESHOLD, adjacency_threshold_px=ADJACENCY_THRESHOLD_PX)
-    detect_results = assign_hsv_detect_results(detect_results, image)
+    if not SAVE_NEW_LABELS: detect_results = assign_hsv_detect_results(detect_results, image)
     if VERBOSE: print(f"Image {image_id} - YOLO detections: {detect_results}")
     class_ids = [det.get('class_id') for det in detect_results if det.get('class_id') is not None]
     if bool(class_ids):

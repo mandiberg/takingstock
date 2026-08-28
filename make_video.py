@@ -57,9 +57,9 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-# SegmentHelper_name = 'SegmentHelper_T3_player'
+SegmentHelper_name = 'SegmentHelper_T45_nature'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-SegmentHelper_name = 'SegmentHelper_TheGym'
+# SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
@@ -74,7 +74,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 12  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -105,9 +105,12 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_known_good_fulllength" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+# CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
+CSV_MAIN_FOLDER = "/Volumes/LaCie"
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_T45_60test" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_FULL_BODY_c157v3_full_list_oneshot" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
+FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
 ENABLE_MODE0_TIMING = True
@@ -128,7 +131,7 @@ def resolve_arms_object_fusion_folder(
 ):
     pattern = os.path.join(
         root_data_path,
-        f"heft_ArmsPoses3D_{arms_cluster_dim}_ObjectFusion_*",
+        f"heft_{matrix_family}_{arms_cluster_dim}_ObjectFusion_*",
         "fusion_manifest.json",
     )
     manifest_paths = glob.glob(pattern)
@@ -146,6 +149,7 @@ def resolve_arms_object_fusion_folder(
 
     matching_manifests = []
     for manifest_path in manifest_paths:
+        print(f"opening {manifest_path}")
         with open(manifest_path, "r", encoding="utf-8") as manifest_file:
             manifest = json.load(manifest_file)
 
@@ -311,7 +315,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    
+    FULL_BODY = True
+    if FULL_BODY: matrix_family = "BodyPoses3D" 
+    else: matrix_family = "ArmsPoses3D"
+
     # turning off face pair testing, as it was misbehaving
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
@@ -335,10 +342,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # USE_HSV = True
 
     # current obj sort
-    CLUSTER_TYPE = "ArmsPoses3D_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
+    CLUSTER_TYPE = f"{matrix_family}_ObjectFusion"  # TEST: new Arms/ObjectFusion mode
     SORT_TYPE = "object_fusion" # for ArmsPoses3D_ObjectFusion keep SORT_TYPE as object_fusion
     SORT_TYPE_NONEOBJECT = "object_fusion" # sort used when pose_no is in OBJECT_NONE_CLUSTERS
     USE_HSV = False
+    # Use a single-topic filter for the active topic run; bump TOPIC_NO to [45] for a different topic.
+    IS_ONE_TOPIC = True
+    TOPIC_NO = [0]
     # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
 
     if HAND_POSE_GESTURE_FUSION:
@@ -409,7 +419,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = False # take all files, based off the very first sort order. (turn on for testing/speed)
+        ONE_SHOT = True # take all files, based off the very first sort order. (turn on for testing/speed)
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         KNN_LARGE_CLUSTERS = True
@@ -418,7 +428,17 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
             GENERATE_FUSION_PAIRS = False 
-            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+
+            # use this to turn on multiplier CSV creation/augmentation
+            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            USE_BIIIIIG_FULL_BODY_MULTIPLIER = True # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
+
+
+            # temp hack for T45 Nature
+            USE_POSE_CROP_DICT = True # override canonical multipliers for production
+            DO_ENRICH_IMAGE_METAS = False # don't bother getting topics/detections because it isn't used.
+            ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
+
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
             # META = True
@@ -496,8 +516,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
         else:
             # for fusion clusters that don't run on class_id, just take the MAX_ROWS_PER_OUTPUT_CSV
-            MIN_VIDEO_FUSION_COUNT = MAX_ROWS_PER_OUTPUT_CSV # this is the cut off for the CSV fusion pairs
-            MIN_CYCLE_COUNT = 100 # at least 100 in the cluster 
+            MIN_VIDEO_FUSION_COUNT = 100 # this is the cut off for the CSV fusion pairs
+            MIN_CYCLE_COUNT = 64 # at least 100 in the cluster 
     elif PURGING_DUPES:
         MIN_VIDEO_FUSION_COUNT = 100
         MIN_CYCLE_COUNT = 200
@@ -568,7 +588,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
     if CLUSTER_TYPE == "object_fusion":
         folder = "objectfusion_object_hsv"
-    elif CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion":
+    elif CLUSTER_TYPE in ["ArmsPoses3D_ObjectFusion", "BodyPoses3D_ObjectFusion"]:
         folder, OBJECT_CLUSTER_DIM = resolve_arms_object_fusion_folder(
             os.path.join(os.getcwd(), "utilities", "data"),
             ARMS_CLUSTER_DIM,
@@ -576,7 +596,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             expected_cluster_type=CLUSTER_TYPE,
         )
     elif META: folder = "heft_keyword_fusion_clusters_hsv_meta"
-    else: folder = "heft_clusters_ArmsPoses3D_768/"
+    else: folder = f"heft_clusters_{matrix_family}_768/"
 
     FUSION_FOLDER = os.path.join("utilities/data/", folder)
     # CSV_FOLDER = os.path.join("/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters/", folder)
@@ -603,7 +623,7 @@ if USE_POSE_CROP_DICT: # I'm not sure if it needs this conditional
         POSE_CROP_DICT = ALL_POSE_CROP_DICTS.get("ARMS_3D")
 
 
-print(f"doing {CURRENT_MODE}: CLUSTER_TYPE {CLUSTER_TYPE}, SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT}")
+print(f"doing {CURRENT_MODE}: CLUSTER_TYPE {CLUSTER_TYPE}, SORT_TYPE {SORT_TYPE}, IS_HAND_POSE_FUSION {IS_HAND_POSE_FUSION}, GENERATE_FUSION_PAIRS {GENERATE_FUSION_PAIRS}, MIN_VIDEO_FUSION_COUNT {MIN_VIDEO_FUSION_COUNT}, IS_TOPICS {IS_TOPICS}, IS_ONE_TOPIC {IS_ONE_TOPIC}, TOPIC_NO {TOPIC_NO}, USE_AFFECT_GROUPS {USE_AFFECT_GROUPS}, CHOP_FIRST {CHOP_FIRST}, ONE_SHOT {ONE_SHOT}, TSP_SORT {TSP_SORT}, CHOP_ITTER_TSP_SORT {CHOP_ITTER_TSP_SORT},  USE_FUSION_PAIR_DICT {USE_FUSION_PAIR_DICT}, FUSION_PAIR_DICT_NAME {FUSION_PAIR_DICT_NAME}, USE_HSV {USE_HSV}, N_HSV {N_HSV}, USE_HEAD_POSE {USE_HEAD_POSE}, FULL_BODY {FULL_BODY}, EXPAND {EXPAND}, INPAINT_COLOR {INPAINT_COLOR}, AUTO_EDGE_CROP {AUTO_EDGE_CROP}, image_edge_multiplier {image_edge_multiplier}, USE_POSE_CROP_DICT {USE_POSE_CROP_DICT}, len POSE_CROP_DICT {len(POSE_CROP_DICT) if POSE_CROP_DICT else None}")
 
 if USE_AFFECT_GROUPS:
     # groupings of affect topics
@@ -684,7 +704,8 @@ IS_ANGLE_SORT = False
 
 
 # gets focus cluster list from the FOCUS_CLUSTER_DICT via CLUSTER1 and TOPIC_NO (which is a list of one keyword)
-if TOPIC_NO is not None and IS_ONE_TOPIC and (IS_HAND_POSE_FUSION or USE_FUSION_PAIR_DICT) and not PURGING_DUPES:
+# skip for CURRENT_MODE == 'heft_torso_keywords'
+if TOPIC_NO is not None and IS_ONE_TOPIC and (IS_HAND_POSE_FUSION or USE_FUSION_PAIR_DICT) and not PURGING_DUPES and CURRENT_MODE != 'heft_torso_keywords':
     print("setting FOCUS_CLUSTER_HACK_LIST for TOPIC_NO", TOPIC_NO, "with CLUSTER1", CLUSTER1)
     # FOCUS_CLUSTER_HACK_LIST = FOCUS_CLUSTER_DICT.get(CLUSTER1, {}).get(int(math.floor(TOPIC_NO[0])), None)
     FOCUS_CLUSTER_HACK_DICT = FOCUS_CLUSTER_DICT.get(CLUSTER1, {})
@@ -1035,6 +1056,7 @@ cfg = {
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
+if USE_BIIIIIG_FULL_BODY_MULTIPLIER: sort.image_edge_multiplier = [8, 11, 14, 11]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
 
 # Keep EXPAND background fill consistent with INPAINT_COLOR.
 if INPAINT_COLOR == "black":
@@ -3344,10 +3366,16 @@ def enrich_image_metas(df):
                 traceback.print_exc()
                 print(str(e))
                 topic_scores = {}
-        print(f"going to unpack score_rows with tuples")
+        print(f"going to unpack {len(topic_scores)} rows from {len(df.index)} rows")
+        print(f"first score is {list(topic_scores.items())[0] if topic_scores else 'none'}")
         # df[['New_Col1', 'New_Col2']] = pd.DataFrame(df['A'].map(my_map).tolist(), index=df.index)
 
-        df[['topic_id', 'topic_score']] = df['image_id'].map(topic_scores).tolist()
+        # map() yields NaN (not a tuple) for unmatched image_ids, which breaks .tolist()
+        # into an inhomogeneous array; fill those with (None, None) to keep shape consistent.
+        mapped_topic_scores = df['image_id'].map(topic_scores).apply(
+            lambda value: value if isinstance(value, tuple) else (None, None)
+        )
+        df[['topic_id', 'topic_score']] = pd.DataFrame(mapped_topic_scores.tolist(), index=df.index)
         print(
             f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
             f"using topic_id={topic_id}"
@@ -4062,7 +4090,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """
     cluster_no = _mode1_normalize_token(cluster_no)
     pose_no = _mode1_normalize_token(pose_no)
-    use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
+    use_pose_crop = bool(USE_POSE_CROP_DICT and (pose_no is not None or cluster_no is not None))
     canonical_multiplier = None
     learned_record = None
     if not use_pose_crop:
@@ -4074,14 +4102,21 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
             f"for arms={cluster_no} object_signature={pose_no}: {sort.image_edge_multiplier}"
         )
     elif use_pose_crop:
-        print(f"Using POSE_CROP_DICT for pose_no={pose_no} cluster_no={cluster_no}")
-        if DO_SMALL_CLUSTER_FUSION_BUCKET:
-            # for small clusters, cluster is -1, so dict is keyed to pose_no
-            crop_key = POSE_CROP_DICT.get(pose_no, "sq_default")
+        if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
+            sort.image_edge_multiplier = [8, 11, 14, 11]
+            print(
+                f"Using BIG_FULL_BODY_MULTIPLIER override for pose_no={pose_no} cluster_no={cluster_no}: "
+                f"{sort.image_edge_multiplier}"
+            )
         else:
-            crop_key = POSE_CROP_DICT.get(cluster_no, "sq_default")
-        sort.image_edge_multiplier = resolve_multiplier(crop_key)
-        print(f"POSE_CROP_DICT multiplier for pose_no={pose_no} cluster_no={cluster_no}: {sort.image_edge_multiplier}")
+            print(f"Using POSE_CROP_DICT for pose_no={pose_no} cluster_no={cluster_no}")
+            if DO_SMALL_CLUSTER_FUSION_BUCKET:
+                # for small clusters, cluster is -1, so dict is keyed to pose_no
+                crop_key = POSE_CROP_DICT.get(pose_no, "sq_default")
+            else:
+                crop_key = POSE_CROP_DICT.get(cluster_no, "sq_default")
+            sort.image_edge_multiplier = resolve_multiplier(crop_key)
+            print(f"POSE_CROP_DICT multiplier for pose_no={pose_no} cluster_no={cluster_no}: {sort.image_edge_multiplier}")
     elif cluster_no is not None and USE_FUSION_PAIR_DICT and not FORCE_CANONICAL_MULT_CREATION:
         print(f"Using FUSION_PAIR_DICT for cluster_no={cluster_no} pose_no={pose_no}")
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
@@ -4097,7 +4132,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
         )
         if (
             MODE == 1
-            and CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion"
+            and CLUSTER_TYPE in ("ArmsPoses3D_ObjectFusion", "BodyPoses3D_ObjectFusion")
             and cluster_no is not None
             and pose_no is not None
             and not use_pose_crop
@@ -4528,6 +4563,8 @@ def main():
 
     canonical_multiplier_registry = {}
     canonical_multiplier_csv_path = None
+    full_body_used_image_ids = set()
+    full_body_exclusion_enabled = False
 
     mode0_timing_enabled = ENABLE_MODE0_TIMING and MODE == 0
     mode0_run_start = time.perf_counter()
@@ -4699,8 +4736,123 @@ def main():
         except (TypeError, ValueError):
             return None
 
+    def resolve_pose_crop_key(cluster_no, pose_no):
+        if cluster_no is None and pose_no is None:
+            return "sq_default"
+
+        candidates = []
+        if DO_SMALL_CLUSTER_FUSION_BUCKET:
+            candidates.extend([pose_no, cluster_no])
+        else:
+            candidates.extend([cluster_no, pose_no])
+
+        for candidate in candidates:
+            if candidate is None:
+                continue
+            if POSE_CROP_DICT is None:
+                continue
+            value = POSE_CROP_DICT.get(candidate)
+            if value is not None:
+                return value
+
+        if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
+            return "1x1_BIGHACK_5_9_13_9"
+        return "sq_default"
+
+    def load_full_body_used_image_ids(csv_folder):
+        used_image_ids = set()
+        if not os.path.isdir(csv_folder):
+            print(
+                f"[FULL_BODY EXCLUDE] folder not found, skipping exclusion load: {csv_folder}"
+            )
+            return used_image_ids
+
+        csv_files = sorted(
+            [
+                name
+                for name in os.listdir(csv_folder)
+                if name.endswith(".csv") and name.startswith("df_sorted_")
+            ]
+        )
+        if not csv_files:
+            print(f"[FULL_BODY EXCLUDE] no df_sorted CSVs found in {csv_folder}")
+            return used_image_ids
+
+        cache_file = os.path.join(csv_folder, "full_body_used_image_ids.csv")
+        progress_every = 25
+
+        latest_source_mtime = 0.0
+        for csv_name in csv_files:
+            csv_path = os.path.join(csv_folder, csv_name)
+            try:
+                latest_source_mtime = max(latest_source_mtime, os.path.getmtime(csv_path))
+            except OSError:
+                continue
+
+        if os.path.exists(cache_file):
+            try:
+                cache_mtime = os.path.getmtime(cache_file)
+            except OSError:
+                cache_mtime = 0.0
+
+            if cache_mtime >= latest_source_mtime:
+                try:
+                    cached_df = pd.read_csv(cache_file, usecols=["image_id"])
+                    cached_ids = pd.to_numeric(cached_df["image_id"], errors="coerce").dropna().astype(int)
+                    used_image_ids = set(cached_ids.tolist())
+                    print(
+                        "[FULL_BODY EXCLUDE] loaded cache "
+                        f"{cache_file} with {len(used_image_ids)} unique image_ids"
+                    )
+                    return used_image_ids
+                except Exception as exc:
+                    print(f"[FULL_BODY EXCLUDE] cache read failed, rebuilding: {exc}")
+
+        print(
+            f"[FULL_BODY EXCLUDE] building cache from {len(csv_files)} CSVs in {csv_folder}"
+        )
+
+        readable_files = 0
+        for idx, csv_name in enumerate(csv_files, start=1):
+            csv_path = os.path.join(csv_folder, csv_name)
+            try:
+                ids_df = pd.read_csv(csv_path, usecols=["image_id"])
+            except ValueError:
+                print(
+                    f"[FULL_BODY EXCLUDE] skipping {csv_name}: missing image_id column"
+                )
+                continue
+            except Exception as exc:
+                print(f"[FULL_BODY EXCLUDE] failed reading {csv_name}: {exc}")
+                continue
+
+            parsed_ids = pd.to_numeric(ids_df["image_id"], errors="coerce").dropna()
+            if not parsed_ids.empty:
+                used_image_ids.update(parsed_ids.astype(int).tolist())
+            readable_files += 1
+            if idx % progress_every == 0 or idx == len(csv_files):
+                print(
+                    "[FULL_BODY EXCLUDE] progress "
+                    f"{idx}/{len(csv_files)} CSVs, current unique image_ids={len(used_image_ids)}"
+                )
+
+        cache_df = pd.DataFrame({"image_id": sorted(used_image_ids)})
+        cache_tmp = cache_file + ".tmp"
+        cache_df.to_csv(cache_tmp, index=False)
+        os.replace(cache_tmp, cache_file)
+        print(
+            "[FULL_BODY EXCLUDE] wrote cache "
+            f"{cache_file} with {len(used_image_ids)} unique image_ids"
+        )
+
+        print(
+            "[FULL_BODY EXCLUDE] loaded "
+            f"{len(used_image_ids)} unique image_ids from {readable_files}/{len(csv_files)} CSVs"
+        )
+        return used_image_ids
+
     def should_use_canonical_multiplier_registry():
-        return MODE == 1 and CLUSTER_TYPE == "ArmsPoses3D_ObjectFusion"
+        return MODE == 1 and CLUSTER_TYPE in ("ArmsPoses3D_ObjectFusion", "BodyPoses3D_ObjectFusion")
 
     def resolve_canonical_multiplier_csv_path():
         data_dir = os.path.join(os.getcwd(), "utilities", "data")
@@ -4894,7 +5046,7 @@ def main():
         return df_segment, n_ok
     
     def build_route_counts_from_fusion_matrix(folder_path):
-        matrix_path = os.path.join(folder_path, "ArmsPoses3D_all.csv")
+        matrix_path = os.path.join(folder_path, f"{matrix_family}_all.csv")
         if not os.path.exists(matrix_path):
             raise FileNotFoundError(f"Missing fusion matrix CSV: {matrix_path}")
 
@@ -5110,7 +5262,7 @@ def main():
         print(f"set_multiplier_and_dims cluster_no: {cluster_no}, pose_no: {pose_no}")
         cluster_no = normalize_cluster_token(cluster_no)
         pose_no = normalize_cluster_token(pose_no)
-        use_pose_crop = bool(USE_POSE_CROP_DICT and pose_no is not None)
+        use_pose_crop = bool(USE_POSE_CROP_DICT and (pose_no is not None or cluster_no is not None))
 
         canonical_multiplier = None
         if not use_pose_crop:
@@ -5128,10 +5280,20 @@ def main():
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         # if pose_no, overide sort.image_edge_multiplier based on pose_no
         if canonical_multiplier is None and use_pose_crop:
-            print("using pose_no to set image_edge_multiplier", pose_no)
-            pose_type = POSE_CROP_DICT.get(cluster_no, "sq_default")
-            sort.image_edge_multiplier = resolve_multiplier(POSE_CROP_DICT.get(cluster_no, "sq_default"))
-            if VERBOSE: print(f"using pose {cluster_no} getting POSE_CROP_DICT value {pose_type} for image_edge_multiplier", sort.image_edge_multiplier)
+            if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
+                sort.image_edge_multiplier = [8, 11, 14, 11]
+                print(
+                    f"using BIG_FULL_BODY_MULTIPLIER override cluster_no={cluster_no} pose_no={pose_no} "
+                    f"-> {sort.image_edge_multiplier}"
+                )
+            else:
+                crop_key = resolve_pose_crop_key(cluster_no, pose_no)
+                print(
+                    f"using pose crop lookup cluster_no={cluster_no} pose_no={pose_no} "
+                    f"resolved_key={crop_key}"
+                )
+                sort.image_edge_multiplier = resolve_multiplier(crop_key)
+                if VERBOSE: print(f"using crop lookup on {cluster_no}/{pose_no}; POSE_CROP_DICT value {crop_key} -> {sort.image_edge_multiplier}")
         elif canonical_multiplier is None and cluster_no is not None and crop_dict_index is not None and USE_FUSION_PAIR_DICT:
             print("using cluster_no to set image_edge_multiplier", cluster_no)
             # for ArmsPoses etc
@@ -5280,6 +5442,24 @@ def main():
                     print('dataframe empty, and not IS_CLUSTER so probably bad path or bad SQL')
                     sys.exit()
                 return
+
+            if full_body_exclusion_enabled and full_body_used_image_ids:
+                before_exclusion_count = len(df.index)
+                image_ids = pd.to_numeric(df["image_id"], errors="coerce")
+                df = df.loc[~image_ids.isin(full_body_used_image_ids)].copy()
+                excluded_count = before_exclusion_count - len(df.index)
+                if excluded_count > 0:
+                    print(
+                        "[FULL_BODY EXCLUDE] filtered "
+                        f"{excluded_count} rows from cluster={this_cluster} topic={this_topic}; "
+                        f"remaining={len(df.index)}"
+                    )
+                if df.empty:
+                    print(
+                        "[FULL_BODY EXCLUDE] all rows removed for "
+                        f"cluster={this_cluster} topic={this_topic}; skipping"
+                    )
+                    return
 
             is_fusion_sort = (
                 SORT_TYPE == "object_fusion"
@@ -5737,6 +5917,10 @@ def main():
         save_images_from_csv_folder()
 
     else:
+        full_body_exclusion_enabled = MODE == 0 and not FULL_BODY
+        if full_body_exclusion_enabled:
+            full_body_used_image_ids = load_full_body_used_image_ids(FULL_BODY_CSV_FOLDER)
+
         # mode zero (and 2, though 2 isn't really functional
         first_loop = this_topic = this_cluster = n_cluster_topics = second_cluster_topic = None
 

@@ -44,6 +44,24 @@ class ToolsClustering:
             {"rule_id": "family_124_tablet", "anchor_class_id": 124, "suppress_class_ids": {63, 67, 73, 133, 137, 123}},
             {"rule_id": "family_93_clipboard", "anchor_class_id": 93, "suppress_class_ids": {63, 67, 73, 133, 137}},
             {"rule_id": "family_127_calculator", "anchor_class_id": 127, "suppress_class_ids": {67, 137}},
+            {"rule_id": "family_140_boxing_gloves", "anchor_class_id": 140, "suppress_class_ids": {32}},
+            {"rule_id": "family_141_soccerball", "anchor_class_id": 141, "suppress_class_ids": {32}},
+            {"rule_id": "family_142_basketball", "anchor_class_id": 142, "suppress_class_ids": {32}},
+            {"rule_id": "family_143_football", "anchor_class_id": 143, "suppress_class_ids": {32}},
+            {"rule_id": "family_144_volleyball", "anchor_class_id": 144, "suppress_class_ids": {32}},
+            {"rule_id": "family_145_baseball", "anchor_class_id": 145, "suppress_class_ids": {32}},
+            {"rule_id": "family_146_tennisball", "anchor_class_id": 146, "suppress_class_ids": {32}},
+            {"rule_id": "family_147_weightball", "anchor_class_id": 147, "suppress_class_ids": {32}},
+            {"rule_id": "family_148_discoball", "anchor_class_id": 148, "suppress_class_ids": {32}},
+            {"rule_id": "family_149_beachball", "anchor_class_id": 149, "suppress_class_ids": {32}},
+            {"rule_id": "family_150_yogaball", "anchor_class_id": 150, "suppress_class_ids": {32}},
+            {"rule_id": "family_151_yogamat", "anchor_class_id": 151, "suppress_class_ids": {37}},
+            {"rule_id": "family_152_golfball", "anchor_class_id": 152, "suppress_class_ids": {32}},
+            {"rule_id": "family_153_tabletennisball", "anchor_class_id": 153, "suppress_class_ids": {32}},
+            {"rule_id": "family_154_globe", "anchor_class_id": 154, "suppress_class_ids": {32}},
+            {"rule_id": "family_155_dumbell", "anchor_class_id": 155, "suppress_class_ids": {86}},
+            {"rule_id": "family_156_barbell", "anchor_class_id": 156, "suppress_class_ids": {86}},
+            {"rule_id": "family_157_kettlebell", "anchor_class_id": 157, "suppress_class_ids": {86}},
         )
         # Dual-hand guard: if the same detection is picked by both hands,
         # drop the farther hand unless dist_far / dist_near <= this ratio.
@@ -53,6 +71,7 @@ class ToolsClustering:
         self.HAND_COMPAT_LEVEL_WEIGHT = 0.08
         self.DEFAULT_HAND_POSITION = [0.0, 8.0, 0.0]
         self.TIE_CLASS_ID = 27
+        self.YOGAMAT_CLASS_ID = 151
         self.USE_ALLOWLIST = True
         self.FLOWER_CLASSES = {104, 105, 106, 107}
         self.HAND_ONLY_CLASSES = {108, 109}
@@ -100,7 +119,7 @@ class ToolsClustering:
             'waist_object',
             'feet_object',
         )
-        all_class_ids = set(range(0, 141))
+        all_class_ids = set(range(0, 158))
         self._allowlist_slots = tuple(self.COMPATIBILITY_SLOT_COLUMNS)
         self._allowlist_reject_counts = {slot: 0 for slot in self._allowlist_slots}
         self.compatibility_matrix = self._load_compatibility_matrix_from_csv(all_class_ids)
@@ -2243,6 +2262,22 @@ class ToolsClustering:
             if self.VERBOSE:
                 print(f"  [TIE] detection_id={tie_detection_id} -> no assignment")
 
+        # Yogamat is always on the ground under the figure's feet, regardless of
+        # which body part (hands, waist) happens to be touching it in this pose.
+        yogamat_detections = [
+            det for det in detections
+            if self._get_detection_class_id(det) == self.YOGAMAT_CLASS_ID
+        ]
+        yogamat_detections.sort(key=lambda det: det.get('conf', 0.0), reverse=True)
+
+        for yogamat_det in yogamat_detections:
+            yogamat_detection_id = yogamat_det['detection_id']
+            assign_slot_if_preferred('feet_object', yogamat_det)
+            tie_locked_slots.add('feet_object')
+            tie_blocked_detection_ids.add(yogamat_detection_id)
+            if self.VERBOSE:
+                print(f"  [YOGAMAT] detection_id={yogamat_detection_id} -> feet_object (always-feet priority)")
+
         tie_blocked_ids_set = set(tie_blocked_detection_ids)
         for det in detections:
             class_id = self._get_detection_class_id(det)
@@ -2789,7 +2824,7 @@ class ToolsClustering:
                     ):
                         results['waist_object'] = det
 
-            if feet_allowed and self.is_feet_object(bbox):
+            if 'feet_object' not in tie_locked_slots and feet_allowed and self.is_feet_object(bbox):
                 candidate_score, reject_reason = lower_body_candidate_score(det, 'feet')
                 if candidate_score is None:
                     self._record_unassigned_reason('feet', reject_reason)
