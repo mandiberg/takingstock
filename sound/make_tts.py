@@ -23,14 +23,14 @@ from mp_db_io import DataIO
 # after you make_video, you to need put them in a folder and merge_expanded_images to produce a metas file.
 
 title = 'Please choose your operation: '
-options = ['meta', 'bark', 'openai_or_eleven_labs']  # Combine OpenAI and ElevenLabs
+options = ['meta', 'bark', 'openai_or_eleven_labs', 'fish']
 OPTION, MODE = pick(options, title)
 
 start = time.time()
 io = DataIO()
 print(io.ROOTSSD)
-INPUT = os.path.join(io.ROOTSSD, "audio_cleanup")
-OUTPUT = os.path.join(io.ROOTSSD, "tts_files")
+INPUT = os.path.join(io.ROOTSSD, "tts_sport")
+OUTPUT = "/Volumes/OWC5/tts_sport"
 # Brandon paths
 # INPUT = os.path.join(io.ROOTSSD, "sound")
 # OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
@@ -49,6 +49,9 @@ OPENAI_VOICE_COUNT = len(OPENAI_PRESET_LIST)
 ELEVEN_LABS_VOICE_COUNT = len(VOICE_IDS) if VOICE_IDS else 20
 TOTAL_VOICES = OPENAI_VOICE_COUNT + ELEVEN_LABS_VOICE_COUNT
 AUDIO_EXTS = {".wav", ".mp3", ".flac"}
+FISH_MODEL = "s2.1-pro-free"
+FISH_VOICE_PAGE_SIZE = 50
+FISH_VOICE_MAX = 1000
 
 
 def hashed_audio_path(out_dir, filename):
@@ -163,6 +166,51 @@ def write_TTS_openai(client, input_text, file_name, voice_preset):
     response.write_to_file(file_name)
 
 
+def write_TTS_fish(client, input_text, file_name, voice_id):
+    audio = client.tts.convert(
+        text=input_text,
+        reference_id=voice_id,
+        format="wav",
+        model=FISH_MODEL,
+    )
+    os.makedirs(os.path.dirname(os.path.abspath(file_name)) or ".", exist_ok=True)
+    with open(file_name, "wb") as f:
+        f.write(audio)
+
+
+def load_fish_voice_ids(client):
+    """Page through the public English voice library for as much variety as the API returns."""
+    ids = []
+    seen = set()
+    page_number = 1
+    while len(ids) < FISH_VOICE_MAX:
+        page = client.voices.list(
+            page_size=FISH_VOICE_PAGE_SIZE,
+            page_number=page_number,
+            self_only=False,
+            language=["en"],
+            sort_by="created_at",
+        )
+        items = list(getattr(page, "items", None) or [])
+        if not items:
+            break
+        for voice in items:
+            voice_id = getattr(voice, "id", None) or getattr(voice, "_id", None)
+            if not voice_id or voice_id in seen:
+                continue
+            seen.add(voice_id)
+            ids.append(voice_id)
+        total = getattr(page, "total", None)
+        print(f"  Fish voices page {page_number}: +{len(items)} (pool={len(ids)}"
+              + (f", total={total}" if total is not None else "") + ")")
+        if len(items) < FISH_VOICE_PAGE_SIZE:
+            break
+        if total is not None and page_number * FISH_VOICE_PAGE_SIZE >= total:
+            break
+        page_number += 1
+    return ids
+
+
 def write_TTS_meta(input_text, file_name):
     inputs = tokenizer(input_text, return_tensors="pt")
     with torch.no_grad():
@@ -184,6 +232,18 @@ def select_voice_and_client(api_key_openai, api_key_elevenlabs):
 
 
 if OPTION == "openai_or_eleven_labs":
+    WINDOW = [0.7, 1]
+
+elif OPTION == "fish":
+    from fishaudio import FishAudio
+    from API_fish import FISH_API_KEY
+
+    fish_client = FishAudio(api_key=FISH_API_KEY)
+    print(f"Loading Fish public English voices ({FISH_MODEL}) …")
+    FISH_VOICE_IDS = load_fish_voice_ids(fish_client)
+    if not FISH_VOICE_IDS:
+        raise SystemExit("Fish voice library returned no voices. Check API_fish.py and the API key.")
+    print(f"Fish voice pool: {len(FISH_VOICE_IDS)}")
     WINDOW = [0.7, 1]
 
 elif OPTION == "bark":
@@ -213,7 +273,6 @@ elif OPTION == "meta":
     write_TTS = write_TTS_meta
 
 os.makedirs(OUTPUT, exist_ok=True)
-io.make_hash_folders(OUTPUT)
 
 already = load_metas_audio_ids(METAS_AUDIO_CSV)
 files_by_id = existing_audio_by_id(OUTPUT)
@@ -282,6 +341,12 @@ with open(source_path, mode="r", encoding="utf-8-sig", newline="") as csvfile:
                 file_path = hashed_audio_path(OUTPUT, out_name)
                 print(f"  ++++++++  doing {engine}", image_id, "->", os.path.join(*io.get_hash_folders(out_name), out_name))
                 write_TTS(client, input_text, file_path, voice_id_or_preset)
+            elif OPTION == "fish":
+                voice_id = random.choice(FISH_VOICE_IDS)
+                out_name = f"{image_id}_fish_{voice_id}_{fit}.wav"
+                file_path = hashed_audio_path(OUTPUT, out_name)
+                print(f"  ++++++++  doing fish", image_id, "->", os.path.join(*io.get_hash_folders(out_name), out_name))
+                write_TTS_fish(fish_client, input_text, file_path, voice_id)
             else:
                 if OPTION != "meta":
                     voice_preset = random.choice(preset_list)

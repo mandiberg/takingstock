@@ -1,10 +1,12 @@
 """
-Temporary Bark-only TTS batch runner.
+Bark TTS batch runner.
 
 Reads all CSVs from the `input_csvs/` folder next to this script, generates
-WAV files with BarkModel, and maintains a single deduplication log
-(`have_barked.csv`) so already-processed image_ids are skipped across runs
-and across files.
+WAV files with BarkModel, and maintains a shared `metas_audio.csv` log so
+already-processed image_ids are skipped across runs and across Bark/Coqui jobs.
+
+metas_audio.csv contains every column from the source CSV plus a `filename`
+column recording the output WAV name.
 """
 
 from __future__ import annotations
@@ -48,7 +50,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 
 IN_CSV_DIR      = os.path.join(_HERE, "input_csvs")   # drop any number of CSVs here
 OUT_DIR         = os.path.join(_HERE, "tts_bark_out")
-HAVE_BARKED_CSV = os.path.join(_HERE, "have_barked.csv")
+METAS_AUDIO_CSV = os.path.join(_HERE, "metas_audio.csv")
 
 # Only generate audio when TOPIC_FIT_MIN <= topic_fit < TOPIC_FIT_MAX
 TOPIC_FIT_FIELD = "topic_fit"
@@ -71,39 +73,46 @@ def _safe_int(value: object) -> Optional[int]:
         return None
 
 
-def _load_have_barked_ids(have_barked_csv: str) -> Set[int]:
-    if not os.path.exists(have_barked_csv):
+def _load_done_ids(path: str) -> Set[int]:
+    """Load already-processed image_ids from metas_audio.csv."""
+    if not os.path.exists(path):
         return set()
-
     ids: Set[int] = set()
-    with open(have_barked_csv, "r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        # allow either header "image_id" or single-column CSV w/out header
-        if reader.fieldnames and "image_id" in reader.fieldnames:
-            for row in reader:
-                image_id = _safe_int(row.get("image_id"))
-                if image_id is not None:
-                    ids.add(image_id)
-        else:
-            f.seek(0)
-            raw = csv.reader(f)
-            for r in raw:
-                if not r:
-                    continue
-                image_id = _safe_int(r[0])
-                if image_id is not None:
-                    ids.add(image_id)
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            v = _safe_int(row.get("image_id"))
+            if v is not None:
+                ids.add(v)
     return ids
 
 
-def _append_have_barked_id(have_barked_csv: str, image_id: int) -> None:
-    exists = os.path.exists(have_barked_csv)
-    os.makedirs(os.path.dirname(os.path.abspath(have_barked_csv)) or ".", exist_ok=True)
-    with open(have_barked_csv, "a", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["image_id"])
+def _append_metas_audio(
+    path: str,
+    row: dict,
+    filename: str,
+    fieldnames: list,
+) -> None:
+    """Append one completed row (original CSV columns + filename) to metas_audio.csv."""
+    exists = os.path.exists(path)
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         if not exists:
             writer.writeheader()
-        writer.writerow({"image_id": image_id})
+        out = {k: row.get(k, "") for k in fieldnames}
+        out["filename"] = filename
+        writer.writerow(out)
+
+
+def _get_fieldnames(input_csvs: list) -> list:
+    """Read the header row of the first input CSV and append 'filename'."""
+    with open(input_csvs[0], "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        _ = reader.fieldnames
+        base = list(reader.fieldnames) if reader.fieldnames else []
+    if "filename" not in base:
+        base.append("filename")
+    return base
 
 
 @dataclass(frozen=True)
@@ -353,12 +362,14 @@ class _PendingItem:
     text: str
     out_path: str
     voice_preset: str
+    row: dict   # full original CSV row for metas_audio.csv logging
 
 
 def _flush_batch(
     tts: BarkTTS,
     pending: list[_PendingItem],
     already: set[int],
+    fieldnames: list,
 ) -> tuple[int, list[str]]:
     """Run one batched generate call and persist results. Returns (successes, written_paths)."""
     if not pending:
@@ -369,7 +380,7 @@ def _flush_batch(
     #  for the actual generation we pick the preset of the first item — acceptable because
     #  voice variance within a batch is minor compared to cross-batch variance.)
     voice_preset = pending[0].voice_preset
-    texts = [item.text for item in pending]
+    texts    = [item.text     for item in pending]
     out_paths = [item.out_path for item in pending]
 
     try:
@@ -385,11 +396,16 @@ def _flush_batch(
                 print(f"  Failed image_id={item.image_id}: {inner_e}")
 
     succeeded = 0
-    for item, path in zip(pending, written):
-        _append_have_barked_id(HAVE_BARKED_CSV, item.image_id)
-        already.add(item.image_id)
-        succeeded += 1
-        print(path)
+    written_set = set(written)
+    for item in pending:
+        if item.out_path in written_set:
+            _append_metas_audio(
+                METAS_AUDIO_CSV, item.row,
+                os.path.basename(item.out_path), fieldnames,
+            )
+            already.add(item.image_id)
+            succeeded += 1
+            print(item.out_path)
 
     return succeeded, written
 
@@ -398,11 +414,15 @@ def main() -> None:
     args = _build_argparser().parse_args()
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    already = _load_have_barked_ids(HAVE_BARKED_CSV)
+    already = _load_done_ids(METAS_AUDIO_CSV)
+    print(f"Loaded {len(already)} already-processed image_ids from metas_audio.csv")
 
     input_csvs = _collect_input_csvs(IN_CSV_DIR)
     print(f"Found {len(input_csvs)} input CSV(s): {[os.path.basename(p) for p in input_csvs]}")
     print(f"Batch size: {args.batch_size}")
+
+    # Derive output fieldnames from the input CSV header + 'filename'
+    fieldnames = _get_fieldnames(input_csvs)
 
     print("Pre-scanning CSVs for row counts …")
     total_rows, total_in_topic_fit = _prescan_csvs(input_csvs, args.image_id_field)
@@ -424,7 +444,7 @@ def main() -> None:
 
     def flush() -> None:
         nonlocal successes
-        n, _ = _flush_batch(tts, pending, already)
+        n, _ = _flush_batch(tts, pending, already, fieldnames)
         successes += n
         pending.clear()
 
@@ -455,7 +475,21 @@ def main() -> None:
 
             voice_preset = random.choice(tts.preset_list)
             out_path = _build_out_path(OUT_DIR, image_id=image_id, voice_preset=voice_preset)
-            pending.append(_PendingItem(image_id=image_id, text=text, out_path=out_path, voice_preset=voice_preset))
+
+            # WAV existence guard — recover from a lost metas_audio.csv without re-synthesizing
+            if os.path.exists(out_path):
+                _append_metas_audio(
+                    METAS_AUDIO_CSV, row,
+                    os.path.basename(out_path), fieldnames,
+                )
+                already.add(image_id)
+                skipped_already_barked += 1
+                continue
+
+            pending.append(_PendingItem(
+                image_id=image_id, text=text, out_path=out_path,
+                voice_preset=voice_preset, row=row,
+            ))
 
             if len(pending) >= args.batch_size:
                 # Sort by text length so all items in a batch have similar token counts.
