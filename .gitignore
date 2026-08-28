@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 API.py
+API_fish.py
 
 # ML models , it downloads automiatically anyway
 yolov8*
