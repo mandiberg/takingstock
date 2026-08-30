@@ -446,15 +446,16 @@ class ToolsClustering:
 
     def build_slot_signature_fields(self, row):
         """Build deterministic token/hash/object-count for a row."""
-        token_parts = []
-        n_objects = 0
-
+        slot_class_ids = {}
         for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
             class_id = self.extract_slot_class_id(row.get(slot_col))
             if class_id > 0:
                 class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
-                n_objects += 1
-            token_parts.append(f"{slot_label}:{class_id}")
+            slot_class_ids[slot_label] = class_id
+
+        normalized = self._canonicalize_signature_slot_values(slot_class_ids)
+        n_objects = sum(1 for class_id in normalized.values() if int(class_id or 0) > 0)
+        token_parts = [f"{slot_label}:{int(normalized.get(slot_label, 0) or 0)}" for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP]
 
         token = "|".join(token_parts)
         sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
@@ -553,16 +554,18 @@ class ToolsClustering:
         for _score, slot_col, _class_id in candidates[:slot_limit]:
             selected_slots.add(slot_col)
 
-        token_parts = []
-        n_objects = 0
+        slot_class_ids = {}
         for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
             class_id = 0
             if slot_col in selected_slots:
                 class_id = self.extract_slot_class_id(row.get(slot_col))
                 if class_id > 0:
                     class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
-                    n_objects += 1
-            token_parts.append(f"{slot_label}:{class_id}")
+            slot_class_ids[slot_label] = class_id
+
+        normalized = self._canonicalize_signature_slot_values(slot_class_ids)
+        n_objects = sum(1 for value in normalized.values() if int(value or 0) > 0)
+        token_parts = [f"{slot_label}:{int(normalized.get(slot_label, 0) or 0)}" for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP]
 
         token = "|".join(token_parts)
         sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
@@ -768,17 +771,56 @@ class ToolsClustering:
             print("Skipping KMeans/ObjectFusion cluster writes because SIGNATURES_ONLY=True")
         print("=== END SIGNATURE RUN SUMMARY ===\n")
 
-    def _build_token_from_slot_labels(self, slot_class_ids):
-        """Build (token, hash) from a {slot_label: class_id} dict."""
-        parts = []
+    def _canonicalize_signature_slot_values(self, slot_class_ids):
+        """Normalize noisy signature slots before hashing or collapse mapping."""
+        normalized = {}
         slot_label_to_col = {slot_label: slot_col for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP}
         for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
-            class_id = int(slot_class_ids.get(slot_label, 0) or 0)
+            raw_class_id = slot_class_ids.get(slot_label, 0)
+            try:
+                class_id = int(float(raw_class_id)) if raw_class_id is not None else 0
+            except (TypeError, ValueError):
+                class_id = 0
             if class_id > 0:
                 class_id = self._canonicalize_signature_class_id(
                     class_id,
                     slot_col=slot_label_to_col.get(slot_label),
                 )
+            normalized[slot_label] = class_id
+
+        # Bicycle is a single object regardless of which hand slot it was assigned to. Normalize
+        # any bike in either hand to the dominant shared bike signature used elsewhere in the topic.
+        if normalized.get('LH', 0) == 1 or normalized.get('RH', 0) == 1:
+            normalized['LH'] = 1
+            normalized['RH'] = 1
+
+        # Only reinterpret gun/weight misassignments when a bike is actually in one of the hands.
+        # If bike is not in a hand, keep those classes as-is and do not rewrite them.
+        hand_slots = ('LH', 'RH')
+        bike_in_hand = any(normalized.get(slot, 0) == 1 for slot in hand_slots)
+        if bike_in_hand:
+            for slot in hand_slots:
+                current = normalized.get(slot, 0)
+                if current in (86, 108, 109, 155, 156, 157):
+                    normalized[slot] = 1
+            for lower_slot in ('SH', 'WA', 'FT'):
+                if normalized.get(lower_slot, 0) in (86, 108, 109, 155, 156, 157):
+                    normalized[lower_slot] = 0
+
+        # Backpack/handbag duplicates on both shoulder and waist split the same object across
+        # locations; keep the shoulder placement and remove the waist duplicate.
+        for bag_class in (24, 26):
+            if normalized.get('SH', 0) == bag_class and normalized.get('WA', 0) == bag_class:
+                normalized['WA'] = 0
+
+        return normalized
+
+    def _build_token_from_slot_labels(self, slot_class_ids):
+        """Build (token, hash) from a {slot_label: class_id} dict."""
+        normalized = self._canonicalize_signature_slot_values(slot_class_ids)
+        parts = []
+        for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
+            class_id = int(normalized.get(slot_label, 0) or 0)
             parts.append(f"{slot_label}:{class_id}")
         token = "|".join(parts)
         sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
