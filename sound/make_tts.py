@@ -40,7 +40,7 @@ TOPIC = 124
 sourcefile = f"metas_{TOPIC}.csv"
 METAS_AUDIO_CSV = os.path.join(OUTPUT, "metas_audio.csv")
 
-STOP_AFTER = 100000
+STOP_AFTER = 10000000
 counter = 1
 start_at = 0
 
@@ -280,6 +280,7 @@ print(f"Already in metas_audio.csv: {len(already)}")
 print(f"Existing audio files: {len(files_by_id)}")
 
 source_path = os.path.join(INPUT, sourcefile)
+print(f"Source file: {source_path}")
 with open(source_path, mode="r", encoding="utf-8-sig", newline="") as _f:
     source_reader = csv.DictReader(_f)
     source_fieldnames = list(source_reader.fieldnames or [])
@@ -293,6 +294,7 @@ with open(source_path, mode="r", encoding="utf-8-sig", newline="") as _f:
 print(f"Lines to process: {_lines_to_process} (window {WINDOW})")
 
 fieldnames = metas_fieldnames(METAS_AUDIO_CSV, source_fieldnames)
+processed = 0
 
 with open(source_path, mode="r", encoding="utf-8-sig", newline="") as csvfile:
     reader = csv.DictReader(csvfile)
@@ -331,7 +333,9 @@ with open(source_path, mode="r", encoding="utf-8-sig", newline="") as csvfile:
             counter += 1
             continue
 
-        print(f"{counter} rows processed")
+        processed += 1
+        pct = (100.0 * processed / _lines_to_process) if _lines_to_process else 100.0
+        print(f"{processed} of {_lines_to_process} rows processed ({pct:.1f}%)")
 
         try:
             if OPTION == "openai_or_eleven_labs":
