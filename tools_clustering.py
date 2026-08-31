@@ -444,6 +444,48 @@ class ToolsClustering:
             return int(original_class_id)
         return int(class_id)
 
+    def canonicalize_full_signature(self, slot_class_ids):
+        """Apply the full signature canonicalization pipeline to a slot dict.
+
+        This is the canonicalization pass used for both initial row hashing and any
+        post-collapse remap decisions. After a slot is zeroed or rewritten to a
+        canonical class, we must re-run the full normalization rules before the
+        token/hash is finalized.
+        """
+        if slot_class_ids is None:
+            slot_class_ids = {}
+
+        prepared = {}
+        slot_label_to_col = {slot_label: slot_col for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP}
+        for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
+            raw_value = slot_class_ids.get(slot_label)
+            if raw_value is None and slot_col in slot_class_ids:
+                raw_value = slot_class_ids.get(slot_col)
+            if raw_value is None:
+                prepared[slot_label] = 0
+                continue
+
+            class_id = self.extract_slot_class_id(raw_value)
+            if class_id > 0:
+                class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
+            prepared[slot_label] = class_id
+
+        normalized = self._canonicalize_signature_slot_values(prepared)
+        n_objects = sum(1 for class_id in normalized.values() if int(class_id or 0) > 0)
+        token_parts = [f"{slot_label}:{int(normalized.get(slot_label, 0) or 0)}" for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP]
+        token = "|".join(token_parts)
+        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+
+        # if self.VERBOSE:
+        #     raw_preview = {k: v for k, v in prepared.items() if v not in (0, None)}
+        #     print(
+        #         f"[SIGNATURE CANON] input={slot_class_ids} prepared={prepared} "
+        #         f"normalized={normalized} token={token} hash={sig_hash[:12]} n_objects={n_objects} "
+        #         f"nonzero_input={raw_preview}"
+        #     )
+
+        return normalized, token, sig_hash, n_objects
+
     def build_slot_signature_fields(self, row):
         """Build deterministic token/hash/object-count for a row."""
         slot_class_ids = {}
@@ -453,12 +495,7 @@ class ToolsClustering:
                 class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
             slot_class_ids[slot_label] = class_id
 
-        normalized = self._canonicalize_signature_slot_values(slot_class_ids)
-        n_objects = sum(1 for class_id in normalized.values() if int(class_id or 0) > 0)
-        token_parts = [f"{slot_label}:{int(normalized.get(slot_label, 0) or 0)}" for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP]
-
-        token = "|".join(token_parts)
-        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+        _, token, sig_hash, n_objects = self.canonicalize_full_signature(slot_class_ids)
         return token, sig_hash, n_objects
 
     def append_object_signature_fields(self, df):
@@ -771,6 +808,38 @@ class ToolsClustering:
             print("Skipping KMeans/ObjectFusion cluster writes because SIGNATURES_ONLY=True")
         print("=== END SIGNATURE RUN SUMMARY ===\n")
 
+    def _replace_anchor_class_in_slots(
+        self,
+        normalized,
+        anchor_class_id,
+        slots,
+        replace_values,
+        trigger_slots=None,
+        clear_slots=(),
+    ):
+        """If an anchor class appears in trigger slots, rewrite matching secondary/empty classes to it.
+
+        This keeps the pattern reusable for future family rules such as:
+        - anchor 140 + slots in (0, 32, 86) => 140
+        - anchor 157 + slot == 0 => 157
+        - any other class_id where an obvious empty or noisy class should collapse into the canonical class.
+        """
+        trigger_slots = trigger_slots or slots
+        if not any(normalized.get(slot, 0) == anchor_class_id for slot in trigger_slots):
+            return normalized
+
+        for slot in slots:
+            current = normalized.get(slot, 0)
+            if current in replace_values:
+                normalized[slot] = anchor_class_id
+
+        for slot in clear_slots:
+            current = normalized.get(slot, 0)
+            if current in replace_values:
+                normalized[slot] = 0
+
+        return normalized
+
     def _canonicalize_signature_slot_values(self, slot_class_ids):
         """Normalize noisy signature slots before hashing or collapse mapping."""
         normalized = {}
@@ -807,6 +876,41 @@ class ToolsClustering:
                 if normalized.get(lower_slot, 0) in (86, 108, 109, 155, 156, 157):
                     normalized[lower_slot] = 0
 
+        # Reuse a generic family-rule helper so future classes can follow the same pattern.
+        self._replace_anchor_class_in_slots(
+            normalized,
+            anchor_class_id=140,
+            slots=hand_slots,
+            replace_values=(0, 32, 86),
+            trigger_slots=hand_slots,
+        )
+
+        # WEIGHTS CORRECTIONS
+        # if kettlebell in hand, replace any weights 86
+        self._replace_anchor_class_in_slots(
+            normalized,
+            anchor_class_id=155,
+            slots=hand_slots,
+            replace_values=(86),
+            trigger_slots=hand_slots,
+        )
+        # if barbellin hand, make both hands and replace any weights 86
+        self._replace_anchor_class_in_slots(
+            normalized,
+            anchor_class_id=156,
+            slots=hand_slots,
+            replace_values=(0,86),
+            trigger_slots=hand_slots,
+        )
+        # if kettlebell in hand, replace any weights 86
+        self._replace_anchor_class_in_slots(
+            normalized,
+            anchor_class_id=157,
+            slots=hand_slots,
+            replace_values=(86),
+            trigger_slots=hand_slots,
+        )
+
         # Backpack/handbag duplicates on both shoulder and waist split the same object across
         # locations; keep the shoulder placement and remove the waist duplicate.
         for bag_class in (24, 26):
@@ -817,13 +921,7 @@ class ToolsClustering:
 
     def _build_token_from_slot_labels(self, slot_class_ids):
         """Build (token, hash) from a {slot_label: class_id} dict."""
-        normalized = self._canonicalize_signature_slot_values(slot_class_ids)
-        parts = []
-        for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
-            class_id = int(normalized.get(slot_label, 0) or 0)
-            parts.append(f"{slot_label}:{class_id}")
-        token = "|".join(parts)
-        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+        _, token, sig_hash, _ = self.canonicalize_full_signature(slot_class_ids)
         return token, sig_hash
 
     def compute_topic_collapse_mapping(self, topic_sig_counts, collapse_min):
@@ -920,7 +1018,11 @@ class ToolsClustering:
             remapped = False
             for class_id, slot_label in drop_order_list:
                 current_slots[slot_label] = 0  # zero this slot; stays zeroed for subsequent rounds
-                _, candidate_hash = self._build_token_from_slot_labels(current_slots)
+
+                # Explicit second canonicalization pass after collapse-style slot zeroing.
+                # This ensures any bike/weapon/backpack equivalence rules are re-applied to
+                # the remapped signature before we compare hashes for a target cluster.
+                current_slots, _, candidate_hash, _ = self.canonicalize_full_signature(current_slots)
 
                 if candidate_hash == null_hash:
                     break  # collapsed to all-zeros: discard
