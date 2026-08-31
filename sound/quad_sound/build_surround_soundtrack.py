@@ -8,6 +8,7 @@ import pandas as pd
 import os
 import shutil
 import subprocess
+import time
 import soundfile as sf
 import numpy as np
 import librosa
@@ -900,8 +901,9 @@ def run_topic(topic, csv_dir=None):
     output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}_quad.wav")
     if os.path.exists(output_path):
         print(f"[Topic {TOPIC}] Output already exists, skipping: {output_path}")
-        return
+        return None
 
+    topic_t0 = time.time()
     print(f"\n{'='*60}")
     print(f"[Topic {TOPIC}] Starting — CSV: {csv_path}  OFFSET: {OFFSET}")
     missing_key_topics = [t for t in KEY_TOPICS if t not in KEYS]
@@ -974,12 +976,16 @@ def run_topic(topic, csv_dir=None):
     print(f"[Topic {TOPIC}] Writing to file:", output_path)
     sf.write(output_path, combined_audio, TARGET_SAMPLE_RATE, format='wav')
     tag_quad_wav(output_path)
+    elapsed = time.time() - topic_t0
+    print(f"[Topic {TOPIC}] Time to process output file: {elapsed:.1f}s")
     del combined_audio
     gc.collect()
+    return elapsed
 
 
 def main():
     filenames_from_metas_audio()
+    elapsed_times = []
     if BATCH_MODE:
         batch_dir = resolve_batch_folder(BATCH_FOLDER_NAME)
         topics = list_metas_topics(batch_dir)
@@ -988,10 +994,20 @@ def main():
             print("No metas_*.csv files found.")
             return
         for topic in topics:
-            run_topic(topic, csv_dir=batch_dir)
+            elapsed = run_topic(topic, csv_dir=batch_dir)
+            if elapsed is not None:
+                elapsed_times.append(elapsed)
         print("\nBatch complete.")
     else:
-        run_topic(TOPIC)
+        elapsed = run_topic(TOPIC)
+        if elapsed is not None:
+            elapsed_times.append(elapsed)
+    if elapsed_times:
+        avg = sum(elapsed_times) / len(elapsed_times)
+        print(f"Average processing time per cluster: {avg:.1f}s "
+              f"({len(elapsed_times)} cluster(s))")
+    else:
+        print("Average processing time per cluster: n/a (no clusters processed)")
 
 if __name__ == "__main__":
     main()
