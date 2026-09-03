@@ -824,6 +824,13 @@ class ToolsClustering:
         - anchor 157 + slot == 0 => 157
         - any other class_id where an obvious empty or noisy class should collapse into the canonical class.
         """
+        if replace_values is None:
+            replace_values = ()
+        elif isinstance(replace_values, (int, np.integer)):
+            replace_values = (int(replace_values),)
+        else:
+            replace_values = tuple(replace_values)
+
         trigger_slots = trigger_slots or slots
         if not any(normalized.get(slot, 0) == anchor_class_id for slot in trigger_slots):
             return normalized

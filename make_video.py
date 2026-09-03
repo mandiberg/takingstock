@@ -57,9 +57,9 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T45_nature'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-# SegmentHelper_name = 'SegmentHelper_TheGym'
+SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
@@ -105,10 +105,10 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-# CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_T45_60test" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_FULL_BODY_c157v3_full_list_oneshot" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
+# CSV_MAIN_FOLDER = "/Volumes/LaCie"
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_real_audio" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_real_audio" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -184,7 +184,7 @@ def resolve_arms_object_fusion_folder(
 
 
 HSV_SOURCE_MODE = "background"
-SKIP_OBJECT_NONE_CLUSTERS = [0] # set to 1 if you want to skip Nones
+SKIP_OBJECT_NONE_CLUSTERS = [] # set to 1 if you want to skip Nones
 DO_OBJECT_COLLAPSE = False #TEMP TK       # compute and apply per-topic object signature collapse mapping
 OBJECT_COLLAPSE_MIN = 1000       # minimum topic-count for a signature bin to be retained
 MULTIPOLICY = False
@@ -257,7 +257,7 @@ elif "3D" in CURRENT_MODE:
     if "bod" in CURRENT_MODE:
         CLUSTER_TYPE = SORT_TYPE = "body3D"
         if "full" in CURRENT_MODE:
-            FULL_BODY = True # this requires is_feet, defaults to false
+            FULL_BODY = False # this requires is_feet, defaults to false
         EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
         # META = True
@@ -315,7 +315,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    FULL_BODY = True
+    FULL_BODY = False
     if FULL_BODY: matrix_family = "BodyPoses3D" 
     else: matrix_family = "ArmsPoses3D"
 
@@ -409,7 +409,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
 
-    OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion. 
+    # to turn off all object nones use SKIP_OBJECT_NONE_CLUSTERS 
     # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
 
@@ -419,7 +420,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = True # take all files, based off the very first sort order. (turn on for testing/speed)
+        ONE_SHOT = False # take all files, based off the very first sort order. (turn on for testing/speed)
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         KNN_LARGE_CLUSTERS = True
@@ -430,14 +431,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             GENERATE_FUSION_PAIRS = False 
 
             # use this to turn on multiplier CSV creation/augmentation
-            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
-            USE_BIIIIIG_FULL_BODY_MULTIPLIER = True # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
+            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
 
 
-            # temp hack for T45 Nature
-            USE_POSE_CROP_DICT = True # override canonical multipliers for production
-            DO_ENRICH_IMAGE_METAS = False # don't bother getting topics/detections because it isn't used.
-            ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
+            # # temp hack for T45 Nature
+            # USE_POSE_CROP_DICT = True # override canonical multipliers for production
+            # DO_ENRICH_IMAGE_METAS = False # don't bother getting topics/detections because it isn't used.
+            # ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
@@ -515,6 +516,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
             MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
         else:
+            # # TEMP HACK for stills, to force small clusters to run
+            # # for fusion clusters that don't run on class_id, just take the MAX_ROWS_PER_OUTPUT_CSV
+            # MIN_VIDEO_FUSION_COUNT = 10 # this is the cut off for the CSV fusion pairs
+            # MIN_CYCLE_COUNT = 10 # at least 100 in the cluster 
+
             # for fusion clusters that don't run on class_id, just take the MAX_ROWS_PER_OUTPUT_CSV
             MIN_VIDEO_FUSION_COUNT = 100 # this is the cut off for the CSV fusion pairs
             MIN_CYCLE_COUNT = 64 # at least 100 in the cluster 
@@ -569,7 +575,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TOPIC_NO = [class_id]
     else:
         TOPIC_NO = [class_id] if class_token else [0] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
-    OBJ_KEYWORD_CUTOFF = 120 # if below this number it is treated as an object_id and not a keyword with AND/NOT
+    OBJ_KEYWORD_CUTOFF = 160 # if below this number it is treated as an object_id and not a keyword with AND/NOT
     
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
     # this is CLUSTER_TYPE
@@ -5100,6 +5106,7 @@ def main():
         return mapping
 
     def classify_fusion_pair_route(cluster_topic_no, route_counts, object_column_totals, arms_to_meta_map):
+        print(f"[classify_fusion_pair_route] for {cluster_topic_no} with MULTIPOLICY={MULTIPOLICY}, HSV_SOURCE_MODE={HSV_SOURCE_MODE}, USE_HSV={USE_HSV}")
         default_policy = {
             "bucket": "legacy_single_policy",
             "hsv_source": "object" if HSV_SOURCE_MODE == "object" else "background",
@@ -5169,7 +5176,8 @@ def main():
         # Object-none override: always route to non-HSV fusion policy.
         # This keeps large OBJECT_NONE_CLUSTERS on the standard non-HSV
         # path (including CHOP_FIRST + iterative sorting behavior).
-        if object_cluster_id in OBJECT_NONE_CLUSTERS or KNN_LARGE_CLUSTERS:
+        print("OBJECT_KEEP_CLUSTERS:", OBJECT_KEEP_CLUSTERS)
+        if (object_cluster_id in OBJECT_NONE_CLUSTERS or KNN_LARGE_CLUSTERS):
             if cell_count >= int(MIN_VIDEO_FUSION_COUNT):
                 print(
                     f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
@@ -5565,7 +5573,7 @@ def main():
 
 
             # this is to save files from a segment to the SSD
-            if VERBOSE: print("will I save segment? ", SAVE_SEGMENT)
+            if VERBOSE: print("will I save segment to SSD? ", SAVE_SEGMENT)
             if SAVE_SEGMENT:
                 Base.metadata.create_all(engine)
                 print(df_segment.size)
