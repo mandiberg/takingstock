@@ -72,6 +72,16 @@ def _safe_int(value):
         return None
 
 
+def in_topic_window(fit, window, inclusive_max=False):
+    try:
+        fit = float(fit)
+    except (TypeError, ValueError):
+        return False
+    if inclusive_max:
+        return window[0] <= fit <= window[1]
+    return window[0] <= fit < window[1]
+
+
 def load_metas_audio_ids(path):
     if not os.path.exists(path):
         return set()
@@ -244,7 +254,7 @@ elif OPTION == "fish":
     if not FISH_VOICE_IDS:
         raise SystemExit("Fish voice library returned no voices. Check API_fish.py and the API key.")
     print(f"Fish voice pool: {len(FISH_VOICE_IDS)}")
-    WINDOW = [0.7, 1]
+    WINDOW = [0.7, 1.0]  # inclusive of 1.0; pairs with Coqui [0.0, 0.7)
 
 elif OPTION == "bark":
     from transformers import AutoProcessor, BarkModel
@@ -274,6 +284,8 @@ elif OPTION == "meta":
 
 os.makedirs(OUTPUT, exist_ok=True)
 
+WINDOW_INCLUSIVE_MAX = OPTION == "fish"
+
 already = load_metas_audio_ids(METAS_AUDIO_CSV)
 files_by_id = existing_audio_by_id(OUTPUT)
 print(f"Already in metas_audio.csv: {len(already)}")
@@ -289,12 +301,22 @@ with open(source_path, mode="r", encoding="utf-8-sig", newline="") as _f:
         if _safe_int(row.get("image_id")) not in already
         and _safe_int(row.get("image_id")) not in files_by_id
         and row.get("description")
-        and WINDOW[0] <= float(row["topic_fit"]) < WINDOW[1]
+        and in_topic_window(row.get("topic_fit"), WINDOW, WINDOW_INCLUSIVE_MAX)
     )
 print(f"Lines to process: {_lines_to_process} (window {WINDOW})")
 
 fieldnames = metas_fieldnames(METAS_AUDIO_CSV, source_fieldnames)
 processed = 0
+process_t0 = None
+
+def log_row_progress(item_t0):
+    pct = (100.0 * processed / _lines_to_process) if _lines_to_process else 100.0
+    item_s = time.time() - item_t0
+    print(f"{processed} of {_lines_to_process} rows processed ({pct:.1f}%)  {item_s:.1f}s")
+    if processed % 100 == 0 and process_t0:
+        elapsed = time.time() - process_t0
+        rate = processed / elapsed if elapsed > 0 else 0.0
+        print(f"Average: {rate:.2f} processed/s ({processed} rows in {elapsed:.1f}s)")
 
 with open(source_path, mode="r", encoding="utf-8-sig", newline="") as csvfile:
     reader = csv.DictReader(csvfile)
@@ -328,14 +350,15 @@ with open(source_path, mode="r", encoding="utf-8-sig", newline="") as csvfile:
             print(f"- {image_id} (no description)")
             counter += 1
             continue
-        if fit < WINDOW[0] or fit >= WINDOW[1]:
+        if not in_topic_window(fit, WINDOW, WINDOW_INCLUSIVE_MAX):
             print(f"Skipping image_id {image_id} (fit {fit} outside window {WINDOW})")
             counter += 1
             continue
 
         processed += 1
-        pct = (100.0 * processed / _lines_to_process) if _lines_to_process else 100.0
-        print(f"{processed} of {_lines_to_process} rows processed ({pct:.1f}%)")
+        if process_t0 is None:
+            process_t0 = time.time()
+        item_t0 = time.time()
 
         try:
             if OPTION == "openai_or_eleven_labs":
@@ -361,16 +384,19 @@ with open(source_path, mode="r", encoding="utf-8-sig", newline="") as csvfile:
                 write_TTS(input_text, file_path)
         except Exception as e:
             print(f"  FAILED {image_id}: {type(e).__name__}: {e}")
+            log_row_progress(item_t0)
             counter += 1
             continue
 
         if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
             print(f"  FAILED {image_id}: empty output {file_path}")
+            log_row_progress(item_t0)
             counter += 1
             continue
 
         append_metas_audio(METAS_AUDIO_CSV, row, out_name, fieldnames)
         already.add(image_id)
+        log_row_progress(item_t0)
 
         counter += 1
         if counter > STOP_AFTER:

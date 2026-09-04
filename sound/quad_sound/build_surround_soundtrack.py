@@ -6,6 +6,7 @@ branches. Output is a 4-channel WAV (FL FR BL BR).
 """
 import pandas as pd
 import os
+import csv
 import shutil
 import subprocess
 import time
@@ -43,7 +44,7 @@ BATCH_MODE = True          # set True to process cluster folders under BATCH_FOL
 # Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
 # Example layout:
 #   BATCH_FOLDER_NAME/clustercc1_p1_t0_om1_1788371815.2307808/metas.csv
-BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/tts_sport_clusters"
+BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/_9000s_arms"
 # Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
 # Empty list = every subfolder that contains metas.csv.
 BATCH_CLUSTERS = [
@@ -51,13 +52,18 @@ BATCH_CLUSTERS = [
     # "clustercc8_p1_t0_om1_1788402205.695117",
 ]
 METAS_CSV_NAME = "metas.csv"
-METAS_COLUMNS = ["image_id", "description", "topic_fit", "detections", "object", "filename"]
+# Cluster metas.csv has no audio filename; the last field is topic weight.
+METAS_COLUMNS = ["image_id", "description", "topic_fit", "detections", "object", "weight"]
+METAS_AUDIO_COLUMNS = [
+    "image_id", "description", "topic_fit", "detections", "objects", "weight", "filename",
+]
 # -------------------------
 
 CSV_FILE = f"metas_{TOPIC}.csv"  # overwritten per-topic when BATCH_MODE = True
 SOUND_FOLDER = "."
 # SOUND_FOLDER = "37_metas_hold_for_now"
 METAS_AUDIO_CSV = os.path.join(INPUT, "metas_audio.csv")
+MISSING_IDS_CSV = os.path.join(INPUT, "missing_ids.csv")
 
 # TOPICFOLDER = "topic" + str(TOPIC)
 
@@ -464,6 +470,7 @@ def test_repeat(description, last_description):
 existing_files = {}
 
 AUDIO_EXTS = {".wav", ".mp3", ".flac"}
+HASH_TOP = tuple("0123456789ABCDEF")
 
 
 def sound_dir():
@@ -529,25 +536,78 @@ def load_filenames_from_metas_audio(path):
 
 
 def existing_audio_by_id(folder):
-    """Walk hashed (or flat) folders and map image_id -> basename."""
+    """Walk hash trees (or the whole folder) and map image_id -> basename."""
+    lists = walk_audio_filenames_by_id(folder)
+    return {iid: pick_audio_filename(names) for iid, names in lists.items()}
+
+
+def hash_dir_roots(folder):
+    """Top-level 0-9/A-F hash directories under folder."""
+    roots = []
+    for top in HASH_TOP:
+        path = os.path.join(folder, top)
+        if os.path.isdir(path):
+            roots.append(path)
+    return roots
+
+
+def walk_audio_filenames_by_id(folder):
+    """image_id -> [basenames] from hash folders, or a full walk if none exist."""
     by_id = {}
     if not os.path.isdir(folder):
         return by_id
-    for walk_root, _dirs, files in os.walk(folder):
-        if "_x" in walk_root:
-            continue
-        for fname in files:
-            if os.path.splitext(fname)[1].lower() not in AUDIO_EXTS:
+    roots = hash_dir_roots(folder)
+    if not roots:
+        roots = [folder]
+    n_files = 0
+    for root in roots:
+        for walk_root, _dirs, files in os.walk(root):
+            if "_x" in walk_root.split(os.sep):
                 continue
-            key = image_id_key(fname.split("_")[0])
-            if key is None:
-                continue
-            by_id[key] = fname
+            for fname in files:
+                ext = os.path.splitext(fname)[1].lower()
+                if ext not in AUDIO_EXTS:
+                    continue
+                key = image_id_key(os.path.splitext(fname)[0].split("_")[0])
+                if key is None:
+                    continue
+                n_files += 1
+                by_id.setdefault(key, [])
+                if fname not in by_id[key]:
+                    by_id[key].append(fname)
+    print(f"  scrape indexed {n_files} audio file(s) for {len(by_id)} image_id(s)")
     return by_id
+
+
+def pick_audio_filename(names):
+    """Prefer wav, then coqui, then a stable last name."""
+    names = [n for n in names if n]
+    if not names:
+        return None
+
+    def score(name):
+        lower = name.lower()
+        return (
+            1 if lower.endswith(".wav") else 0,
+            1 if "_coqui_" in lower else 0,
+            name,
+        )
+
+    return sorted(names, key=score)[-1]
+
+
+def audio_on_disk(filename):
+    filename = _clean_filename(filename)
+    if not filename:
+        return False
+    path = resolve_audio_path(filename)
+    return os.path.isfile(path)
 
 
 _filenames_from_csv = None
 _walked_audio_by_id = None
+_walked_audio_all = None
+_metas_audio_fieldnames = None
 
 
 def filenames_from_metas_audio():
@@ -558,42 +618,206 @@ def filenames_from_metas_audio():
 
 
 def walked_audio_by_id():
-    """Walk SOUND_FOLDER once per process; used only for ids missing from the CSV."""
-    global _walked_audio_by_id
+    """Walk hash folders once per process; keep every clip per image_id."""
+    global _walked_audio_by_id, _walked_audio_all
     if _walked_audio_by_id is None:
         root = sound_dir()
-        print(f"Walking audio in {root} for ids missing from metas_audio.csv …")
-        _walked_audio_by_id = existing_audio_by_id(root)
-        print(f"Walk found {len(_walked_audio_by_id)} audio files")
+        print(f"Scraping hash-folder audio in {root} …")
+        _walked_audio_all = walk_audio_filenames_by_id(root)
+        _walked_audio_by_id = {
+            iid: pick_audio_filename(names) for iid, names in _walked_audio_all.items()
+        }
+        print(f"Walk found {len(_walked_audio_by_id)} image_id(s) with audio")
     return _walked_audio_by_id
 
 
-def index_audio_for_topic(df):
-    """CSV filenames first; walk only for ids with no usable filename."""
+def metas_audio_fieldnames():
+    """Header of metas_audio.csv, guaranteeing a filename column."""
+    global _metas_audio_fieldnames
+    if _metas_audio_fieldnames is not None:
+        return _metas_audio_fieldnames
+    names = list(METAS_AUDIO_COLUMNS)
+    if os.path.isfile(METAS_AUDIO_CSV) and os.path.getsize(METAS_AUDIO_CSV) > 0:
+        with open(METAS_AUDIO_CSV, "r", encoding="utf-8-sig", newline="") as f:
+            header = list(csv.DictReader(f).fieldnames or [])
+        if header:
+            names = header
+    if "filename" not in names:
+        names.append("filename")
+    _metas_audio_fieldnames = names
+    return names
+
+
+def _csv_cell(value):
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return value
+
+
+def cluster_row_to_metas_audio(row, filename, fieldnames):
+    """Map a cluster metas.csv row onto metas_audio.csv columns + scraped filename."""
+    data = row.to_dict() if hasattr(row, "to_dict") else dict(row)
+    objects = data.get("objects", data.get("object", ""))
+    weight = data.get("weight", "")
+    if weight is None or (isinstance(weight, float) and pd.isna(weight)):
+        maybe = data.get("filename")
+        if maybe is not None and _clean_filename(maybe) is None:
+            weight = maybe
+    out = {}
+    for key in fieldnames:
+        if key == "filename":
+            out[key] = filename
+        elif key == "objects":
+            out[key] = _csv_cell(objects)
+        elif key == "weight":
+            out[key] = _csv_cell(weight)
+        elif key == "object":
+            out[key] = _csv_cell(data.get("object", objects))
+        else:
+            out[key] = _csv_cell(data.get(key, ""))
+    return out
+
+
+def _ensure_csv_trailing_newline(path):
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        return
+    with open(path, "rb+") as f:
+        f.seek(-1, os.SEEK_END)
+        if f.read(1) != b"\n":
+            f.write(b"\n")
+
+
+def append_metas_audio_rows(rows):
+    """Append scraped cluster rows (with filename) to metas_audio.csv."""
+    if not rows:
+        return 0
+    fieldnames = metas_audio_fieldnames()
+    path = METAS_AUDIO_CSV
+    exists = os.path.isfile(path) and os.path.getsize(path) > 0
+    if exists:
+        _ensure_csv_trailing_newline(path)
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        if not exists:
+            writer.writeheader()
+        writer.writerows(rows)
+    return len(rows)
+
+
+def append_scraped_cluster_rows(df, scraped):
+    """Write metas.csv data + scraped filename for ids not yet in metas_audio.csv."""
+    global _filenames_from_csv
+    if not scraped:
+        return 0
     csv_names = filenames_from_metas_audio()
+    keys = df["image_id"].map(image_id_key)
+    fieldnames = metas_audio_fieldnames()
+    rows = []
+    for iid, filename in scraped:
+        if iid in csv_names:
+            continue
+        matches = df[keys == iid]
+        if matches.empty:
+            continue
+        row = cluster_row_to_metas_audio(matches.iloc[-1], filename, fieldnames)
+        rows.append(row)
+        csv_names[iid] = filename
+    written = append_metas_audio_rows(rows)
+    if _filenames_from_csv is not None:
+        _filenames_from_csv.update(csv_names)
+    return written
+
+
+_missing_ids_written = 0
+_missing_ids_fieldnames = None
+
+
+def index_audio_for_topic(df):
+    """Resolve audio for this cluster's ids; scrape hash folders; backfill metas_audio.csv.
+
+    Returns (existing, still_missing). existing maps image_id -> audio basename.
+    Ids found on disk but missing from metas_audio.csv are appended with the
+    cluster metas.csv fields plus the scraped filename.
+    """
+    csv_names = filenames_from_metas_audio()
+    walked = walked_audio_by_id()
     df_ids = {k for k in (image_id_key(v) for v in df["image_id"]) if k is not None}
     existing = {}
-    missing = []
+    still_missing = []
+    scraped = []
+    csv_ok = 0
+    csv_stale = 0
     for iid in df_ids:
-        fname = csv_names.get(iid)
-        if fname:
-            existing[iid] = fname
-        else:
-            missing.append(iid)
-    if missing:
-        walked = walked_audio_by_id()
-        filled = 0
-        still_missing = 0
-        for iid in missing:
-            fname = walked.get(iid)
-            if fname:
-                existing[iid] = fname
-                filled += 1
-            else:
-                still_missing += 1
-        print(f"  {len(missing)} id(s) missing/empty in metas_audio.csv; "
-              f"walk filled {filled}, still missing {still_missing}")
-    return existing
+        csv_name = _clean_filename(csv_names.get(iid))
+        if csv_name and audio_on_disk(csv_name):
+            existing[iid] = csv_name
+            csv_ok += 1
+            continue
+        if csv_name:
+            csv_stale += 1
+        walked_name = _clean_filename(walked.get(iid))
+        if walked_name:
+            existing[iid] = walked_name
+            if iid not in csv_names:
+                scraped.append((iid, walked_name))
+            continue
+        still_missing.append(iid)
+
+    appended = append_scraped_cluster_rows(df, scraped)
+    print(f"  metas_audio.csv hits on disk: {csv_ok}; "
+          f"csv filename missing on disk: {csv_stale}; "
+          f"scrape filled: {len(scraped)}; still missing: {len(still_missing)}")
+    if appended:
+        print(f"  appended {appended} row(s) to {METAS_AUDIO_CSV}")
+    return existing, still_missing
+
+
+def collect_missing_id_rows(df, missing_ids, cluster):
+    """Append metas rows for ids with no audio to missing_ids.csv immediately."""
+    global _missing_ids_written, _missing_ids_fieldnames
+    if not missing_ids:
+        return 0
+    missing_set = set(missing_ids)
+    keys = df["image_id"].map(image_id_key)
+    rows = df[keys.isin(missing_set)].copy()
+    if rows.empty:
+        return 0
+    rows.insert(0, "cluster", cluster)
+    path = MISSING_IDS_CSV
+    exists = os.path.isfile(path) and os.path.getsize(path) > 0
+    if exists:
+        _ensure_csv_trailing_newline(path)
+        if _missing_ids_fieldnames is None:
+            with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                _missing_ids_fieldnames = list(csv.DictReader(f).fieldnames or [])
+        fieldnames = _missing_ids_fieldnames
+        for col in fieldnames:
+            if col not in rows.columns:
+                rows[col] = ""
+        rows = rows[fieldnames]
+    else:
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+        _missing_ids_fieldnames = list(rows.columns)
+    rows.to_csv(path, mode="a", header=not exists, index=False)
+    n = len(rows)
+    _missing_ids_written += n
+    print(f"  appended {n} missing-id row(s) to {path}")
+    return n
+
+
+def write_missing_ids_csv(path=None):
+    """Summarize missing_ids.csv appends for this run."""
+    path = path or MISSING_IDS_CSV
+    if _missing_ids_written == 0:
+        print(f"No missing ids appended to {path}")
+        return
+    print(f"Appended {_missing_ids_written} missing-id row(s) this run to {path}")
 
 
 def build_quiet_background(quiet_files, total_duration, vol=0.04):
@@ -894,10 +1118,27 @@ def metas_read_csv_kwargs(path):
     return {"header": None, "names": METAS_COLUMNS}
 
 
+def normalize_metas_df(df):
+    """Cluster metas.csv stores topic weight, not an audio filename."""
+    if df is None or df.empty:
+        return df
+    if "weight" not in df.columns and "filename" in df.columns:
+        audio_names = df["filename"].map(_clean_filename)
+        if audio_names.notna().sum() == 0:
+            df = df.rename(columns={"filename": "weight"})
+    return df
+
+
 def read_metas_csv(path, **kwargs):
     merged = metas_read_csv_kwargs(path)
     merged.update(kwargs)
-    return pd.read_csv(path, **merged)
+    chunksize = merged.pop("chunksize", None)
+    if chunksize:
+        return (
+            normalize_metas_df(chunk)
+            for chunk in pd.read_csv(path, chunksize=chunksize, **merged)
+        )
+    return normalize_metas_df(pd.read_csv(path, **merged))
 
 
 def cluster_csv_path(folder):
@@ -963,9 +1204,6 @@ def run_topic(topic, csv_path=None):
     fake_loud = False
 
     output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}_quad.wav")
-    if os.path.exists(output_path):
-        print(f"[Topic {TOPIC}] Output already exists, skipping: {output_path}")
-        return None
 
     topic_t0 = time.time()
     print(f"\n{'='*60}")
@@ -978,11 +1216,16 @@ def run_topic(topic, csv_path=None):
 
     df = read_metas_csv(csv_path)
 
-    print(f"[Topic {TOPIC}] Resolving audio via metas_audio.csv (walk fallback for missing ids)")
-    existing_files = index_audio_for_topic(df)
+    print(f"[Topic {TOPIC}] Resolving audio via metas_audio.csv + hash-folder scrape")
+    existing_files, missing_ids = index_audio_for_topic(df)
+    collect_missing_id_rows(df, missing_ids, TOPIC)
     print(f"[Topic {TOPIC}] Existing files after INTERSECT:", len(existing_files))
     for k, v in list(existing_files.items())[:5]:
         print(f"  existing_files key: {repr(k)}  ->  {resolve_audio_path(v)}")
+
+    if os.path.exists(output_path):
+        print(f"[Topic {TOPIC}] Output already exists, skipping: {output_path}")
+        return None
 
     combined_audio = None
     start_index = 0
@@ -1048,7 +1291,11 @@ def run_topic(topic, csv_path=None):
 
 
 def main():
+    global _missing_ids_written, _missing_ids_fieldnames
+    _missing_ids_written = 0
+    _missing_ids_fieldnames = None
     filenames_from_metas_audio()
+    walked_audio_by_id()
     elapsed_times = []
     if BATCH_MODE:
         batch_dir = resolve_batch_folder(BATCH_FOLDER_NAME)
@@ -1066,6 +1313,7 @@ def main():
         elapsed = run_topic(TOPIC)
         if elapsed is not None:
             elapsed_times.append(elapsed)
+    write_missing_ids_csv()
     if elapsed_times:
         avg = sum(elapsed_times) / len(elapsed_times)
         print(f"Average processing time per cluster: {avg:.1f}s "
