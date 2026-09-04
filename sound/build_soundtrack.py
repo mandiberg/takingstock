@@ -17,9 +17,161 @@ from mp_db_io import DataIO
 
 
 
-TOPIC=37 # what folder are the files in?
+TOPIC=11 # what folder are the files in?
 
-CSV_FILE = f"metas_{TOPIC}.csv"
+# --- Batch mode config ---
+BATCH_MODE = True          # set True to process every topic in BATCH_TOPICS
+BATCH_TOPICS = [
+"cc100_p2263_t0_1781354008.2844028",
+"cc100_p733_t0_1781354008.284462",
+"cc100_p734_t0_1781354008.284565",
+"cc106_p2341_t0_1781354008.284698",
+"cc129_p2263_t0_1781354008.284726",
+"cc129_p2341_t0_1781354008.2849338",
+"cc129_p586_t0_1781354040.627423",
+"cc129_p727_t0_1781354043.751498",
+"cc138_p1685_t0_1781354046.6547031",
+"cc140_p2341_t0_1781354051.225558",
+"cc140_p734_t0_1781354052.4769",
+"cc153_p727_t0_1781354057.051112",
+"cc164_p2263_t0_1781354079.1617",
+"cc164_p586_t0_1781354080.3379",
+"cc173_p2341_t0_1781354081.947423",
+"cc173_p734_t0_1781354089.871104",
+"cc174_p2341_t0_1781354091.804319",
+"cc174_p734_t0_1781354092.7694058",
+"cc176_p2341_t0_1781354112.926543",
+"cc18_p1685_t0_1781354131.618468",
+"cc18_p2263_t0_1781354132.692957",
+"cc18_p3052_t0_1781354149.487799",
+"cc18_p586_t0_1781354161.8375769",
+"cc18_p727_t0_1781354163.805249",
+"cc18_p733_t0_1781354166.225365",
+"cc18_p734_t0_1781354168.5396721",
+"cc181_p1685_t0_om1_1781354118.201664",
+"cc181_p1685_t0_om2_1781354124.696685",
+"cc181_p2230_t0_1781354129.427186",
+"cc207_p2341_t0_1781354171.375859",
+"cc207_p734_t0_1781354183.6664262",
+"cc218_p1685_t0_1781354198.566848",
+"cc221_p2341_t0_1781354205.85057",
+"cc221_p258_t0_1781354208.625665",
+"cc221_p727_t0_1781354209.569845",
+"cc232_p1685_t0_om2_1781354211.2346082",
+"cc240_p1685_t0_1781354217.0588748",
+"cc252_p2263_t0_1781354230.850847",
+"cc252_p2341_t0_1781354246.4691432",
+"cc252_p586_t0_1781354247.595505",
+"cc252_p727_t0_1781354249.5857542",
+"cc252_p734_t0_1781354250.786443",
+"cc272_p1685_t0_1781354251.9313269",
+"cc272_p258_t0_1781354261.960465",
+"cc276_p2263_t0_1781354281.597419",
+"cc276_p258_t0_1781354288.6031659",
+"cc276_p727_t0_1781354293.667905",
+"cc276_p734_t0_1781354293.898411",
+"cc285_p258_t0_1781354297.069623",
+"cc290_p1685_t0_1781354300.060731",
+"cc294_p727_t0_1781354317.528149",
+"cc299_p2341_t0_om1_1781354331.248721",
+"cc299_p2341_t0_om14-21_1781354322.510436",
+"cc299_p2341_t0_om2_1781354331.619519",
+"cc299_p2341_t0_om3-7+22_1781354334.404993",
+"cc299_p2341_t0_om8-13_1781354337.1965609",
+"cc299_p586_t0_1781354351.331156",
+"cc299_p734_t0_1781354364.050156",
+"cc32_p586_t0_1781354400.387258",
+"cc322_p1685_t0_1781354365.240767",
+"cc322_p727_t0_1781354369.3196921",
+"cc329_p1685_t0_1781354375.070813",
+"cc329_p727_t0_1781354377.228257",
+"cc329_p733_t0_1781354387.1715121",
+"cc336_p2263_t0_1781354406.687737",
+"cc376_p734_t0_1781354408.5397918",
+"cc396_p1685_t0_1781354411.103116",
+"cc410_p2263_t0_1781354415.480688",
+"cc410_p2341_t0_1781354420.493612",
+"cc410_p734_t0_1781354436.586436",
+"cc423_p1685_t0_1781354442.5726871",
+"cc423_p258_t0_1781354445.3870761",
+"cc460_p2263_t0_1781354450.339499",
+"cc460_p727_t0_1781354452.262708",
+"cc47_p2341_t0_1781354529.011594",
+"cc47_p734_t0_1781354536.7478101",
+"cc472_p2341_t0_om1_1781354472.9020731",
+"cc472_p2341_t0_om14-21_1781354469.327456",
+"cc472_p2341_t0_om2_1781354477.9506829",
+"cc472_p734_t0_om1_1781354487.61303",
+"cc472_p734_t0_om14-21_1781354482.0088792",
+"cc472_p734_t0_om2_1781354488.780426",
+"cc472_p734_t0_om8-13_1781354503.510774",
+"cc474_p734_t0_1781354506.477726",
+"cc479_p1685_t0_om1_1781354518.20244",
+"cc479_p1685_t0_om2_1781354520.133919",
+"cc479_p2230_t0_1781354521.776533",
+"cc485_p2263_t0_1781354543.565963",
+"cc487_p2263_t0_1781354551.327713",
+"cc487_p2341_t0_1781354556.994349",
+"cc487_p727_t0_1781354557.383531",
+"cc490_p2263_t0_1781354574.891683",
+"cc490_p2341_t0_1781354577.5796502",
+"cc490_p727_t0_1781354579.8854342",
+"cc490_p733_t0_1781354582.421941",
+"cc518_p586_t0_1781354587.988336",
+"cc523_p1685_t0_1781354609.543432",
+"cc528_p1685_t0_1781354619.2121432",
+"cc542_p2341_t0_1781354621.791092",
+"cc547_p2341_t0_1781354621.9293509",
+"cc547_p734_t0_1781354629.9248939",
+"cc56_p1685_t0_om1_1781354665.714916",
+"cc56_p1685_t0_om2_1781354674.618307",
+"cc56_p258_t0_1781354678.4502988",
+"cc566_p2341_t0_om1_1781354642.981844",
+"cc566_p2341_t0_om14-21_1781354630.351407",
+"cc566_p2341_t0_om2_1781354651.203597",
+"cc566_p2341_t0_om3-7+22_1781354658.6624482",
+"cc566_p2341_t0_om8-13_1781354659.610663",
+"cc572_p734_t0_1781354695.865389",
+"cc579_p2341_t0_1781354696.667917",
+"cc587_p734_t0_1781354697.1006231",
+"cc589_p2341_t0_1781354711.259119",
+"cc638_p2341_t0_1781354713.486352",
+"cc638_p734_t0_1781354717.318681",
+"cc65_p2341_t0_1781354724.511369",
+"cc701_p1685_t0_1781354730.3445451",
+"cc701_p258_t0_1781354742.1572878",
+"cc718_p2341_t0_om14-21_1781354750.796727",
+"cc718_p2341_t0_om2_1781354759.047947",
+"cc718_p2341_t0_om3-7+22_1781354762.185907",
+"cc718_p734_t0_1781354771.3586729",
+"cc720_p2341_t0_1781354781.573573",
+"cc720_p727_t0_1781354795.340511",
+"cc722_p2341_t0_1781354796.9534411",
+"cc722_p734_t0_1781354797.845109",
+"cc729_p734_t0_1781354810.9727528",
+"cc749_p2341_t0_1781354817.0406358",
+"cc749_p727_t0_1781354820.128577",
+"cc749_p733_t0_1781354832.535018",
+"cc752_p1685_t0_1781354835.697527",
+"cc752_p2263_t0_1781354837.6508071",
+"cc752_p2341_t0_1781354847.635193",
+"cc752_p586_t0_1781354855.974784",
+"cc752_p727_t0_om0_1781354864.7338738",
+"cc752_p727_t0_om1_1781354868.186869",
+"cc752_p727_t0_om14-21_1781354866.624934",
+"cc752_p727_t0_om2_1781354877.295719",
+"cc752_p727_t0_om8-13_1781354892.340652",
+"cc752_p733_t0_1781354899.558799",
+"cc757_p2341_t0_1781354901.525433",
+"cc764_p2263_t0_1781354903.177483",
+"cc83_p1685_t0_1781354907.8347661",
+"cc84_p2341_t0_1781354915.344958",
+"cc89_p258_t0_1781354926.761695",
+"cc89_p727_t0_1781354939.339426"
+]  # topics to process when BATCH_MODE = True
+# -------------------------
+
+CSV_FILE = f"metas_{TOPIC}.csv"  # overwritten per-topic when BATCH_MODE = True
 SOUND_FOLDER = "tts_files_test"
 SOUND_FOLDER = "tts_files_pitch_shift"
 # SOUND_FOLDER = "37_metas_hold_for_now"
@@ -39,9 +191,7 @@ INPUT = io.ROOTSSD # folder that holds SOUND_FOLDER and audiopduction folders
 # Choose a file starting with a given string
 # prefixed = [filename for filename in os.listdir('.') if filename.startswith("prefix")]
 
-# Read all rows from the CSV file
-df = pd.read_csv(os.path.join(INPUT, "audioproduction",CSV_FILE))
-# sound_files_dict_image_id = io.get_existing_image_ids_from_wavs(INPUT,full_path=True)
+# df and existing_files are loaded per-topic inside main()
 
 # # Initialize lists to store audio data for each channel
 # left_channel_data = []
@@ -66,19 +216,14 @@ OFFSET_DICT = {
     37: 0.0755, # T37
 }
 
-OFFSET = OFFSET_DICT.get(TOPIC, 0.0743) # Default to T23 if not found
-
-# OFFSET = 0.071 # T32
-
-# OFFSET = 0.077 # T37
-TRACK_COUNT = len(df)
+OFFSET = OFFSET_DICT.get(TOPIC, 0.0743)  # overwritten per-topic when BATCH_MODE = True
 #### GENERALLY 3 words per second
 WPS=4
+SCALE_EXPONENT = 0 # exponent for scale_volume_exp; 0 = linear, 1 = cubic
 VOLUME_MIN = 0
 VOLUME_MAX = .8
-FIT_VOL_MIN = .3
+FIT_VOL_MIN = .1
 FIT_VOL_MAX = 1
-SCALE_EXPONENT = 0 # this is normally 1, but maybe 0 will produce linear scaling?
 FADEOUT = 7
 FADE_TIME = 1
 QUIET =.5
@@ -244,6 +389,8 @@ def scale_volume(row, cycler, audio_data, sample_rate):
         image_id = row['image_id']  # Using topic_fit as the volume level
         path = existing_files.get(str(image_id))
         # if path containts meta, return True
+        # TEMP CHANGE (was: if "bark_v5" in path: return True)
+        if path is None: return False
         if "bark_v5" in path: return True
         else: return False
 
@@ -333,13 +480,15 @@ def search_for_keys(row):
     desc_split=row['description'].lower().split(" ")
     desc_count=len(desc_split)
     for index,word in enumerate(desc_split):
-        for key in KEYS[TOPIC]:
+        # TEMP CHANGE (was: for key in KEYS[TOPIC]:)
+        for key in KEYS[37]:
             if key in word:
                 print(" ---- ", key, "found in", word, row['description'],row['image_id'])
                 found_list.append(index)
                 break
     if len(found_list)==0:
-        print("No keys found in", row['description'],"for topic model",KEYS[TOPIC])
+        # TEMP CHANGE (was: print("No keys found in", row['description'],"for topic model",KEYS[TOPIC]))
+        print("No keys found in", row['description'],"for topic model",KEYS[11])
     return found_list,desc_count
 
 def test_repeat(description, last_description):
@@ -353,17 +502,63 @@ def test_repeat(description, last_description):
     else:
         return 0, description
 
-existing_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
-# make a dict of existing files using the first part of filename (split on _) as the key
-existing_files = {os.path.basename(f).split("_")[0]:f for f in existing_files}
+# existing_files is populated per-topic inside main()
+existing_files = {}
 
-print("Existing files:", len(existing_files))
-# print("Existing files:", (existing_files))
-print("Existing file 1:", existing_files.keys())
+def build_quiet_background(quiet_files, total_duration, vol=0.04):
+    """Build a full-duration looping quiet background layer (t=0 to total_duration).
+
+    Cycles through *quiet_files* end-to-end, applying a gentle random pan to
+    each clip, and returns a stereo numpy array ready to be mixed into the
+    combined audio.  Using a fixed full-duration layer guarantees the murmur
+    is always present regardless of where quiet-tier CSV rows fall.
+    """
+    if not quiet_files:
+        return None
+
+    files = list(dict.fromkeys(quiet_files))  # deduplicate, preserve order
+    total_samples = int(total_duration * TARGET_SAMPLE_RATE)
+    background = np.zeros((total_samples, 2))
+    cursor = 0
+    file_idx = 0
+    consecutive_errors = 0
+
+    while cursor < total_samples:
+        if consecutive_errors >= len(files):
+            print("build_quiet_background: all files unreadable, aborting pad")
+            break
+        filepath = files[file_idx % len(files)]
+        file_idx += 1
+        try:
+            audio, sr = sf.read(filepath)
+            consecutive_errors = 0
+        except Exception as e:
+            print(f"build_quiet_background: skipping {filepath}: {e}")
+            consecutive_errors += 1
+            continue
+
+        audio, _ = conform_sample_rate(audio, sr)
+        # apply a slight random volume wobble so the loop doesn't sound static
+        clip_vol = vol * np.random.uniform(0.7, 1.3)
+        audio = audio * clip_vol
+        if len(audio.shape) == 1:
+            audio = np.column_stack((audio, audio))
+        # gentle pan: keep within centre range so the murmur doesn't pull hard
+        pan = np.random.uniform(0.25, 0.75)
+        audio[:, 0] *= (1.0 - pan)
+        audio[:, 1] *= pan
+        end = min(cursor + len(audio), total_samples)
+        background[cursor:end] += audio[:end - cursor]
+        cursor = end
+
+    return background
+
 
 def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chunk_index):
     left_channel_data = []
     right_channel_data = []
+    quiet_files_used = []   # paths of files placed in the quiet tier
+    quiet_max_end_time = 0  # latest end time seen for a quiet-tier clip
     max_end_time = 0
     global loud_counter
     global channel_counter
@@ -400,12 +595,18 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
             input_file = existing_files.get(str(image_id))
             print("Using existing file:", input_file)
         elif pd.notna(description) and image_id:
+            if not existing_files:
+                print(f"Skipping image_id {image_id}: no existing files to fall back to")
+                continue
             input_file = np.random.choice(list(existing_files.values()))
             if row['topic_fit'] < .6:
                 print("unprocessed meta file")
             elif row['topic_fit'] > .75:
                 print("unprocessed openai file")
         elif pd.isna(description) and image_id:
+            if not existing_files:
+                print(f"Skipping image_id {image_id} (NaN description): no existing files to fall back to")
+                continue
             input_file = np.random.choice(list(existing_files.values()))
             if row['topic_fit'] > QUIET:
                 row['topic_fit'] = row['topic_fit']/2
@@ -416,8 +617,13 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
 
         input_path = os.path.join(INPUT,SOUND_FOLDER,input_file)
 
+
         # Read the audio file
-        audio_data, sample_rate = sf.read(input_path)
+        try:
+            audio_data, sample_rate = sf.read(input_path)
+        except Exception as e:
+            print(f"Skipping corrupted/unreadable file {input_path}: {e}")
+            continue
         print("length at start",len(audio_data))
         print("location",input_path)
         # print("Audio data shape:", audio_data.shape, "Sample rate:", sample_rate)
@@ -513,6 +719,11 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         start_time = (start_index + i - repeat + loud_offset) * OFFSET
         end_time = start_time + len(audio_data_adjusted) / TARGET_SAMPLE_RATE
         max_end_time = max(max_end_time, end_time)
+
+        # track quiet-tier (lowest volume) files so we can loop them later if needed
+        if float(row['topic_fit']) < QUIET:
+            quiet_files_used.append(input_path)
+            quiet_max_end_time = max(quiet_max_end_time, end_time)
         
         # Create arrays with the correct offset
         left_channel = np.zeros(int(np.ceil(end_time * TARGET_SAMPLE_RATE)))
@@ -528,6 +739,12 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         left_channel_data.append(left_channel)
         right_channel_data.append(right_channel)
     
+    # If no audio was collected (all rows skipped), return silence
+    if not left_channel_data:
+        print("process_audio_chunk: no audio collected for this chunk, returning silence")
+        silence = np.zeros((TARGET_SAMPLE_RATE, 2))
+        return silence, 0.0, quiet_files_used, quiet_max_end_time
+
     # Mix the audio data for the chunk
     max_length = max(len(data) for data in left_channel_data + right_channel_data)
     mixed_audio = np.zeros((max_length, 2))
@@ -544,7 +761,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
     # output_file = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}_{chunk_index}.wav")
     # sf.write(output_file, mixed_audio, TARGET_SAMPLE_RATE, format='wav')
 
-    return mixed_audio, max_end_time
+    return mixed_audio, max_end_time, quiet_files_used, quiet_max_end_time
 
 def merge_audio(combined_audio, chunk_audio_without_silence):
     # Assuming sample_rate is defined
@@ -574,21 +791,60 @@ def merge_audio(combined_audio, chunk_audio_without_silence):
     return combined_audio
 
 
-def main():
-    io = DataIO()
+def run_topic(topic):
+    """Process a single topic and write its output file."""
+    global TOPIC, CSV_FILE, OFFSET, existing_files, loud_counter, channel_counter, fake_loud
 
-    existing_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
-    existing_files = {os.path.basename(f).split("_")[0]:f for f in existing_files}
+    # configure globals for this topic
+    TOPIC = topic
+    CSV_FILE = f"metas_{TOPIC}.csv"
+    OFFSET = OFFSET_DICT.get(TOPIC, 0.0743)
+
+    # reset stateful globals so each topic starts clean
+    loud_counter = []
+    channel_counter = 0
+    fake_loud = False
+
+    output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}.wav")
+    if os.path.exists(output_path):
+        print(f"[Topic {TOPIC}] Output already exists, skipping: {output_path}")
+        return
+
+    print(f"\n{'='*60}")
+    print(f"[Topic {TOPIC}] Starting — CSV: {CSV_FILE}  OFFSET: {OFFSET}")
+    chosen_keys = KEYS.get(TOPIC, None)
+    if chosen_keys is not None:
+        print(f"[Topic {TOPIC}] KEYS chosen: {chosen_keys}")
+    else:
+        print(f"[Topic {TOPIC}] WARNING: TOPIC {TOPIC} not found in KEYS dict — search_for_keys will fall back to KEYS[11]: {KEYS[11]}")
+    print(f"{'='*60}")
+
+    io = DataIO()
+    df = pd.read_csv(os.path.join(INPUT, "audioproduction", CSV_FILE))
+
+    raw_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
+
+    existing_files = {os.path.basename(f).split("_")[0]: f for f in raw_files}
     existing_files = {k: v for k, v in existing_files.items() if int(k) in df['image_id'].values}
-    print("Existing files after INTERSECT:", len(existing_files))
+    print(f"[Topic {TOPIC}] Existing files after INTERSECT:", len(existing_files))
+    # TEMP CHANGE: print sample keys and paths to debug filename mismatch
+    for k, v in list(existing_files.items())[:5]:
+        print(f"  existing_files key: {repr(k)}  ->  {v}")
 
     combined_audio = None
     start_index = 0
-    output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}.wav")
+    all_quiet_files = []      # accumulate quiet-tier file paths across all chunks
+    quiet_coverage_end = 0.0  # track the furthest end time of any quiet-tier clip
+
     chunks = pd.read_csv(os.path.join(INPUT, "audioproduction", CSV_FILE), chunksize=CHUNK_SIZE)
     for chunk_index, chunk in enumerate(chunks):
-        chunk_audio, chunk_end_time = process_audio_chunk(chunk, existing_files, INPUT, start_index, chunk_index)
-        print("Chunk audio length/sample:", len(chunk_audio)/TARGET_SAMPLE_RATE, "Chunk end time:", chunk_end_time)
+        chunk_audio, chunk_end_time, chunk_quiet_files, chunk_quiet_end = process_audio_chunk(chunk, existing_files, INPUT, start_index, chunk_index)
+        print(f"[Topic {TOPIC}] Chunk audio length/sample:", len(chunk_audio)/TARGET_SAMPLE_RATE, "Chunk end time:", chunk_end_time)
+
+        # collect quiet-tier bookkeeping
+        all_quiet_files.extend(chunk_quiet_files)
+        quiet_coverage_end = max(quiet_coverage_end, chunk_quiet_end)
+
         if combined_audio is None:
             combined_audio = chunk_audio
             print(chunk_index, "Combined audio shape:", combined_audio.shape, "Chunk audio shape:", chunk_audio.shape)
@@ -604,9 +860,43 @@ def main():
             combined_audio = merge_audio(combined_audio, chunk_audio_without_silence)
         del chunk_audio
         gc.collect()
-    print("Combined audio shape before writing:", combined_audio.shape)
-    print("writing to file", output_path)
+
+    # --- Quiet-tier barrier: lay a continuous looping murmur under the entire track ---
+    # Rather than detecting when quiet audio ends, we always build a full-duration
+    # quiet background so the murmur is guaranteed to persist from start to finish.
+    total_duration = len(combined_audio) / TARGET_SAMPLE_RATE
+    print(f"[Topic {TOPIC}] Quiet tier reached {quiet_coverage_end:.1f}s / {total_duration:.1f}s total")
+    if all_quiet_files:
+        print(f"[Topic {TOPIC}] Building full-duration quiet background ({total_duration:.1f}s, "
+              f"{len(set(all_quiet_files))} unique files)…")
+        quiet_bg = build_quiet_background(all_quiet_files, total_duration)
+        if quiet_bg is not None:
+            if len(quiet_bg) > len(combined_audio):
+                combined_audio = np.pad(
+                    combined_audio,
+                    ((0, len(quiet_bg) - len(combined_audio)), (0, 0)),
+                    'constant',
+                )
+            combined_audio[:len(quiet_bg)] += quiet_bg
+            print(f"[Topic {TOPIC}] Quiet background mixed in ({len(quiet_bg)/TARGET_SAMPLE_RATE:.1f}s)")
+    else:
+        print(f"[Topic {TOPIC}] No quiet-tier files collected — skipping quiet background")
+
+    print(f"[Topic {TOPIC}] Combined audio shape before writing:", combined_audio.shape)
+    print(f"[Topic {TOPIC}] Writing to file:", output_path)
     sf.write(output_path, combined_audio, TARGET_SAMPLE_RATE, format='wav')
+    del combined_audio
+    gc.collect()
+
+
+def main():
+    if BATCH_MODE:
+        print(f"Batch mode ON — processing topics: {BATCH_TOPICS}")
+        for topic in BATCH_TOPICS:
+            run_topic(topic)
+        print("\nBatch complete.")
+    else:
+        run_topic(TOPIC)
 
 if __name__ == "__main__":
     main()

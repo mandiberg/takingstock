@@ -39,9 +39,19 @@ TOPIC = 0  # non-batch only: which metas_{TOPIC}.csv to mix
 KEY_TOPICS = [0, 3, 15, 45]
 
 # --- Batch mode config ---
-BATCH_MODE = True          # set True to process every metas_*.csv in BATCH_FOLDER_NAME
-# Folder under INPUT, or an absolute path, containing metas_<topic>.csv files.
-BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/tts_sport_metas_per_cluster"
+BATCH_MODE = True          # set True to process cluster folders under BATCH_FOLDER_NAME
+# Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
+# Example layout:
+#   BATCH_FOLDER_NAME/clustercc1_p1_t0_om1_1788371815.2307808/metas.csv
+BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/tts_sport_clusters"
+# Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
+# Empty list = every subfolder that contains metas.csv.
+BATCH_CLUSTERS = [
+    # "clustercc1_p1_t0_om1_1788371815.2307808",
+    # "clustercc8_p1_t0_om1_1788402205.695117",
+]
+METAS_CSV_NAME = "metas.csv"
+METAS_COLUMNS = ["image_id", "description", "topic_fit", "detections", "object", "filename"]
 # -------------------------
 
 CSV_FILE = f"metas_{TOPIC}.csv"  # overwritten per-topic when BATCH_MODE = True
@@ -861,36 +871,90 @@ def merge_audio(combined_audio, chunk_audio_without_silence):
 
 
 def resolve_batch_folder(folder_name):
-    """Return an absolute path to the folder that holds metas_*.csv files."""
+    """Return an absolute path to the parent folder of cluster directories."""
     if os.path.isabs(folder_name):
         return folder_name
     return os.path.join(INPUT, folder_name)
 
 
-def list_metas_topics(folder):
-    """Return topic stems from metas_<topic>.csv files in folder (sorted)."""
-    if not os.path.isdir(folder):
-        raise FileNotFoundError(f"Batch folder not found: {folder}")
-    topics = []
-    for name in sorted(os.listdir(folder)):
-        if not name.startswith("metas_") or not name.endswith(".csv"):
-            continue
-        if name == "metas_audio.csv":
-            continue
-        topics.append(name[len("metas_"):-len(".csv")])
-    return topics
+def metas_csv_has_header(path):
+    """True if the first field of the first line is image_id."""
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        first = f.readline()
+    if not first:
+        return False
+    first_field = first.split(",", 1)[0].strip().strip('"').lower()
+    return first_field == "image_id"
 
 
-def run_topic(topic, csv_dir=None):
-    """Process a single topic and write its output file."""
+def metas_read_csv_kwargs(path):
+    """Kwargs so headerless cluster metas.csv files still expose named columns."""
+    if metas_csv_has_header(path):
+        return {}
+    return {"header": None, "names": METAS_COLUMNS}
+
+
+def read_metas_csv(path, **kwargs):
+    merged = metas_read_csv_kwargs(path)
+    merged.update(kwargs)
+    return pd.read_csv(path, **merged)
+
+
+def cluster_csv_path(folder):
+    return os.path.join(folder, METAS_CSV_NAME)
+
+
+def resolve_cluster_folder(entry, parent):
+    """Resolve a BATCH_CLUSTERS entry to an absolute cluster folder path."""
+    if os.path.isabs(entry):
+        return entry
+    return os.path.join(parent, entry)
+
+
+def list_cluster_jobs(parent, names=None):
+    """Return (folder_name, metas.csv path) for each cluster folder to mix.
+
+    If names is empty, every subdirectory of parent that contains metas.csv
+    is included. Otherwise each name is a folder under parent, or an absolute
+    cluster path.
+    """
+    if not os.path.isdir(parent):
+        raise FileNotFoundError(f"Batch folder not found: {parent}")
+
+    if names:
+        candidates = [resolve_cluster_folder(n, parent) for n in names]
+    else:
+        candidates = [
+            os.path.join(parent, name)
+            for name in sorted(os.listdir(parent))
+            if os.path.isdir(os.path.join(parent, name))
+        ]
+
+    jobs = []
+    for folder in candidates:
+        csv_path = cluster_csv_path(folder)
+        label = os.path.basename(os.path.normpath(folder))
+        if not os.path.isdir(folder):
+            print(f"Skipping {label}: not a directory ({folder})")
+            continue
+        if not os.path.isfile(csv_path):
+            print(f"Skipping {label}: no {METAS_CSV_NAME} in {folder}")
+            continue
+        jobs.append((label, csv_path))
+    return jobs
+
+
+def run_topic(topic, csv_path=None):
+    """Process a single topic/cluster and write its output file."""
     global TOPIC, CSV_FILE, OFFSET, existing_files, loud_counter, channel_counter, fake_loud
 
     # configure globals for this topic
     TOPIC = topic
-    CSV_FILE = f"metas_{TOPIC}.csv"
-    if csv_dir is None:
-        csv_dir = os.path.join(INPUT, "audioproduction")
-    csv_path = os.path.join(csv_dir, CSV_FILE)
+    if csv_path is None:
+        CSV_FILE = f"metas_{TOPIC}.csv"
+        csv_path = os.path.join(INPUT, "audioproduction", CSV_FILE)
+    else:
+        CSV_FILE = os.path.basename(csv_path)
     OFFSET = OFFSET_DICT.get(TOPIC, 0.0743)
 
     # reset stateful globals so each topic starts clean
@@ -912,7 +976,7 @@ def run_topic(topic, csv_dir=None):
     print(f"[Topic {TOPIC}] KEY_TOPICS {KEY_TOPICS} → {keys_for_search()}")
     print(f"{'='*60}")
 
-    df = pd.read_csv(csv_path)
+    df = read_metas_csv(csv_path)
 
     print(f"[Topic {TOPIC}] Resolving audio via metas_audio.csv (walk fallback for missing ids)")
     existing_files = index_audio_for_topic(df)
@@ -925,7 +989,7 @@ def run_topic(topic, csv_dir=None):
     all_quiet_files = []      # accumulate quiet-tier file paths across all chunks
     quiet_coverage_end = 0.0  # track the furthest end time of any quiet-tier clip
 
-    chunks = pd.read_csv(csv_path, chunksize=CHUNK_SIZE)
+    chunks = read_metas_csv(csv_path, chunksize=CHUNK_SIZE)
     for chunk_index, chunk in enumerate(chunks):
         chunk_audio, chunk_end_time, chunk_quiet_files, chunk_quiet_end = process_audio_chunk(chunk, existing_files, INPUT, start_index, chunk_index)
         print(f"[Topic {TOPIC}] Chunk audio length/sample:", len(chunk_audio)/TARGET_SAMPLE_RATE, "Chunk end time:", chunk_end_time)
@@ -988,13 +1052,13 @@ def main():
     elapsed_times = []
     if BATCH_MODE:
         batch_dir = resolve_batch_folder(BATCH_FOLDER_NAME)
-        topics = list_metas_topics(batch_dir)
-        print(f"Batch mode ON — found {len(topics)} metas_ file(s) in {batch_dir}")
-        if not topics:
-            print("No metas_*.csv files found.")
+        jobs = list_cluster_jobs(batch_dir, BATCH_CLUSTERS)
+        print(f"Batch mode ON — found {len(jobs)} cluster folder(s) in {batch_dir}")
+        if not jobs:
+            print(f"No cluster folders with {METAS_CSV_NAME} found.")
             return
-        for topic in topics:
-            elapsed = run_topic(topic, csv_dir=batch_dir)
+        for topic, csv_path in jobs:
+            elapsed = run_topic(topic, csv_path=csv_path)
             if elapsed is not None:
                 elapsed_times.append(elapsed)
         print("\nBatch complete.")
