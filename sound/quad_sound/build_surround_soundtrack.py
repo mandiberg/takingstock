@@ -44,7 +44,7 @@ BATCH_MODE = True          # set True to process cluster folders under BATCH_FOL
 # Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
 # Example layout:
 #   BATCH_FOLDER_NAME/clustercc1_p1_t0_om1_1788371815.2307808/metas.csv
-BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/_9000s_arms"
+BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/test"
 # Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
 # Empty list = every subfolder that contains metas.csv.
 BATCH_CLUSTERS = [
@@ -53,9 +53,9 @@ BATCH_CLUSTERS = [
 ]
 METAS_CSV_NAME = "metas.csv"
 # Cluster metas.csv has no audio filename; the last field is topic weight.
-METAS_COLUMNS = ["image_id", "description", "topic_fit", "detections", "object", "weight"]
+METAS_COLUMNS = ["image_id", "description", "topic_fit", "detections", "object", "topic"]
 METAS_AUDIO_COLUMNS = [
-    "image_id", "description", "topic_fit", "detections", "objects", "weight", "filename",
+    "image_id", "description", "topic_fit", "detections", "objects", "topic", "filename",
 ]
 # -------------------------
 
@@ -120,6 +120,10 @@ N_CHANNELS = 4
 SPEAKER_NAMES = ("FL", "FR", "BL", "BR")
 # Clockwise around the room as indices into SPEAKERS / channels
 CYCLE = (0, 1, 3, 2)  # FL, FR, BR, BL
+# Fraction of total gain the anchor speaker gets (inclusive). Remainder is
+# split randomly among the other speakers in that tier.
+ANCHOR_RANGE_MID = [0.50, 0.75]
+ANCHOR_RANGE_LOUD = [0.40, 0.70]
 KEYS = {
     0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
     1: ["outsid", "think", "sceneri", "landscap", "calm", "contempl", "peac", "retir", "pension", "blur"],
@@ -366,20 +370,47 @@ def random_normalized_weights(n):
     return w / s
 
 
+def _anchor_share(range_lo_hi):
+    lo, hi = range_lo_hi
+    return float(np.random.uniform(lo, hi))
+
+
 def spatial_gains(tier):
-    """Weights for FL, FR, BL, BR that sum to 1 over the chosen speakers."""
+    """Weights for FL, FR, BL, BR that sum to 1 over the chosen speakers.
+
+    Returns (gains, anchor_info). anchor_info is None for quiet, else
+    (speaker_name, share, [lo, hi]).
+    """
     gains = np.zeros(N_CHANNELS)
     start = np.random.randint(0, 4)
     if tier == "quiet":
         idxs = [CYCLE[start], CYCLE[(start + 1) % 4]]
-    elif tier == "mid":
-        idxs = [CYCLE[(start + i) % 4] for i in range(3)]
-    else:
-        idxs = list(CYCLE)
-    weights = random_normalized_weights(len(idxs))
-    for idx, weight in zip(idxs, weights):
+        weights = random_normalized_weights(len(idxs))
+        for idx, weight in zip(idxs, weights):
+            gains[idx] = weight
+        return gains, None
+
+    if tier == "mid":
+        anchor = CYCLE[start]
+        others = [CYCLE[(start - 1) % 4], CYCLE[(start + 1) % 4]]
+        lo_hi = ANCHOR_RANGE_MID
+        share = _anchor_share(lo_hi)
+        remainder = random_normalized_weights(2) * (1.0 - share)
+        gains[anchor] = share
+        for idx, weight in zip(others, remainder):
+            gains[idx] = weight
+        return gains, (SPEAKER_NAMES[anchor], share, lo_hi)
+
+    # loud: any speaker as anchor; remainder split among the other three
+    anchor = start
+    others = [i for i in range(N_CHANNELS) if i != anchor]
+    lo_hi = ANCHOR_RANGE_LOUD
+    share = _anchor_share(lo_hi)
+    remainder = random_normalized_weights(3) * (1.0 - share)
+    gains[anchor] = share
+    for idx, weight in zip(others, remainder):
         gains[idx] = weight
-    return gains
+    return gains, (SPEAKER_NAMES[anchor], share, lo_hi)
 
 
 def apply_quad_gains(mono, gains):
@@ -387,6 +418,13 @@ def apply_quad_gains(mono, gains):
 
 
 def tag_quad_wav(path):
+    """Stamp WAV channel_layout=quad without rematrixing.
+
+    ffmpeg's default guess for an untagged 4-channel file is 4.0 (FL FR FC BC).
+    If we only set the *output* layout to quad, ffmpeg remixes ch2 (our BL)
+    into the front as center, which makes FL/FR dominate. Declaring the input
+    as quad already keeps sample order FL FR BL BR and only writes the tag.
+    """
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         print("ffmpeg not found — wrote 4-channel WAV without a quad channel_layout tag")
@@ -394,7 +432,13 @@ def tag_quad_wav(path):
     tmp = path + ".quadtmp.wav"
     try:
         subprocess.run(
-            [ffmpeg, "-y", "-i", path, "-channel_layout", "quad", "-c:a", "pcm_s16le", tmp],
+            [
+                ffmpeg, "-y",
+                "-channel_layout", "quad",
+                "-i", path,
+                "-c", "copy",
+                tmp,
+            ],
             check=True,
             capture_output=True,
         )
@@ -853,7 +897,7 @@ def build_quiet_background(quiet_files, total_duration, vol=0.04):
         audio, _ = conform_sample_rate(to_mono(audio), sr)
         clip_vol = vol * np.random.uniform(0.7, 1.3)
         mono = audio * clip_vol
-        gains = spatial_gains("quiet")
+        gains, _anchor = spatial_gains("quiet")
         audio = apply_quad_gains(mono, gains)
         end = min(cursor + len(audio), total_samples)
         background[cursor:end] += audio[:end - cursor]
@@ -1002,8 +1046,11 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         if fadein>0:apply_fadein(audio_data_adjusted, sample_rate, fadein)
         ####################
         tier = spatial_tier(row)
-        gains = spatial_gains(tier)
+        gains, anchor_info = spatial_gains(tier)
         audio_data_adjusted = apply_quad_gains(audio_data_adjusted, gains)
+        if anchor_info is not None:
+            name, share, lo_hi = anchor_info
+            print(f"Anchor {name}={share:.2f} range=[{lo_hi[0]:.2f}, {lo_hi[1]:.2f}] ({tier})")
         print(f"Spatial {tier}:", " ".join(
             f"{name}={g:.2f}" for name, g in zip(SPEAKER_NAMES, gains) if g > 1e-6
         ))
