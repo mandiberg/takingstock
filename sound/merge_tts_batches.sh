@@ -2,8 +2,9 @@
 # merge_tts_batches.sh
 #
 # Unzips all batch_*.zip files from INPUT_DIR, merges their two-level MD5
-# hash folder trees into OUTPUT_DIR, copies metas_audio.csv to OUTPUT_DIR,
-# and deletes each zip only after confirming its contents landed correctly.
+# hash folder trees into OUTPUT_DIR, unions metas_audio.csv into OUTPUT_DIR
+# (never overwrites existing rows), and deletes each zip only after
+# confirming its contents landed correctly.
 #
 # Collision policy: if a WAV already exists in OUTPUT_DIR with the same path,
 # the incoming file is skipped and the collision is logged to a report file.
@@ -213,15 +214,80 @@ done
 # metas_audio.csv
 # ─────────────────────────────────────────────────────────────────────────────
 
-banner "Copying metas_audio.csv"
+banner "Merging metas_audio.csv"
 src_csv="${INPUT_DIR}/metas_audio.csv"
 dest_csv="${OUTPUT_DIR}/metas_audio.csv"
 
 if [[ -f "$src_csv" ]]; then
-    cp "$src_csv" "$dest_csv"
-    csv_rows=$(( $(wc -l < "$dest_csv") - 1 ))  # subtract header
-    log "metas_audio.csv copied to output ($csv_rows data row(s))"
-    echo "metas_audio.csv: $csv_rows rows copied" >> "$REPORT_FILE"
+    merge_out="$(python3 - "$src_csv" "$dest_csv" <<'PY'
+import csv, os, sys, tempfile
+
+src, dest = sys.argv[1], sys.argv[2]
+
+def image_id_key(row):
+    try:
+        return str(int(float(str(row.get("image_id", "")).strip())))
+    except (TypeError, ValueError):
+        return None
+
+def load(path):
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        fields = list(reader.fieldnames or [])
+        return fields, list(reader)
+
+src_fields, src_rows = load(src)
+if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+    dest_fields, dest_rows = load(dest)
+else:
+    dest_fields, dest_rows = [], []
+
+fields = list(dict.fromkeys(dest_fields + src_fields))
+if "filename" in fields:
+    fields = [c for c in fields if c != "filename"] + ["filename"]
+
+seen = set()
+out_rows = []
+for row in dest_rows:
+    key = image_id_key(row)
+    if key:
+        seen.add(key)
+    out_rows.append(row)
+
+added = 0
+for row in src_rows:
+    key = image_id_key(row)
+    if key and key in seen:
+        continue
+    if key:
+        seen.add(key)
+    out_rows.append(row)
+    added += 1
+
+os.makedirs(os.path.dirname(os.path.abspath(dest)) or ".", exist_ok=True)
+fd, tmp = tempfile.mkstemp(prefix="metas_audio_", suffix=".csv",
+                           dir=os.path.dirname(os.path.abspath(dest)) or ".")
+try:
+    with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(out_rows)
+    os.replace(tmp, dest)
+except Exception:
+    try:
+        os.remove(tmp)
+    except OSError:
+        pass
+    raise
+
+print(f"{len(dest_rows)} {added} {len(out_rows)}")
+PY
+)"
+    dest_before="$(echo "$merge_out" | awk '{print $1}')"
+    added="$(echo "$merge_out" | awk '{print $2}')"
+    dest_after="$(echo "$merge_out" | awk '{print $3}')"
+    log "metas_audio.csv merged: dest had ${dest_before} row(s), added ${added} new image_id(s), now ${dest_after}"
+    echo "metas_audio.csv: dest_before=${dest_before} added=${added} dest_after=${dest_after}" >> "$REPORT_FILE"
 else
     warn "metas_audio.csv not found in INPUT_DIR — skipping"
     echo "metas_audio.csv: NOT FOUND in input" >> "$REPORT_FILE"

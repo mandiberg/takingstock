@@ -9,7 +9,7 @@ metas_audio.csv contains every column from the source CSV plus a `filename`
 column recording the output WAV name.  It is shared with install_make_tts.py
 (Bark) so both engines deduplicate against the same log.
 
-Score range: 0.6 <= topic_fit < 0.7
+Score range: 0.0 <= topic_fit < 0.7  (Fish covers 0.7 <= topic_fit <= 1.0)
 Speaker:     random VCTK speaker picked per line (109 available)
 Output:      tts_bark_out/
 """
@@ -97,6 +97,23 @@ def _load_done_ids(path: str) -> Set[int]:
             if v is not None:
                 ids.add(v)
     return ids
+
+
+def _existing_audio_by_id(folder: str) -> dict[int, str]:
+    """Map image_id -> basename for wavs already in OUT_DIR (any speaker/voice)."""
+    by_id: dict[int, str] = {}
+    if not os.path.isdir(folder):
+        return by_id
+    audio_exts = {".wav", ".mp3", ".flac"}
+    for _root, _dirs, files in os.walk(folder):
+        for fname in files:
+            if os.path.splitext(fname)[1].lower() not in audio_exts:
+                continue
+            image_id = _safe_int(fname.split("_")[0])
+            if image_id is None:
+                continue
+            by_id[image_id] = fname
+    return by_id
 
 
 def _append_metas_audio(
@@ -380,7 +397,9 @@ def main() -> None:
 
     os.makedirs(OUT_DIR, exist_ok=True)
     already = _load_done_ids(METAS_AUDIO_CSV)
+    files_by_id = _existing_audio_by_id(OUT_DIR)
     print(f"Loaded {len(already)} already-processed image_ids from metas_audio.csv")
+    print(f"Existing audio files in {OUT_DIR}: {len(files_by_id)}")
 
     input_csvs = _collect_input_csvs(IN_CSV_DIR)
     print(f"Found {len(input_csvs)} input CSV(s): "
@@ -462,19 +481,19 @@ def main() -> None:
             if not text:
                 continue
 
-            speaker  = tts.random_speaker()
-            out_path = _build_out_path(OUT_DIR, image_id=image_id, speaker=speaker)
-
-            # WAV existence guard — if the file already exists on disk, log it
-            # and skip re-synthesis without requiring metas_audio.csv to be intact.
-            if os.path.exists(out_path):
+            # WAV existence guard — any on-disk file for this image_id counts,
+            # regardless of which random speaker was baked into the filename.
+            existing_name = files_by_id.get(image_id)
+            if existing_name:
                 _append_metas_audio(
-                    METAS_AUDIO_CSV, row,
-                    os.path.basename(out_path), fieldnames,
+                    METAS_AUDIO_CSV, row, existing_name, fieldnames,
                 )
                 already.add(image_id)
                 skipped_already += 1
                 continue
+
+            speaker  = tts.random_speaker()
+            out_path = _build_out_path(OUT_DIR, image_id=image_id, speaker=speaker)
 
             pending.append(_PendingItem(
                 image_id=image_id,
