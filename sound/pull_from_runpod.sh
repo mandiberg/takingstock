@@ -20,10 +20,10 @@ set -euo pipefail
 # -----------------------------------------------------------------------
 RUNPOD_KEY="$HOME/.ssh/id_ed25519"
 RUNPOD_USER="root"
-RUNPOD_HOST="213.192.2.83"
-RUNPOD_PORT="40052"
+RUNPOD_HOST="47.47.180.65"
+RUNPOD_PORT="28050"
 REMOTE_DIR="/root/install_make_tts/downloads"
-LOCAL_DIR="/Users/tenchc/Documents/GitHub/taking_stock_production/tts_sport"
+LOCAL_DIR="/Users/tenchc/Documents/GitHub/taking_stock_production/tts_sport_coqui"
 POLL_INTERVAL=3600   # seconds between polls (1 hour)
 # -----------------------------------------------------------------------
 
