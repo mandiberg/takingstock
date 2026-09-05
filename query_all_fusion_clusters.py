@@ -21,7 +21,7 @@ ROOT = io.ROOT
 NUMBER_OF_PROCESSES = io.NUMBER_OF_PROCESSES
 #######################################
 
-# USE THIS TO MAKE THE FILE NECESSARY TO DO KEYWORD BASED MAKE VIDEO OUTPUT
+# USE THIS TO MAKE THE FILE NECESSARY TO DO KEYWORD/SIGNATURE BASED MAKE VIDEO OUTPUT
 
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/heft_keyword_fusion_clusters'
 ROOT_DATA_PATH = '/Users/michaelmandiberg/Documents/GitHub/takingstock/utilities/data/'

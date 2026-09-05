@@ -33,7 +33,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "T37_final_looping_video_source_files"
-FOLDER_NAME = "output_folder/_thegym_body_audio_sept2_pt1"
+FOLDER_NAME = "output_folder/_BODY_c157v3_2000s_preLAX"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -178,9 +178,9 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
-# VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 # VID_DIMS_TEST = [1746,1746]
-VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+# VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 

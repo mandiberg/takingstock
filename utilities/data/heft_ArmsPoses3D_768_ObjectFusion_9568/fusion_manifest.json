@@ -3,7 +3,7 @@
   "contract_version": 1,
   "export_options": {
     "helper_table": "SegmentHelper_TheGym",
-    "kept_cluster_count": 8178,
+    "kept_cluster_count": 9568,
     "object_cluster_table_name": "ImagesObjectSignatures"
   },
   "files": {

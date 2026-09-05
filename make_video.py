@@ -107,8 +107,8 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_real_audio" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_real_audio" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX" # go check FULL_BODY //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -431,7 +431,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             GENERATE_FUSION_PAIRS = False 
 
             # use this to turn on multiplier CSV creation/augmentation
-            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
 
 
@@ -3338,63 +3338,98 @@ def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
 
 def enrich_image_metas(df):
     print("enriching image metas")
+    total_start = time.perf_counter()
+
     KEYWORD_TO_SCORE_DIVISOR = 4
     RANDOM_DIVISOR = 5
-    if 'description' not in df.columns:
-        df['description'] = None
+
+    if "description" not in df.columns:
+        df["description"] = None
+
     def count_keywords_in_description(description, keywords):
         print("count_keywords_in_description called with description:", description)
-        keywords = ["banknote", "money", "dollar", "euro", "pounds", "credit", "financ", "card", "currenc", "cash", "rupee", "yen", "yuan", 'ruble', "mark", "rupee", "peso", "franc", "lira", "shekel", "ether", "crypto", "bitcoin"]
+        keywords = [
+            "banknote", "money", "dollar", "euro", "pounds", "credit", "financ",
+            "card", "currenc", "cash", "rupee", "yen", "yuan", "ruble", "mark",
+            "peso", "franc", "lira", "shekel", "ether", "crypto", "bitcoin"
+        ]
         if not description or not isinstance(description, str):
             return 0
         description_lower = description.lower()
         count = sum(1 for keyword in keywords if keyword in description_lower)
-        print(f"count_keywords_in_description called with description: {description}, count: {count}")
-        # score is calculated as the count divided by 4 + a random number between .0 and .2
-        random_number = (random() / RANDOM_DIVISOR)  # Random number between 0.0 and 0.2
+        random_number = random() / RANDOM_DIVISOR
         raw_score = (count / KEYWORD_TO_SCORE_DIVISOR) + random_number
-        score = min(raw_score, .9)  # Ensure the score does not exceed 1.0
-        print(f"count_keywords_in_description called with description: {description}, count: {count}, score: {score}, random_number: {random_number}")
-        return score
+        return min(raw_score, 0.9)
 
-    parts = SegmentHelper_name.split("_")
-    topic_id = None
-    if 'topic_score' not in df.columns:
-        image_ids = df['image_id'].dropna().tolist()
-        topic_scores = {}
-        if image_ids:
-            try:
-                score_rows = session.query(ImagesTopics.image_id, ImagesTopics.topic_id, ImagesTopics.topic_score).filter(
-                    ImagesTopics.image_id.in_(image_ids),
-                ).all()
-                topic_scores = {image_id: (topic_id,topic_score) for image_id, topic_id, topic_score in score_rows}
-            except Exception as e:
-                traceback.print_exc()
-                print(str(e))
-                topic_scores = {}
-        print(f"going to unpack {len(topic_scores)} rows from {len(df.index)} rows")
-        print(f"first score is {list(topic_scores.items())[0] if topic_scores else 'none'}")
-        # df[['New_Col1', 'New_Col2']] = pd.DataFrame(df['A'].map(my_map).tolist(), index=df.index)
+    # normalize once
+    image_ids = pd.to_numeric(df["image_id"], errors="coerce").dropna().astype("int64").unique().tolist()
+    if "topic_score" not in df.columns:
+        df["topic_id"] = None
+        df["topic_score"] = None
 
-        # map() yields NaN (not a tuple) for unmatched image_ids, which breaks .tolist()
-        # into an inhomogeneous array; fill those with (None, None) to keep shape consistent.
-        mapped_topic_scores = df['image_id'].map(topic_scores).apply(
-            lambda value: value if isinstance(value, tuple) else (None, None)
-        )
-        df[['topic_id', 'topic_score']] = pd.DataFrame(mapped_topic_scores.tolist(), index=df.index)
-        print(
-            f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
-            f"using topic_id={topic_id}"
-        )
-            
-    # Only backfill topic_score from description when no usable score already exists.
-    topic_score_missing_mask = df['topic_score'].isna() | (pd.to_numeric(df['topic_score'], errors='coerce') == 0)
+    topic_query_start = time.perf_counter()
+    topic_scores = {}
+    if image_ids:
+        try:
+            if SegmentHelper_name:
+                helper_table = f"`{SegmentHelper_name}`"
+                bound_ids = tuple(image_ids)
+                query_sql = f"""
+                    SELECT it.image_id, it.topic_id, it.topic_score
+                    FROM ImagesTopics it
+                    JOIN {helper_table} sh ON sh.image_id = it.image_id
+                    WHERE sh.image_id IN :image_ids
+                      AND it.topic_score IS NOT NULL
+                """
+                # print(f"[enrich_image_metas] topic query SQL:\n{query_sql}")
+                # print(f"[enrich_image_metas] topic query image_ids sample={bound_ids[:10]}")
+                rows = session.execute(
+                    text(query_sql),
+                    {"image_ids": bound_ids},
+                ).fetchall()
+            else:
+                rows = session.execute(
+                    select(ImagesTopics.image_id, ImagesTopics.topic_id, ImagesTopics.topic_score)
+                    .where(ImagesTopics.image_id.in_(image_ids))
+                    .where(
+                        or_(
+                            ImagesTopics.topic_score.is_(None),
+                            ImagesTopics.topic_score == 0
+                        )
+                    )
+                ).fetchall()
+
+            topic_scores = {
+                int(image_id): (int(topic_id), float(topic_score)) if topic_id is not None else (None, None)
+                for image_id, topic_id, topic_score in rows
+            }
+        except Exception:
+            traceback.print_exc()
+            topic_scores = {}
+    # print(
+    #     f"[enrich_image_metas] topic query elapsed={time.perf_counter() - topic_query_start:.3f}s "
+    #     f"rows={len(df.index)} unique_ids={len(image_ids)} matched_rows={len(topic_scores)}"
+    # )
+
+    map_start = time.perf_counter()
+    mapped_topic_scores = df["image_id"].map(topic_scores).apply(
+        lambda value: value if isinstance(value, tuple) else (None, None)
+    )
+    df[["topic_id", "topic_score"]] = pd.DataFrame(mapped_topic_scores.tolist(), index=df.index)
+    # print(f"[enrich_image_metas] topic map elapsed={time.perf_counter() - map_start:.3f}s")
+
+    backfill_start = time.perf_counter()
+    topic_score_missing_mask = df["topic_score"].isna() | (pd.to_numeric(df["topic_score"], errors="coerce") == 0)
     if topic_score_missing_mask.any():
-        df.loc[topic_score_missing_mask, 'topic_score'] = df.loc[
-            topic_score_missing_mask, 'description'
+        missing_count = int(topic_score_missing_mask.sum())
+        print(f"[enrich_image_metas] backfill candidates={missing_count}")
+        df.loc[topic_score_missing_mask, "topic_score"] = df.loc[
+            topic_score_missing_mask, "description"
         ].apply(lambda desc: count_keywords_in_description(desc, []))
-    
-    image_ids = df['image_id'].dropna().tolist()
+    # print(f"[enrich_image_metas] topic backfill elapsed={time.perf_counter() - backfill_start:.3f}s")
+
+    detection_query_start = time.perf_counter()
+    image_ids = df["image_id"].dropna().tolist()
     detection_payloads = {}
     if image_ids:
         try:
@@ -3418,19 +3453,32 @@ def enrich_image_metas(df):
                 image_id: json.dumps(detections, ensure_ascii=False)
                 for image_id, detections in grouped_detections.items()
             }
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
-            print(str(e))
             detection_payloads = {}
-    if 'detections_json' not in df.columns:
-        df['detections_json'] = df['image_id'].map(detection_payloads).fillna("[]")
+    # print(
+    #     f"[enrich_image_metas] detection query elapsed={time.perf_counter() - detection_query_start:.3f}s "
+    #     f"rows={len(image_ids)} payload_rows={len(detection_payloads)}"
+    # )
+
+    if "detections_json" not in df.columns:
+        detection_map_start = time.perf_counter()
+        df["detections_json"] = df["image_id"].map(detection_payloads).fillna("[]")
+        # print(f"[enrich_image_metas] detection map elapsed={time.perf_counter() - detection_map_start:.3f}s")
     else:
-        df['detections_json'] = df['detections_json'].fillna("[]")
-    if 'detection_count' not in df.columns:
-        df['detection_count'] = df['detections_json'].apply(
+        df["detections_json"] = df["detections_json"].fillna("[]")
+
+    if "detection_count" not in df.columns:
+        detection_count_start = time.perf_counter()
+        df["detection_count"] = df["detections_json"].apply(
             lambda value: len(json.loads(value)) if isinstance(value, str) and value else 0
         )
-    return df 
+        # print(f"[enrich_image_metas] detection_count elapsed={time.perf_counter() - detection_count_start:.3f}s")
+
+    total_elapsed = time.perf_counter() - total_start
+    # print(f"[enrich_image_metas] total elapsed={total_elapsed:.3f}s row_count={len(df.index)}")
+    return df
+
 def _build_sorted_artifact_paths(csv_folder, file_prefix, segment_count):
     stem = f"df_sorted_{file_prefix}_ct{segment_count}"
     base_path = os.path.join(csv_folder, stem)
