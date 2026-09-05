@@ -10,7 +10,8 @@ from pathlib import Path
 # importing project-specific models
 import sys
 import os
-ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/facemap/")
+
+ROOT_GITHUB = os.path.join(Path.home(), "Documents/GitHub/takingstock/")
 # caution: path[0] is reserved for script path (or '' in REPL)
 sys.path.insert(1, ROOT_GITHUB)
 
@@ -32,7 +33,7 @@ bboxnormed_collection = mongo_db["body_landmarks_norm"]
 
 SUBSET_LANDMARKS = [i for i in range(13,22)]
 
-image_id = 6301419
+image_id = 65152722
 #
 #
 # 10152053
