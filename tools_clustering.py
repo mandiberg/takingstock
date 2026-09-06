@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 from my_declarative_base import Base, Images, Detections, Encodings
 import pickle
+import math
 import numpy as np
 import json
 import os
@@ -4679,13 +4680,12 @@ class ToolsClustering:
         return result
 
     def derive_leg_pose_multiplier_variant(self, leg_pose_label, leg_extension_values=None):
-        """Return a compact, registry-friendly leg-pose variant token.
+        """Return the canonical integer bucket used for multiplier registry keys.
 
-        The separability split can produce the same semantic pose family with
-        materially different leg lengths (e.g. folded legs around 1.0 vs.
-        standing legs around 5.0). That matters because the crop multiplier is
-        sensitive to the leg articulation, even when the object signature and
-        cluster are otherwise identical.
+        The raw modal leg length is allowed to vary around a multiplier bucket,
+        but registry lookups should remain stable and compatible. We therefore
+        bucket values using ceiling so that 0.2/0.7/0.8 all map to 1, while
+        4.0/4.5/4.7 map to 5 and 5.5 maps to 6.
         """
         if leg_pose_label is None or str(leg_pose_label).lower() in ("none", "nan", "not_visible"):
             return None
@@ -4698,8 +4698,7 @@ class ToolsClustering:
             return None
 
         modal_leg_length = float(np.median(values.to_numpy(dtype=float)))
-        rounded = float(np.round(modal_leg_length, 1))
-        return f"{rounded:.1f}"
+        return int(math.ceil(modal_leg_length))
 
     def label_by_leg_pose(self, df, boundary, asymmetry_threshold=0.15):
         """

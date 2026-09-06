@@ -107,7 +107,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX_legpose" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX_legpose_legvariants_64test2" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX_9000s" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
@@ -438,7 +438,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             GENERATE_FUSION_PAIRS = False 
 
             # use this to turn on multiplier CSV creation/augmentation
-            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
 
 
@@ -4167,16 +4167,43 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, l
     use_pose_crop = bool(USE_POSE_CROP_DICT and (pose_no is not None or cluster_no is not None))
     canonical_multiplier = None
     learned_record = None
+    variant_registry_miss = False
+    exact_variant_key = None
     if not use_pose_crop:
-        candidate_keys = []
         if cluster_no is not None and pose_no is not None:
-            candidate_keys.append((cluster_no, pose_no))
             if normalized_leg_variant is not None:
-                candidate_keys.append((cluster_no, pose_no, normalized_leg_variant))
-        for key in candidate_keys:
-            if key in (canonical_registry or {}):
-                canonical_multiplier = (canonical_registry or {})[key]
-                break
+                exact_variant_key = (cluster_no, pose_no, normalized_leg_variant)
+                if VERBOSE: print(
+                    "[MODE1 MULTIPLIER TRACE] exact variant lookup start "
+                    f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+                    f"exact_key={exact_variant_key} registry_size={len(canonical_registry or {})}"
+                )
+                if exact_variant_key in (canonical_registry or {}):
+                    canonical_multiplier = (canonical_registry or {})[exact_variant_key]
+                    if VERBOSE: print(
+                        "[MODE1 MULTIPLIER TRACE] exact variant match used "
+                        f"key={exact_variant_key} value={canonical_multiplier}"
+                    )
+                else:
+                    variant_registry_miss = True
+                    if VERBOSE: print(
+                        "[MODE1 MULTIPLIER TRACE] exact variant miss trigger "
+                        f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+                        f"missing_key={exact_variant_key} legacy_base_key={(cluster_no, pose_no)}"
+                    )
+            else:
+                legacy_key = (cluster_no, pose_no)
+                if VERBOSE: print(
+                    "[MODE1 MULTIPLIER TRACE] legacy lookup start "
+                    f"arms={cluster_no} object_signature={pose_no} key={legacy_key} "
+                    f"registry_size={len(canonical_registry or {})}"
+                )
+                if legacy_key in (canonical_registry or {}):
+                    canonical_multiplier = (canonical_registry or {})[legacy_key]
+                    if VERBOSE: print(
+                        "[MODE1 MULTIPLIER TRACE] legacy match used "
+                        f"key={legacy_key} value={canonical_multiplier}"
+                    )
     if canonical_multiplier is not None:
         sort.image_edge_multiplier = list(canonical_multiplier)
         print(
@@ -4204,8 +4231,10 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, l
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         if crop_dict_index is not None:
             sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
-    elif image_edge_multiplier is None:
-        # Dynamic fallback with object-bbox awareness.
+    elif image_edge_multiplier is None or variant_registry_miss:
+        # Dynamic fallback with object-bbox awareness. Missing leg-pose keys in
+        # MODE 1 should still trigger a fresh estimate and a registry write for
+        # the variant-specific multiplier set.
         sort.image_edge_multiplier = _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, MULTIPLIER_PADDING)
         print(
             "No multiplier found in canonical registry or pose crop dict; "
@@ -4226,9 +4255,26 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, l
                 "multiplier": [float(value) for value in sort.image_edge_multiplier],
             }
             print(
+                "[MODE1 MULTIPLIER TRACE] dynamic multiplier created "
+                f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+                f"mult={learned_record['multiplier']}"
+            )
+            if normalized_leg_variant is not None:
+                variant_key = (int(cluster_no), int(pose_no), int(normalized_leg_variant))
+                canonical_registry[variant_key] = list(learned_record["multiplier"])
+                print(
+                    "[MODE1 MULTIPLIER TRACE] stored exact variant registry entry "
+                    f"key={variant_key} value={canonical_registry[variant_key]}"
+                )
+            print(
                 "[canonical multipliers][worker] learned candidate "
                 f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} mult={learned_record['multiplier']}"
             )
+    print(
+        "[MODE1 MULTIPLIER TRACE] implementation "
+        f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+        f"sort.image_edge_multiplier={sort.image_edge_multiplier}"
+    )
     sort.face_height_output = face_height_output
     sort.set_output_dims()
     return learned_record
@@ -4975,6 +5021,19 @@ def main():
         filename = f"canonical_multipliers_{cluster}_{arms_dim}_ObjectFusion_{object_dim}.csv"
         return os.path.join(data_dir, filename)
 
+    def normalize_leg_pose_variant(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            token = value.strip()
+            if not token or token.lower() in ("none", "nan"):
+                return None
+            value = token.replace("lp", "")
+        try:
+            return int(math.ceil(float(value)))
+        except (TypeError, ValueError):
+            return None
+
     def write_canonical_multiplier_registry():
         nonlocal canonical_multiplier_csv_path
         if canonical_multiplier_csv_path is None:
@@ -4988,7 +5047,7 @@ def main():
                 {
                     "arms_cluster_id": int(arms_cluster_id),
                     "object_signature_cluster_id": int(object_signature_cluster_id),
-                    "leg_pose_variant": None if leg_pose_variant is None else float(leg_pose_variant),
+                    "leg_pose_variant": None if leg_pose_variant is None else int(leg_pose_variant),
                     "mult_top": float(multipliers[0]),
                     "mult_right": float(multipliers[1]),
                     "mult_bottom": float(multipliers[2]),
@@ -5061,10 +5120,28 @@ def main():
 
         normalized_variant = normalize_leg_pose_variant(leg_pose_variant)
         if normalized_variant is not None:
-            candidate = canonical_multiplier_registry.get((arms_cluster_id, object_signature_cluster_id, normalized_variant))
+            variant_key = (arms_cluster_id, object_signature_cluster_id, normalized_variant)
+            candidate = canonical_multiplier_registry.get(variant_key)
             if candidate is not None:
+                print(
+                    "[MODE1 MULTIPLIER TRACE] exact variant key selected "
+                    f"key={variant_key} value={candidate}"
+                )
                 return candidate
-        return canonical_multiplier_registry.get((arms_cluster_id, object_signature_cluster_id))
+            print(
+                "[MODE1 MULTIPLIER TRACE] exact variant key missing; legacy fallback forbidden "
+                f"key={variant_key} legacy_key={(arms_cluster_id, object_signature_cluster_id)}"
+            )
+            return None
+
+        legacy_key = (arms_cluster_id, object_signature_cluster_id)
+        candidate = canonical_multiplier_registry.get(legacy_key)
+        if candidate is not None:
+            print(
+                "[MODE1 MULTIPLIER TRACE] legacy key used (no leg variant present) "
+                f"key={legacy_key} value={candidate}"
+            )
+        return candidate
 
     def register_canonical_multiplier(cluster_no, pose_no, multiplier_values, leg_pose_variant=None):
         if not should_use_canonical_multiplier_registry():
@@ -5081,9 +5158,17 @@ def main():
         if normalized_variant is not None:
             key = (arms_cluster_id, object_signature_cluster_id, normalized_variant)
         if key in canonical_multiplier_registry:
+            print(
+                "[MODE1 MULTIPLIER TRACE] registration skipped existing key "
+                f"key={key} existing={canonical_multiplier_registry[key]}"
+            )
             return
 
         canonical_multiplier_registry[key] = [float(value) for value in multiplier_values]
+        print(
+            "[MODE1 MULTIPLIER TRACE] register canonical multiplier "
+            f"key={key} value={canonical_multiplier_registry[key]}"
+        )
         print(
             "[canonical multipliers] learned new combo "
             f"arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
@@ -6034,7 +6119,7 @@ def main():
         mode1_shared_cfg = {
             "CSV_FOLDER": CSV_FOLDER,
             "mode1_enable_db_dedupe": mode1_enable_db_dedupe,
-            "canonical_registry": dict(canonical_multiplier_registry),
+            "canonical_registry": canonical_multiplier_registry,
         }
 
         cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
@@ -6069,6 +6154,7 @@ def main():
                         result.get("learned_multipliers", []),
                         result.get("csv_file"),
                     )
+                    mode1_shared_cfg["canonical_registry"] = canonical_multiplier_registry
                     if not result.get("success"):
                         print(
                             f"[MODE1 WORKER] error in {result.get('csv_file')}: "
@@ -6089,6 +6175,7 @@ def main():
                     result.get("learned_multipliers", []),
                     result.get("csv_file"),
                 )
+                mode1_shared_cfg["canonical_registry"] = canonical_multiplier_registry
                 if not result.get("success"):
                     print(
                         f"[MODE1 SERIAL] error in {result.get('csv_file')}: "
