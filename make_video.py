@@ -107,8 +107,8 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAXv2" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX_legpose" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX_9000s" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -3900,7 +3900,7 @@ def _mode1_worker_init(cfg: dict) -> None:
 
 def _mode1_find_parts(parts: list) -> tuple:
     """Module-level version of find_parts; used by the top-level pool worker."""
-    cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
+    cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = leg_pose_variant = None
     for part in parts:
         if part.startswith("ct"):
             segment_count = part.split("ct")[1]
@@ -3910,6 +3910,8 @@ def _mode1_find_parts(parts: list) -> tuple:
             topic_no = part.split("t")[1]
         elif part.startswith("c"):
             cluster_no = part.split("c")[1]
+        elif part.startswith("lp"):
+            leg_pose_variant = part.split("lp", 1)[1]
         elif part.startswith("oml"):
             continue
         elif part.startswith("sb"):
@@ -3920,7 +3922,7 @@ def _mode1_find_parts(parts: list) -> tuple:
             continue
         elif part.startswith("h"):
             background_hsv_no = part.split("h", 1)[1]
-    return segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no
+    return segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no, leg_pose_variant
 
 
 def _mode1_normalize_token(value):
@@ -4145,7 +4147,7 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     return merged_multiplier
 
 
-def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
+def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, leg_pose_variant=None):
     """Standalone set_multiplier_and_dims for pool workers (no main() closures).
 
     Mirrors the logic of the nested set_multiplier_and_dims but reads from
@@ -4155,16 +4157,31 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """
     cluster_no = _mode1_normalize_token(cluster_no)
     pose_no = _mode1_normalize_token(pose_no)
+    normalized_leg_variant = None
+    try:
+        if leg_pose_variant is not None:
+            normalized_leg_variant = float(str(leg_pose_variant).replace("lp", "").strip())
+    except (TypeError, ValueError):
+        normalized_leg_variant = None
+
     use_pose_crop = bool(USE_POSE_CROP_DICT and (pose_no is not None or cluster_no is not None))
     canonical_multiplier = None
     learned_record = None
     if not use_pose_crop:
-        canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
+        candidate_keys = []
+        if cluster_no is not None and pose_no is not None:
+            candidate_keys.append((cluster_no, pose_no))
+            if normalized_leg_variant is not None:
+                candidate_keys.append((cluster_no, pose_no, normalized_leg_variant))
+        for key in candidate_keys:
+            if key in (canonical_registry or {}):
+                canonical_multiplier = (canonical_registry or {})[key]
+                break
     if canonical_multiplier is not None:
         sort.image_edge_multiplier = list(canonical_multiplier)
         print(
             "[canonical multipliers] using stored multiplier "
-            f"for arms={cluster_no} object_signature={pose_no}: {sort.image_edge_multiplier}"
+            f"for arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant}: {sort.image_edge_multiplier}"
         )
     elif use_pose_crop:
         if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
@@ -4205,11 +4222,12 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
             learned_record = {
                 "arms_cluster_id": int(cluster_no),
                 "object_signature_cluster_id": int(pose_no),
+                "leg_pose_variant": normalized_leg_variant,
                 "multiplier": [float(value) for value in sort.image_edge_multiplier],
             }
             print(
                 "[canonical multipliers][worker] learned candidate "
-                f"arms={cluster_no} object_signature={pose_no} mult={learned_record['multiplier']}"
+                f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} mult={learned_record['multiplier']}"
             )
     sort.face_height_output = face_height_output
     sort.set_output_dims()
@@ -4470,13 +4488,14 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
 
     try:
         parts = csv_file.replace(".csv", "").split("_")
-        segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no = _mode1_find_parts(parts)
+        segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no, leg_pose_variant = _mode1_find_parts(parts)
         if len(parts) >= 3:
             cluster_no = parts[2]
 
         print(
             f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, "
-            f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no} from csv file: {csv_file}"
+            f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no}, "
+            f"leg_pose_variant {leg_pose_variant} from csv file: {csv_file}"
         )
 
         csv_counter_state = set_my_counter_dict(
@@ -4526,7 +4545,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             }
 
         multiplier_start = time.perf_counter()
-        learned_multiplier = _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        learned_multiplier = _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry, leg_pose_variant=leg_pose_variant)
         if learned_multiplier is not None:
             learned_multipliers.append(learned_multiplier)
         timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (
@@ -4962,11 +4981,14 @@ def main():
             canonical_multiplier_csv_path = resolve_canonical_multiplier_csv_path()
 
         rows = []
-        for (arms_cluster_id, object_signature_cluster_id), multipliers in sorted(canonical_multiplier_registry.items()):
+        for key, multipliers in sorted(canonical_multiplier_registry.items(), key=lambda item: str(item[0])):
+            arms_cluster_id, object_signature_cluster_id = key[:2]
+            leg_pose_variant = key[2] if len(key) > 2 else None
             rows.append(
                 {
                     "arms_cluster_id": int(arms_cluster_id),
                     "object_signature_cluster_id": int(object_signature_cluster_id),
+                    "leg_pose_variant": None if leg_pose_variant is None else float(leg_pose_variant),
                     "mult_top": float(multipliers[0]),
                     "mult_right": float(multipliers[1]),
                     "mult_bottom": float(multipliers[2]),
@@ -5007,6 +5029,7 @@ def main():
             if arms_cluster_id is None or object_signature_cluster_id is None:
                 continue
 
+            leg_pose_variant = normalize_leg_pose_variant(row.get("leg_pose_variant"))
             multiplier_values = [
                 row.get("mult_top", None),
                 row.get("mult_right", None),
@@ -5019,6 +5042,8 @@ def main():
                 continue
 
             key = (arms_cluster_id, object_signature_cluster_id)
+            if leg_pose_variant is not None:
+                key = (arms_cluster_id, object_signature_cluster_id, leg_pose_variant)
             canonical_multiplier_registry[key] = parsed_values
             loaded_count += 1
 
@@ -5026,16 +5051,22 @@ def main():
             f"[canonical multipliers] loaded {loaded_count} rows from {canonical_multiplier_csv_path}"
         )
 
-    def get_canonical_multiplier(cluster_no, pose_no):
+    def get_canonical_multiplier(cluster_no, pose_no, leg_pose_variant=None):
         if not should_use_canonical_multiplier_registry():
             return None
         arms_cluster_id = normalize_cluster_token(cluster_no)
         object_signature_cluster_id = normalize_cluster_token(pose_no)
         if arms_cluster_id is None or object_signature_cluster_id is None:
             return None
+
+        normalized_variant = normalize_leg_pose_variant(leg_pose_variant)
+        if normalized_variant is not None:
+            candidate = canonical_multiplier_registry.get((arms_cluster_id, object_signature_cluster_id, normalized_variant))
+            if candidate is not None:
+                return candidate
         return canonical_multiplier_registry.get((arms_cluster_id, object_signature_cluster_id))
 
-    def register_canonical_multiplier(cluster_no, pose_no, multiplier_values):
+    def register_canonical_multiplier(cluster_no, pose_no, multiplier_values, leg_pose_variant=None):
         if not should_use_canonical_multiplier_registry():
             return
         arms_cluster_id = normalize_cluster_token(cluster_no)
@@ -5045,7 +5076,10 @@ def main():
         if multiplier_values is None or len(multiplier_values) != 4:
             return
 
+        normalized_variant = normalize_leg_pose_variant(leg_pose_variant)
         key = (arms_cluster_id, object_signature_cluster_id)
+        if normalized_variant is not None:
+            key = (arms_cluster_id, object_signature_cluster_id, normalized_variant)
         if key in canonical_multiplier_registry:
             return
 
@@ -5053,7 +5087,7 @@ def main():
         print(
             "[canonical multipliers] learned new combo "
             f"arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
-            f"mult={canonical_multiplier_registry[key]}"
+            f"leg_variant={normalized_variant} mult={canonical_multiplier_registry[key]}"
         )
         write_canonical_multiplier_registry()
 
@@ -5493,13 +5527,19 @@ def main():
         for label, group_df in partition_df.groupby("_leg_pose_label"):
             if group_df.empty:
                 continue
+            variant = cl.derive_leg_pose_multiplier_variant(
+                label,
+                group_df.get("leg_extension_max", pd.Series(dtype=float)),
+            )
             group_df = group_df.drop(columns=["_leg_pose_label"]).reset_index(drop=True)
+            if variant is not None:
+                group_df["_leg_pose_multiplier_variant"] = variant
             groups.append((label, group_df))
 
         groups.sort(key=lambda item: len(item[1].index), reverse=True)
         print(
             f"[leg-pose] partitioned into {len(groups)} buckets: "
-            f"{[(label, len(g.index)) for label, g in groups]}"
+            f"{[(label, len(g.index), g.get('_leg_pose_multiplier_variant').iloc[0] if '_leg_pose_multiplier_variant' in g.columns and not g.empty else None) for label, g in groups]}"
         )
         return groups
 
@@ -5778,10 +5818,17 @@ def main():
 
                         subset_suffix = f"sb{subset_idx:03d}"
                         subset_prefix = f"{base_file_prefix}_{subset_suffix}"
+                        subset_variant = None
+                        if "_leg_pose_multiplier_variant" in subset_df.columns:
+                            unique_variants = subset_df["_leg_pose_multiplier_variant"].dropna().unique().tolist()
+                            if len(unique_variants) == 1:
+                                subset_variant = unique_variants[0]
+                        if subset_variant is not None:
+                            subset_prefix = f"{subset_prefix}_lp{subset_variant}"
                         if subset_label is not None:
                             print(
                                 f"[partition] {subset_suffix} -> leg-pose label={subset_label} "
-                                f"rows={len(subset_df.index)}"
+                                f"rows={len(subset_df.index)} variant={subset_variant}"
                             )
 
                         if len(subset_df.index) > MAX_ROWS_PER_OUTPUT_CSV:
@@ -5938,6 +5985,7 @@ def main():
                 arms_cluster_id = normalize_cluster_token(record.get("arms_cluster_id"))
                 object_signature_cluster_id = normalize_cluster_token(record.get("object_signature_cluster_id"))
                 multiplier_values = record.get("multiplier")
+                leg_pose_variant = normalize_leg_pose_variant(record.get("leg_pose_variant"))
 
                 if arms_cluster_id is None or object_signature_cluster_id is None:
                     continue
@@ -5950,6 +5998,8 @@ def main():
                     continue
 
                 key = (arms_cluster_id, object_signature_cluster_id)
+                if leg_pose_variant is not None:
+                    key = (arms_cluster_id, object_signature_cluster_id, leg_pose_variant)
                 existing = canonical_multiplier_registry.get(key)
                 if existing is not None:
                     try:
@@ -5961,7 +6011,7 @@ def main():
                         print(
                             "[canonical multipliers][mode1] duplicate learned key ignored (first-write-wins) "
                             f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
-                            f"existing={existing_values} candidate={parsed_values}"
+                            f"leg_variant={leg_pose_variant} existing={existing_values} candidate={parsed_values}"
                         )
                     continue
 
@@ -5970,7 +6020,7 @@ def main():
                 print(
                     "[canonical multipliers][mode1] accepted learned key "
                     f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
-                    f"mult={parsed_values}"
+                    f"leg_variant={leg_pose_variant} mult={parsed_values}"
                 )
 
         load_canonical_multiplier_registry_once()

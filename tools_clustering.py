@@ -4678,6 +4678,29 @@ class ToolsClustering:
 
         return result
 
+    def derive_leg_pose_multiplier_variant(self, leg_pose_label, leg_extension_values=None):
+        """Return a compact, registry-friendly leg-pose variant token.
+
+        The separability split can produce the same semantic pose family with
+        materially different leg lengths (e.g. folded legs around 1.0 vs.
+        standing legs around 5.0). That matters because the crop multiplier is
+        sensitive to the leg articulation, even when the object signature and
+        cluster are otherwise identical.
+        """
+        if leg_pose_label is None or str(leg_pose_label).lower() in ("none", "nan", "not_visible"):
+            return None
+
+        if leg_extension_values is None:
+            return None
+
+        values = pd.to_numeric(pd.Series(leg_extension_values), errors="coerce").dropna()
+        if values.empty:
+            return None
+
+        modal_leg_length = float(np.median(values.to_numpy(dtype=float)))
+        rounded = float(np.round(modal_leg_length, 1))
+        return f"{rounded:.1f}"
+
     def label_by_leg_pose(self, df, boundary, asymmetry_threshold=0.15):
         """
         Assign a per-row leg-pose bucket label using a boundary from
