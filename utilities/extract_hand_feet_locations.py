@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import sqlalchemy
 from sqlalchemy import create_engine
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -100,7 +101,7 @@ batch_size = 1000
 num_threads = 16
 # sept 6 2026 -- processd full encodings table up to 45014557
 # switching to the segment helper
-start_encoding_id = 61591855
+start_encoding_id = 95603649
 last_id = start_encoding_id
 VIS_THRESHOLD = 0.5  # matches existing body-landmark visibility convention elsewhere in the pipeline
 
@@ -198,6 +199,21 @@ def build_location_row(image_id, nlms):
     )
 
 
+def row_to_upsert_dict(row):
+    return {column.name: getattr(row, column.name) for column in row.__table__.columns}
+
+
+def dedupe_rows(rows):
+    unique_rows = []
+    seen_image_ids = set()
+    for encoding_id, image_id in rows:
+        if image_id in seen_image_ids:
+            continue
+        seen_image_ids.add(image_id)
+        unique_rows.append((encoding_id, image_id))
+    return unique_rows
+
+
 def process_batch(rows):
     """Each thread gets its own MySQL session and Mongo client."""
     thread_engine = create_engine(
@@ -213,12 +229,7 @@ def process_batch(rows):
 
     try:
         inserted_or_updated = 0
-        seen_image_ids = set()
         for encoding_id, image_id in rows:
-            if image_id in seen_image_ids:
-                continue
-            seen_image_ids.add(image_id)
-
             mongo_doc_norm = thread_mongo_db["body_landmarks_norm"].find_one({"image_id": image_id}, {"nlms": 1})
             if not (mongo_doc_norm and mongo_doc_norm.get("nlms")):
                 continue
@@ -226,7 +237,10 @@ def process_batch(rows):
             try:
                 nlms = pickle.loads(mongo_doc_norm["nlms"])
                 row = build_location_row(image_id, nlms)
-                thread_session.merge(row)
+                values = row_to_upsert_dict(row)
+                update_values = {key: value for key, value in values.items() if key != "image_id"}
+                stmt = mysql_insert(LocationHandsFeet).values(values).on_duplicate_key_update(**update_values)
+                thread_session.execute(stmt)
                 inserted_or_updated += 1
             except Exception as exc:
                 print(f"Error extracting landmarks for image_id {image_id}: {exc}")
@@ -263,7 +277,12 @@ while True:
         print("No more rows to process. Exiting.")
         break
 
-    batches = [results[i:i + batch_size] for i in range(0, len(results), batch_size)]
+    unique_results = dedupe_rows(results)
+    if not unique_results:
+        print("No unique rows to process. Exiting.")
+        break
+
+    batches = [unique_results[i:i + batch_size] for i in range(0, len(unique_results), batch_size)]
     processed_total = 0
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
@@ -271,7 +290,7 @@ while True:
         for future in as_completed(futures):
             processed_total += future.result()
 
-    last_id = results[-1][0]
+    last_id = unique_results[-1][0]
     print(f"Processed up to encoding_id = {last_id}, rows written = {processed_total}")
 
 session.close()

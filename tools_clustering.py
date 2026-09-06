@@ -4682,21 +4682,83 @@ class ToolsClustering:
         """
         Assign a per-row leg-pose bucket label using a boundary from
         assess_leg_pose_separability. Categories:
-            'not_visible'      no foot/ankle/heel/toe visible on either side
-            'folded'           leg_extension_max below boundary (seated/crossed)
-            'extended_single'  one leg extended, asymmetric (splits, one-leg-standing, foot-on-object)
-            'extended_both'    both legs extended, symmetric (standing/planted)
+            'not_visible'                    no foot/ankle/heel/toe visible on either side
+            'folded_left_on_right_knee'      left foot sits on right knee / crossed-left
+            'folded_right_on_left_knee'      right foot sits on left knee / crossed-right
+            'standing_raised_left_leg'       left knee/foot raised to the side while right leg is planted
+            'standing_raised_right_leg'      right knee/foot raised to the side while left leg is planted
+            'extended_single'                one leg extended, asymmetric (splits, one-leg-standing, foot-on-object)
+            'extended_both'                  both legs extended, symmetric (standing/planted)
         Returns a pandas Series of labels aligned to df.index.
+
+        There are two distinct pose families below the separability boundary:
+        1) seated/folded crossed legs, where vertical ankle/knee ordering is enough;
+        2) standing with one leg raised, where the leg is not fully folded and the
+           raised knee/foot stands out to the side of the hip midline while the
+           planted leg stays low. This family requires both a vertical threshold and
+           a lateral x-offset signal.
         """
         visible = pd.to_numeric(df["visible_leg_count"], errors="coerce").fillna(0) > 0
         leg_max = pd.to_numeric(df["leg_extension_max"], errors="coerce")
         asymmetry = pd.to_numeric(df["leg_asymmetry"], errors="coerce").fillna(0)
 
-        extended = visible & (leg_max >= boundary)
+        def series_or_zero(col_name):
+            if col_name in df.columns:
+                return pd.to_numeric(df[col_name], errors="coerce").fillna(0)
+            return pd.Series(0.0, index=df.index)
+
+        ankle_left = series_or_zero("ankle_rel_y_left")
+        ankle_right = series_or_zero("ankle_rel_y_right")
+        knee_left = series_or_zero("knee_rel_y_left")
+        knee_right = series_or_zero("knee_rel_y_right")
+        knee_left_x = series_or_zero("knee_left_x")
+        knee_right_x = series_or_zero("knee_right_x")
+        foot_left_x = series_or_zero("foot_left_x")
+        foot_right_x = series_or_zero("foot_right_x")
+        mid_hip_x = series_or_zero("mid_hip_x")
+
+        ankle_diff = ankle_left - ankle_right
+        knee_diff = knee_left - knee_right
+
+        # Distinguish the seated crossed-leg family from the standing raised-leg family.
+        # The raised-leg family is not a fully folded pose: the raised leg remains
+        # vertically mid-level relative to the planted leg, while the knee and foot are
+        # offset away from the hip midline in the direction of the raised leg.
+        raised_leg_left = (
+            visible
+            & (asymmetry >= asymmetry_threshold)
+            & (leg_max >= boundary)
+            & ((ankle_right - ankle_left) > 0.35)
+            & ((knee_left_x - mid_hip_x) < -0.15)
+            & ((foot_left_x - mid_hip_x) < -0.10)
+        )
+        raised_leg_right = (
+            visible
+            & (asymmetry >= asymmetry_threshold)
+            & (leg_max >= boundary)
+            & ((ankle_left - ankle_right) > 0.35)
+            & ((knee_right_x - mid_hip_x) > 0.15)
+            & ((foot_right_x - mid_hip_x) > 0.10)
+        )
+
+        # Fully seated/folded crossed legs use the vertical ordering of ankles and,
+        # if needed, a knee-height fallback when ankles are nearly tied.
         folded = visible & (leg_max < boundary)
+        ankle_tie = folded & (pd.Series(np.abs(ankle_diff), index=df.index) <= 0.15)
+
+        tie_rows = ankle_tie & (knee_left != knee_right)
+        folded_left = (folded & (ankle_left > ankle_right)) & ~tie_rows & ~raised_leg_left
+        folded_right = (folded & (ankle_right > ankle_left)) & ~tie_rows & ~raised_leg_right
+        folded_left = folded_left | (tie_rows & (knee_left > knee_right))
+        folded_right = folded_right | (tie_rows & (knee_right > knee_left))
 
         labels = pd.Series("not_visible", index=df.index)
-        labels[folded] = "folded"
-        labels[extended & (asymmetry >= asymmetry_threshold)] = "extended_single"
+        labels[raised_leg_left] = "standing_raised_left_leg"
+        labels[raised_leg_right] = "standing_raised_right_leg"
+        labels[folded_left] = "folded_left_on_right_knee"
+        labels[folded_right] = "folded_right_on_left_knee"
+
+        extended = visible & (leg_max >= boundary)
+        labels[extended & (asymmetry >= asymmetry_threshold) & ~raised_leg_left & ~raised_leg_right] = "extended_single"
         labels[extended & (asymmetry < asymmetry_threshold)] = "extended_both"
         return labels

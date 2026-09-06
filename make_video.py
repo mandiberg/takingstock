@@ -107,8 +107,8 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX_9000sV2" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX_9000s" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAXv2" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -933,7 +933,7 @@ elif IS_SEGONLY and io.platform == "darwin":
     if INCLUDE_LEG_POSE_FEATURES:
         # LEFT JOIN: not every image has a LocationHandsFeet row yet, and it must not filter the segment
         FROM += " LEFT JOIN LocationHandsFeet lhf ON s.image_id = lhf.image_id "
-        SELECT += ", lhf.ankle_rel_y_left, lhf.ankle_rel_y_right, lhf.leg_extension_max, lhf.leg_extension_min, lhf.leg_asymmetry, lhf.visible_leg_count, lhf.foot_left_vis, lhf.foot_right_vis "
+        SELECT += ", lhf.mid_hip_x, lhf.knee_left_x, lhf.knee_right_x, lhf.foot_left_x, lhf.foot_right_x, lhf.ankle_rel_y_left, lhf.ankle_rel_y_right, lhf.leg_extension_max, lhf.leg_extension_min, lhf.leg_asymmetry, lhf.visible_leg_count, lhf.foot_left_vis, lhf.foot_right_vis "
     ###
     if SUBSELECT_ON_CLASS_ID > 0:
         # HACKY TK FIX THIS LATER

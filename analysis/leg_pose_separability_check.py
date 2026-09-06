@@ -35,7 +35,9 @@ def fetch_cluster_leg_features(engine, cluster_table, cluster_id, helper_table):
         junction_table = f"Images{cluster_table}"
 
     sql = text(f"""
-        SELECT j.image_id, lhf.leg_extension_max, lhf.leg_extension_min,
+        SELECT j.image_id, lhf.mid_hip_x, lhf.knee_left_x, lhf.knee_right_x,
+               lhf.foot_left_x, lhf.foot_right_x, lhf.ankle_rel_y_left,
+               lhf.ankle_rel_y_right, lhf.leg_extension_max, lhf.leg_extension_min,
                lhf.leg_asymmetry, lhf.visible_leg_count
         FROM {junction_table} j
         LEFT JOIN LocationHandsFeet lhf ON j.image_id = lhf.image_id
