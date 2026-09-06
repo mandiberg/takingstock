@@ -2,11 +2,12 @@
 """Offline validation for the leg-pose separability heuristic (tools_clustering.py).
 
 Pulls leg-shape features (LocationHandsFeet) for one cluster and reports whether
-the gap-based separability check would split it, without touching make_video.py.
+its leg-extension distribution has a meaningful valley between two populated
+modes, without touching make_video.py.
 
 Usage:
     python analysis/leg_pose_separability_check.py --cluster-id 64
-    python analysis/leg_pose_separability_check.py --cluster-id 64 --cluster-table ArmsPoses3D  --min-gap-ratio 0.3
+    python analysis/leg_pose_separability_check.py --cluster-id 64 --cluster-table ArmsPoses3D --min-gap-ratio 0.35
 """
 import argparse
 import os
@@ -26,7 +27,13 @@ from tools_clustering import ToolsClustering
 
 
 def fetch_cluster_leg_features(engine, cluster_table, cluster_id, helper_table):
-    junction_table = f"Images{cluster_table}"
+    if cluster_table.startswith("Images"):
+        junction_table = cluster_table
+    elif cluster_table == "ObjectSignatures":
+        junction_table = "ImagesObjectSignatures"
+    else:
+        junction_table = f"Images{cluster_table}"
+
     sql = text(f"""
         SELECT j.image_id, lhf.leg_extension_max, lhf.leg_extension_min,
                lhf.leg_asymmetry, lhf.visible_leg_count
@@ -43,6 +50,10 @@ def fetch_cluster_leg_features(engine, cluster_table, cluster_id, helper_table):
 
 
 def plot_leg_distribution(df, boundary=None, output_path=None, title=None):
+    if df.empty or "visible_leg_count" not in df.columns or "leg_extension_max" not in df.columns:
+        print("No leg feature data to plot for this cluster.")
+        return
+
     visible_mask = pd.to_numeric(df["visible_leg_count"], errors="coerce").fillna(0) > 0
     values = pd.to_numeric(df.loc[visible_mask, "leg_extension_max"], errors="coerce").dropna()
     if values.empty:
@@ -81,11 +92,15 @@ def plot_leg_distribution(df, boundary=None, output_path=None, title=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cluster-id", type=int, required=True, help="cluster_id in Images<cluster-table>")
-    parser.add_argument("--cluster-table", default="ArmsPoses3D", help="cluster family, e.g. ArmsPoses3D")
+    parser.add_argument(
+        "--cluster-table",
+        default="ArmsPoses3D",
+        help="cluster family, e.g. ArmsPoses3D or ObjectSignatures (uses ImagesObjectSignatures)",
+    )
     parser.add_argument("--helper-table", default="SegmentHelper_TheGym", help="segment helper to narrow query")
-    parser.add_argument("--floor-pct", type=float, default=5.0)
-    parser.add_argument("--min-bucket-size", type=int, default=20)
-    parser.add_argument("--min-gap-ratio", type=float, default=0.35)
+    parser.add_argument("--floor-pct", type=float, default=5.0, help="minimum visible-leg percentage before testing separability")
+    parser.add_argument("--min-bucket-size", type=int, default=20, help="minimum rows required on each side of the candidate valley")
+    parser.add_argument("--min-gap-ratio", type=float, default=0.35, help="minimum valley-to-peak strength required to split")
     parser.add_argument("--plot", action="store_true", help="show/save a histogram of leg_extension_max")
     parser.add_argument("--plot-path", default="leg_pose_distribution.png", help="output PNG path when --plot is used")
     args = parser.parse_args()

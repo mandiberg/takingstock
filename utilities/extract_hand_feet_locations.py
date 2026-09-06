@@ -100,7 +100,7 @@ batch_size = 1000
 num_threads = 16
 # sept 6 2026 -- processd full encodings table up to 45014557
 # switching to the segment helper
-start_encoding_id = 49704807
+start_encoding_id = 61591855
 last_id = start_encoding_id
 VIS_THRESHOLD = 0.5  # matches existing body-landmark visibility convention elsewhere in the pipeline
 

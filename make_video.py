@@ -67,7 +67,7 @@ SegmentHelper_name = 'SegmentHelper_TheGym'
 IS_SSD = True
 # SSD_PATH = "/Volumes/LaCie/segment_images"
 SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 # DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
@@ -107,7 +107,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX_9000s" # go check FULL_BODY //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX_9000sV2" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX_9000s" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
@@ -191,11 +191,11 @@ MULTIPOLICY = False
 
 # CONTROL LEG STUFF FOR ARMS CLUSTERS
 INCLUDE_LEG_POSE_FEATURES = True  # join LocationHandsFeet for leg-shape cluster separability testing
-LEG_POSE_FLOOR_PCT = 5.0             # skip separability check below this visible-leg percentage
-LEG_POSE_MIN_BUCKET_SIZE = 20        # min rows required on each side of a gap to trust it as real
-LEG_POSE_MIN_GAP_RATIO = 0.35        # gap/range fraction required to call a cluster separable
+LEG_POSE_FLOOR_PCT = 5.0             # minimum visible-leg percentage required before split test
+LEG_POSE_MIN_BUCKET_SIZE = 20        # minimum rows required on each side of the candidate valley
+LEG_POSE_MIN_GAP_RATIO = 0.35        # valley-to-peak ratio for a real split; not a literal empty-gap width
 LEG_POSE_ASYMMETRY_THRESHOLD = 0.15  # leg_asymmetry threshold for single- vs both-leg extended
-
+print("THISISTHENEWTHING")
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"

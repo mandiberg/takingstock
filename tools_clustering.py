@@ -4565,48 +4565,116 @@ class ToolsClustering:
             return result
 
         values = pd.to_numeric(df.loc[visible_mask, "leg_extension_max"], errors="coerce").dropna()
+        values = values[values >= 0]
         if len(values) < (2 * min_bucket_size):
             result["reason"] = (
-                f"only {len(values)} usable leg_extension_max rows, need >= {2 * min_bucket_size}"
+                f"only {len(values)} usable non-negative leg_extension_max rows, need >= {2 * min_bucket_size}"
             )
             return result
 
-        sorted_values = np.sort(values.to_numpy())
-        total_range = float(sorted_values[-1] - sorted_values[0])
-        if total_range <= 0:
-            result["reason"] = "leg_extension_max has zero spread"
+        # Ignore negative/outlier noise and look for a real valley between two
+        # populated modes. The old rule used the largest adjacent gap in the
+        # sorted values, which fails when the distribution is broad and bimodal
+        # without a clean empty gap. Here we instead histogram the positive values,
+        # search for the deepest local trough between two local peaks, and judge
+        # the split by how much the valley drops relative to adjacent peak counts.
+        pos_values = values.to_numpy(dtype=float)
+        if pos_values.size == 0:
+            result["reason"] = "no non-negative leg_extension_max values after noise filtering"
             return result
 
-        # Only consider gaps that leave >= min_bucket_size rows on each side.
-        candidate_slice = sorted_values[min_bucket_size: len(sorted_values) - min_bucket_size + 1]
-        if len(candidate_slice) < 2:
-            result["reason"] = f"not enough rows after reserving min_bucket_size={min_bucket_size} per side"
+        hist_min = float(pos_values.min())
+        hist_max = float(pos_values.max())
+        if hist_max <= hist_min:
+            result["reason"] = "leg_extension_max has zero spread after noise filtering"
             return result
 
-        diffs = np.diff(candidate_slice)
-        best_idx = int(np.argmax(diffs))
-        gap_size = float(diffs[best_idx])
-        gap_ratio = gap_size / total_range
-        boundary = (candidate_slice[best_idx] + candidate_slice[best_idx + 1]) / 2.0
-        low_bucket_size = min_bucket_size + best_idx + 1
-        high_bucket_size = len(sorted_values) - low_bucket_size
+        # For this pose family, the split boundary is usually not at the extreme tails
+        # but in the middle of the leg-extension shape: a low-value folded mode near ~1,
+        # then a trough around ~2-3, then a standing/extended mode around ~4-5.
+        search_min = 1.0
+        search_max = 5.0
+        midrange = pos_values[(pos_values >= search_min) & (pos_values <= search_max)]
+        if midrange.size < (2 * min_bucket_size):
+            result["reason"] = (
+                f"only {midrange.size} usable rows in the 1..5 candidate window, need >= {2 * min_bucket_size}"
+            )
+            return result
 
+        n_bins = max(20, min(80, int(np.sqrt(midrange.size))))
+        hist, bin_edges = np.histogram(midrange, bins=n_bins, range=(search_min, search_max))
+        if hist.size < 3:
+            result["reason"] = "not enough histogram bins in the 1..5 candidate window to detect a valley"
+            return result
+
+        # Smooth the counts slightly to suppress tiny local noise while preserving a
+        # real valley between the low and extended pose modes.
+        smoothed = np.convolve(hist, np.ones(3) / 3.0, mode="same")
+        best_idx = None
+        best_gap = -1.0
+        best_left_peak = 0.0
+        best_right_peak = 0.0
+        best_valley = 0.0
+
+        for i in range(1, len(smoothed) - 1):
+            left_peak = float(np.max(smoothed[:i]))
+            right_peak = float(np.max(smoothed[i + 1:]))
+            valley = float(smoothed[i])
+            if left_peak <= valley or right_peak <= valley:
+                continue
+
+            # Compare the trough against the smaller adjacent peak. This matches the
+            # actual pose pattern: the split is a valley between two populated modes,
+            # not an empty gap against the largest peak.
+            smaller_peak = float(min(left_peak, right_peak))
+            gap_size = float(smaller_peak - valley)
+            if gap_size <= 0:
+                continue
+            gap_ratio = gap_size / float(max(smaller_peak, 1.0))
+
+            if gap_size > best_gap:
+                best_gap = gap_size
+                best_idx = i
+                best_left_peak = left_peak
+                best_right_peak = right_peak
+                best_valley = valley
+                best_gap_ratio = gap_ratio
+
+        if best_idx is None:
+            result["reason"] = "no meaningful midrange valley found between the low and extended pose modes"
+            return result
+
+        # Convert the valley to the original feature space.
+        boundary = float((bin_edges[best_idx] + bin_edges[best_idx + 1]) / 2.0)
+        left_count = float(np.sum(midrange < boundary))
+        right_count = float(np.sum(midrange >= boundary))
+        if left_count < min_bucket_size or right_count < min_bucket_size:
+            result["reason"] = (
+                f"midrange valley at {boundary:.3f} leaves too few rows on one side "
+                f"(left={left_count:.0f}, right={right_count:.0f}; need >= {min_bucket_size})"
+            )
+            return result
+
+        gap_ratio = best_gap / float(max(min(best_left_peak, best_right_peak), 1.0))
         result.update({
-            "gap_size": round(gap_size, 4),
+            "gap_size": round(best_gap, 4),
             "gap_ratio": round(gap_ratio, 4),
             "boundary": round(float(boundary), 4),
-            "low_bucket_size": int(low_bucket_size),
-            "high_bucket_size": int(high_bucket_size),
+            "low_bucket_size": int(left_count),
+            "high_bucket_size": int(right_count),
         })
 
         if gap_ratio >= min_gap_ratio:
             result["is_separable"] = True
             result["reason"] = (
-                f"gap_ratio {gap_ratio:.2f} >= min_gap_ratio {min_gap_ratio} "
-                f"at boundary {boundary:.3f} (low={low_bucket_size}, high={high_bucket_size})"
+                f"midrange valley gap_ratio {gap_ratio:.2f} >= min_gap_ratio {min_gap_ratio} "
+                f"at boundary {boundary:.3f} (left={int(left_count)}, right={int(right_count)})"
             )
         else:
-            result["reason"] = f"gap_ratio {gap_ratio:.2f} below min_gap_ratio {min_gap_ratio}"
+            result["reason"] = (
+                f"midrange valley gap_ratio {gap_ratio:.2f} below min_gap_ratio {min_gap_ratio} "
+                f"(valley={best_valley:.1f}, left_peak={best_left_peak:.1f}, right_peak={best_right_peak:.1f})"
+            )
 
         return result
 
