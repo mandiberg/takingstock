@@ -4504,3 +4504,131 @@ class ToolsClustering:
         print(f"Expected recompute rows (selected run scope): {expected_recompute_rows:,}")
         print(f"Affected existing rows (selected run scope): {affected_existing_selected:,}")
         print("=" * 70 + "\n")
+
+    # ================================================================================
+    # LEG-POSE SEPARABILITY (LocationHandsFeet-derived features)
+    # ================================================================================
+
+    def assess_leg_pose_separability(
+        self,
+        df,
+        floor_pct=5.0,
+        min_bucket_size=20,
+        min_gap_ratio=0.35,
+        cluster_label=None,
+    ):
+        """
+        Gap-based heuristic: does this cluster contain two visually distinct
+        leg configurations (e.g. seated vs. standing) that should be split?
+
+        Looks for the single largest gap in leg_extension_max among rows with
+        at least one visible foot/ankle/heel/toe. A gap only counts as real
+        separation when it is wide relative to the overall spread (min_gap_ratio)
+        AND leaves at least min_bucket_size rows on each side, so a couple of
+        outliers can't masquerade as a second population.
+
+        Does not mutate df or apply any split — read-only diagnostic.
+        Requires the LocationHandsFeet-derived columns (visible_leg_count,
+        leg_extension_max) to already be present on df, e.g. via the
+        LEFT JOIN LocationHandsFeet added to make_video.py's selectSQL.
+
+        Returns a stats dict, always including 'is_separable' and 'reason'.
+        """
+        total_rows = len(df.index)
+        result = {
+            "cluster_label": cluster_label,
+            "total_rows": total_rows,
+            "visible_leg_rows": 0,
+            "visible_leg_pct": 0.0,
+            "is_separable": False,
+            "reason": None,
+            "boundary": None,
+            "gap_size": None,
+            "gap_ratio": None,
+            "low_bucket_size": None,
+            "high_bucket_size": None,
+        }
+
+        required_cols = {"visible_leg_count", "leg_extension_max"}
+        if total_rows == 0 or not required_cols.issubset(df.columns):
+            result["reason"] = f"no rows or missing columns {required_cols - set(df.columns)}"
+            return result
+
+        visible_mask = pd.to_numeric(df["visible_leg_count"], errors="coerce").fillna(0) > 0
+        visible_rows = int(visible_mask.sum())
+        visible_pct = (visible_rows / total_rows) * 100.0
+        result["visible_leg_rows"] = visible_rows
+        result["visible_leg_pct"] = round(visible_pct, 2)
+
+        if visible_pct < floor_pct:
+            result["reason"] = f"visible_leg_pct {visible_pct:.1f}% below floor {floor_pct}%"
+            return result
+
+        values = pd.to_numeric(df.loc[visible_mask, "leg_extension_max"], errors="coerce").dropna()
+        if len(values) < (2 * min_bucket_size):
+            result["reason"] = (
+                f"only {len(values)} usable leg_extension_max rows, need >= {2 * min_bucket_size}"
+            )
+            return result
+
+        sorted_values = np.sort(values.to_numpy())
+        total_range = float(sorted_values[-1] - sorted_values[0])
+        if total_range <= 0:
+            result["reason"] = "leg_extension_max has zero spread"
+            return result
+
+        # Only consider gaps that leave >= min_bucket_size rows on each side.
+        candidate_slice = sorted_values[min_bucket_size: len(sorted_values) - min_bucket_size + 1]
+        if len(candidate_slice) < 2:
+            result["reason"] = f"not enough rows after reserving min_bucket_size={min_bucket_size} per side"
+            return result
+
+        diffs = np.diff(candidate_slice)
+        best_idx = int(np.argmax(diffs))
+        gap_size = float(diffs[best_idx])
+        gap_ratio = gap_size / total_range
+        boundary = (candidate_slice[best_idx] + candidate_slice[best_idx + 1]) / 2.0
+        low_bucket_size = min_bucket_size + best_idx + 1
+        high_bucket_size = len(sorted_values) - low_bucket_size
+
+        result.update({
+            "gap_size": round(gap_size, 4),
+            "gap_ratio": round(gap_ratio, 4),
+            "boundary": round(float(boundary), 4),
+            "low_bucket_size": int(low_bucket_size),
+            "high_bucket_size": int(high_bucket_size),
+        })
+
+        if gap_ratio >= min_gap_ratio:
+            result["is_separable"] = True
+            result["reason"] = (
+                f"gap_ratio {gap_ratio:.2f} >= min_gap_ratio {min_gap_ratio} "
+                f"at boundary {boundary:.3f} (low={low_bucket_size}, high={high_bucket_size})"
+            )
+        else:
+            result["reason"] = f"gap_ratio {gap_ratio:.2f} below min_gap_ratio {min_gap_ratio}"
+
+        return result
+
+    def label_by_leg_pose(self, df, boundary, asymmetry_threshold=0.15):
+        """
+        Assign a per-row leg-pose bucket label using a boundary from
+        assess_leg_pose_separability. Categories:
+            'not_visible'      no foot/ankle/heel/toe visible on either side
+            'folded'           leg_extension_max below boundary (seated/crossed)
+            'extended_single'  one leg extended, asymmetric (splits, one-leg-standing, foot-on-object)
+            'extended_both'    both legs extended, symmetric (standing/planted)
+        Returns a pandas Series of labels aligned to df.index.
+        """
+        visible = pd.to_numeric(df["visible_leg_count"], errors="coerce").fillna(0) > 0
+        leg_max = pd.to_numeric(df["leg_extension_max"], errors="coerce")
+        asymmetry = pd.to_numeric(df["leg_asymmetry"], errors="coerce").fillna(0)
+
+        extended = visible & (leg_max >= boundary)
+        folded = visible & (leg_max < boundary)
+
+        labels = pd.Series("not_visible", index=df.index)
+        labels[folded] = "folded"
+        labels[extended & (asymmetry >= asymmetry_threshold)] = "extended_single"
+        labels[extended & (asymmetry < asymmetry_threshold)] = "extended_both"
+        return labels

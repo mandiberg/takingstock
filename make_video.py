@@ -107,8 +107,8 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_2plus_oneshot_test" # go check FULL_BODY //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX_9000s" # go check FULL_BODY //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX_9000s" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -188,6 +188,13 @@ SKIP_OBJECT_NONE_CLUSTERS = [] # set to 1 if you want to skip Nones
 DO_OBJECT_COLLAPSE = False #TEMP TK       # compute and apply per-topic object signature collapse mapping
 OBJECT_COLLAPSE_MIN = 1000       # minimum topic-count for a signature bin to be retained
 MULTIPOLICY = False
+
+# CONTROL LEG STUFF FOR ARMS CLUSTERS
+INCLUDE_LEG_POSE_FEATURES = True  # join LocationHandsFeet for leg-shape cluster separability testing
+LEG_POSE_FLOOR_PCT = 5.0             # skip separability check below this visible-leg percentage
+LEG_POSE_MIN_BUCKET_SIZE = 20        # min rows required on each side of a gap to trust it as real
+LEG_POSE_MIN_GAP_RATIO = 0.35        # gap/range fraction required to call a cluster separable
+LEG_POSE_ASYMMETRY_THRESHOLD = 0.15  # leg_asymmetry threshold for single- vs both-leg extended
 
 # overriding DB for testing
 # io.db["name"] = "stock"
@@ -431,7 +438,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             GENERATE_FUSION_PAIRS = False 
 
             # use this to turn on multiplier CSV creation/augmentation
-            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
 
 
@@ -923,6 +930,10 @@ elif IS_SEGONLY and io.platform == "darwin":
         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
+    if INCLUDE_LEG_POSE_FEATURES:
+        # LEFT JOIN: not every image has a LocationHandsFeet row yet, and it must not filter the segment
+        FROM += " LEFT JOIN LocationHandsFeet lhf ON s.image_id = lhf.image_id "
+        SELECT += ", lhf.ankle_rel_y_left, lhf.ankle_rel_y_right, lhf.leg_extension_max, lhf.leg_extension_min, lhf.leg_asymmetry, lhf.visible_leg_count, lhf.foot_left_vis, lhf.foot_right_vis "
     ###
     if SUBSELECT_ON_CLASS_ID > 0:
         # HACKY TK FIX THIS LATER
@@ -4654,6 +4665,33 @@ def main():
     global MODE0_TIMING_CALLBACK
     MODE0_TIMING_CALLBACK = add_mode0_timing
 
+    leg_pose_log_rows = []
+
+    def record_leg_pose_result(result):
+        leg_pose_log_rows.append(dict(result))
+        status = "SEPARABLE" if result.get("is_separable") else "not separable"
+        print(
+            f"[leg-pose] {status} cluster={result.get('cluster_label')} "
+            f"visible_leg_pct={result.get('visible_leg_pct')}% rows={result.get('total_rows')} "
+            f"reason={result.get('reason')}"
+        )
+
+    def write_leg_pose_log():
+        if not leg_pose_log_rows:
+            return
+        try:
+            if not os.path.exists(CSV_FOLDER):
+                os.makedirs(CSV_FOLDER)
+            log_path = os.path.join(CSV_FOLDER, "leg_pose_separability_log.csv")
+            pd.DataFrame(leg_pose_log_rows).to_csv(log_path, index=False)
+            separable_count = sum(1 for r in leg_pose_log_rows if r.get("is_separable"))
+            print(
+                f"[leg-pose] wrote {len(leg_pose_log_rows)} cluster checks to {log_path} "
+                f"({separable_count} separable, {len(leg_pose_log_rows) - separable_count} not separable)"
+            )
+        except Exception as exc:
+            print(f"[leg-pose] failed to write log: {exc}")
+
     def print_mode0_timing_summary():
         if not mode0_timing_enabled:
             return
@@ -5438,6 +5476,33 @@ def main():
         )
         return partition_groups
 
+    def partition_segment_by_leg_pose(df_segment, leg_pose_check):
+        """Split df_segment into (label, subset_df) groups using label_by_leg_pose.
+
+        Ordered largest-group-first so sbNNN numbering in logs stays stable/readable.
+        """
+        labels = cl.label_by_leg_pose(
+            df_segment,
+            leg_pose_check["boundary"],
+            asymmetry_threshold=LEG_POSE_ASYMMETRY_THRESHOLD,
+        )
+        partition_df = df_segment.copy()
+        partition_df["_leg_pose_label"] = labels
+
+        groups = []
+        for label, group_df in partition_df.groupby("_leg_pose_label"):
+            if group_df.empty:
+                continue
+            group_df = group_df.drop(columns=["_leg_pose_label"]).reset_index(drop=True)
+            groups.append((label, group_df))
+
+        groups.sort(key=lambda item: len(item[1].index), reverse=True)
+        print(
+            f"[leg-pose] partitioned into {len(groups)} buckets: "
+            f"{[(label, len(g.index)) for label, g in groups]}"
+        )
+        return groups
+
     def one_shot_sort_dataframe(df_segment):
         global ONE_SHOT, TSP_SORT, CHOP_ITTER_TSP_SORT, CHOP_FIRST
 
@@ -5664,15 +5729,39 @@ def main():
                 # sort.counter_dict["start_img_name"] = "median"
                 base_file_prefix = const_prefix(this_topic, cluster_no, pose_no, effective_hsv_meta)
 
+                leg_pose_check = None
+                leg_pose_partition_groups = None
+                if MODE == 0 and is_fusion_sort and INCLUDE_LEG_POSE_FEATURES:
+                    leg_pose_check = cl.assess_leg_pose_separability(
+                        df_segment,
+                        floor_pct=LEG_POSE_FLOOR_PCT,
+                        min_bucket_size=LEG_POSE_MIN_BUCKET_SIZE,
+                        min_gap_ratio=LEG_POSE_MIN_GAP_RATIO,
+                        cluster_label=base_file_prefix,
+                    )
+                    record_leg_pose_result(leg_pose_check)
+                    if leg_pose_check["is_separable"]:
+                        leg_pose_partition_groups = partition_segment_by_leg_pose(df_segment, leg_pose_check)
+
                 should_partition_before_sort = (
                     MODE == 0
                     and is_fusion_sort
+                    and leg_pose_partition_groups is None
                     and len(df_segment.index) > MAX_ROWS_PER_OUTPUT_CSV
                 )
 
                 mode0_jobs = []
+                # (label_or_none, subset_df) pairs driving sbNNN CSV output; populated
+                # either from leg-pose buckets or from size-based KMeans partitioning
+                partition_units = None
 
-                if should_partition_before_sort:
+                if leg_pose_partition_groups is not None:
+                    print(
+                        f"[leg-pose] {base_file_prefix}: routing {len(leg_pose_partition_groups)} "
+                        "leg-pose buckets through sbNNN partition plumbing"
+                    )
+                    partition_units = leg_pose_partition_groups
+                elif should_partition_before_sort:
                     print(
                         f"[partition] oversized segment detected ({len(df_segment.index)} rows); "
                         "partitioning before process_linear"
@@ -5680,13 +5769,20 @@ def main():
                     partition_start = time.perf_counter()
                     partition_groups = partition_segment_with_kmeans(df_segment, MAX_ROWS_PER_OUTPUT_CSV)
                     add_mode0_timing("partition", time.perf_counter() - partition_start)
+                    partition_units = [(None, group_df) for group_df in partition_groups]
 
-                    for subset_idx, subset_df in enumerate(partition_groups, start=1):
+                if partition_units is not None:
+                    for subset_idx, (subset_label, subset_df) in enumerate(partition_units, start=1):
                         if subset_df.empty:
                             continue
 
                         subset_suffix = f"sb{subset_idx:03d}"
                         subset_prefix = f"{base_file_prefix}_{subset_suffix}"
+                        if subset_label is not None:
+                            print(
+                                f"[partition] {subset_suffix} -> leg-pose label={subset_label} "
+                                f"rows={len(subset_df.index)}"
+                            )
 
                         if len(subset_df.index) > MAX_ROWS_PER_OUTPUT_CSV:
                             print(
@@ -6476,6 +6572,7 @@ def main():
                 mode0_pool.join()
 
         print_mode0_timing_summary()
+        write_leg_pose_log()
 
 
 if __name__ == '__main__':

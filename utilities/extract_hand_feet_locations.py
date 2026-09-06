@@ -97,7 +97,11 @@ session = Session()
 
 # Batch processing parameters
 batch_size = 1000
-last_id = 0
+num_threads = 16
+# sept 6 2026 -- processd full encodings table up to 45014557
+# switching to the segment helper
+start_encoding_id = 49704807
+last_id = start_encoding_id
 VIS_THRESHOLD = 0.5  # matches existing body-landmark visibility convention elsewhere in the pipeline
 
 # MediaPipe pose landmark indices
@@ -139,97 +143,137 @@ def resolve_mid_hip(hip_left, hip_right, hip_left_vis, hip_right_vis):
     return None, None
 
 
-while True:
+def build_location_row(image_id, nlms):
+    lh, rh = get_lm(nlms, LM_LEFT_HAND), get_lm(nlms, LM_RIGHT_HAND)
+    lh_vis, rh_vis = is_visible(lh), is_visible(rh)
 
-    # broadened: every face+body-normalized image, not just is_feet-flagged ones,
-    # so the separability test has coverage across all clusters, not just is_feet=True rows
-    results = (
+    hip_l, hip_r = get_lm(nlms, LM_HIP_LEFT), get_lm(nlms, LM_HIP_RIGHT)
+    hip_l_vis, hip_r_vis = is_visible(hip_l), is_visible(hip_r)
+    mid_hip_x, mid_hip_y = resolve_mid_hip(hip_l, hip_r, hip_l_vis, hip_r_vis)
+
+    knee_l, knee_r = get_lm(nlms, LM_KNEE_LEFT), get_lm(nlms, LM_KNEE_RIGHT)
+    knee_l_vis, knee_r_vis = is_visible(knee_l), is_visible(knee_r)
+
+    foot_l_x, foot_l_y, foot_l_vis, foot_l_source = resolve_foot_point(
+        nlms, LM_ANKLE_LEFT, LM_HEEL_LEFT, LM_TOE_LEFT
+    )
+    foot_r_x, foot_r_y, foot_r_vis, foot_r_source = resolve_foot_point(
+        nlms, LM_ANKLE_RIGHT, LM_HEEL_RIGHT, LM_TOE_RIGHT
+    )
+
+    ankle_rel_y_left = (foot_l_y - mid_hip_y) if (foot_l_vis and mid_hip_y is not None) else None
+    ankle_rel_y_right = (foot_r_y - mid_hip_y) if (foot_r_vis and mid_hip_y is not None) else None
+    knee_rel_y_left = (knee_l.y - mid_hip_y) if (knee_l_vis and mid_hip_y is not None) else None
+    knee_rel_y_right = (knee_r.y - mid_hip_y) if (knee_r_vis and mid_hip_y is not None) else None
+
+    visible_rel_y = [v for v in (ankle_rel_y_left, ankle_rel_y_right) if v is not None]
+    leg_extension_max = max(visible_rel_y) if visible_rel_y else None
+    leg_extension_min = min(visible_rel_y) if visible_rel_y else None
+    leg_asymmetry = (
+        leg_extension_max - leg_extension_min
+        if (ankle_rel_y_left is not None and ankle_rel_y_right is not None)
+        else None
+    )
+    visible_leg_count = sum(1 for v in (foot_l_vis, foot_r_vis) if v)
+
+    return LocationHandsFeet(
+        image_id=image_id,
+        left_hand_x=lh.x if lh else None, left_hand_y=lh.y if lh else None, left_hand_vis=lh_vis,
+        right_hand_x=rh.x if rh else None, right_hand_y=rh.y if rh else None, right_hand_vis=rh_vis,
+
+        hip_left_x=hip_l.x if hip_l else None, hip_left_y=hip_l.y if hip_l else None, hip_left_vis=hip_l_vis,
+        hip_right_x=hip_r.x if hip_r else None, hip_right_y=hip_r.y if hip_r else None, hip_right_vis=hip_r_vis,
+        mid_hip_x=mid_hip_x, mid_hip_y=mid_hip_y,
+
+        knee_left_x=knee_l.x if knee_l else None, knee_left_y=knee_l.y if knee_l else None, knee_left_vis=knee_l_vis,
+        knee_right_x=knee_r.x if knee_r else None, knee_right_y=knee_r.y if knee_r else None, knee_right_vis=knee_r_vis,
+
+        foot_left_x=foot_l_x, foot_left_y=foot_l_y, foot_left_vis=foot_l_vis, foot_left_source=foot_l_source,
+        foot_right_x=foot_r_x, foot_right_y=foot_r_y, foot_right_vis=foot_r_vis, foot_right_source=foot_r_source,
+
+        ankle_rel_y_left=ankle_rel_y_left, ankle_rel_y_right=ankle_rel_y_right,
+        knee_rel_y_left=knee_rel_y_left, knee_rel_y_right=knee_rel_y_right,
+        leg_extension_max=leg_extension_max, leg_extension_min=leg_extension_min,
+        leg_asymmetry=leg_asymmetry, visible_leg_count=visible_leg_count,
+    )
+
+
+def process_batch(rows):
+    """Each thread gets its own MySQL session and Mongo client."""
+    thread_engine = create_engine(
+        f"mysql+pymysql://{db['user']}:{db['pass']}@/{db['name']}?unix_socket={db['unix_socket']}",
+        pool_pre_ping=True,
+        pool_recycle=600,
+        poolclass=NullPool,
+    )
+    ThreadSession = sessionmaker(bind=thread_engine)
+    thread_session = ThreadSession()
+    thread_mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
+    thread_mongo_db = thread_mongo_client["stock"]
+
+    try:
+        inserted_or_updated = 0
+        seen_image_ids = set()
+        for encoding_id, image_id in rows:
+            if image_id in seen_image_ids:
+                continue
+            seen_image_ids.add(image_id)
+
+            mongo_doc_norm = thread_mongo_db["body_landmarks_norm"].find_one({"image_id": image_id}, {"nlms": 1})
+            if not (mongo_doc_norm and mongo_doc_norm.get("nlms")):
+                continue
+
+            try:
+                nlms = pickle.loads(mongo_doc_norm["nlms"])
+                row = build_location_row(image_id, nlms)
+                thread_session.merge(row)
+                inserted_or_updated += 1
+            except Exception as exc:
+                print(f"Error extracting landmarks for image_id {image_id}: {exc}")
+
+        if inserted_or_updated:
+            thread_session.commit()
+
+        return inserted_or_updated
+    finally:
+        thread_session.close()
+        thread_mongo_client.close()
+        thread_engine.dispose()
+
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+while True:
+    # producer: fetch only the next batch of rows that are both in the helper table
+    # and beyond the configured start point.
+    query = (
         session.query(Encodings.encoding_id, Encodings.image_id)
+        .join(HelperTable, HelperTable.image_id == Encodings.image_id)
         .filter(
             Encodings.mongo_body_landmarks_norm.is_(True),
             Encodings.is_face.is_(True),
-            Encodings.encoding_id > last_id
+            Encodings.encoding_id > last_id,
         )
         .order_by(Encodings.encoding_id)
-        .limit(batch_size)
-        .all()
+        .limit(batch_size * num_threads)
     )
+    results = query.all()
 
     if not results:
         print("No more rows to process. Exiting.")
         break
 
-    for encoding_id, image_id in results:
-        # Fetch normalized body landmarks from Mongo
-        mongo_doc_norm = mongo_collection_norm.find_one({"image_id": image_id}, {"nlms": 1})
-        if not (mongo_doc_norm and mongo_doc_norm.get("nlms")):
-            print(f"No normalized landmarks for image_id {image_id}")
-            continue
+    batches = [results[i:i + batch_size] for i in range(0, len(results), batch_size)]
+    processed_total = 0
 
-        try:
-            nlms = pickle.loads(mongo_doc_norm["nlms"])
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        futures = [executor.submit(process_batch, batch) for batch in batches]
+        for future in as_completed(futures):
+            processed_total += future.result()
 
-            lh, rh = get_lm(nlms, LM_LEFT_HAND), get_lm(nlms, LM_RIGHT_HAND)
-            lh_vis, rh_vis = is_visible(lh), is_visible(rh)
-
-            hip_l, hip_r = get_lm(nlms, LM_HIP_LEFT), get_lm(nlms, LM_HIP_RIGHT)
-            hip_l_vis, hip_r_vis = is_visible(hip_l), is_visible(hip_r)
-            mid_hip_x, mid_hip_y = resolve_mid_hip(hip_l, hip_r, hip_l_vis, hip_r_vis)
-
-            knee_l, knee_r = get_lm(nlms, LM_KNEE_LEFT), get_lm(nlms, LM_KNEE_RIGHT)
-            knee_l_vis, knee_r_vis = is_visible(knee_l), is_visible(knee_r)
-
-            foot_l_x, foot_l_y, foot_l_vis, foot_l_source = resolve_foot_point(
-                nlms, LM_ANKLE_LEFT, LM_HEEL_LEFT, LM_TOE_LEFT
-            )
-            foot_r_x, foot_r_y, foot_r_vis, foot_r_source = resolve_foot_point(
-                nlms, LM_ANKLE_RIGHT, LM_HEEL_RIGHT, LM_TOE_RIGHT
-            )
-
-            # sided, mid-hip-relative deltas; only computable when both the point and mid_hip exist
-            ankle_rel_y_left = (foot_l_y - mid_hip_y) if (foot_l_vis and mid_hip_y is not None) else None
-            ankle_rel_y_right = (foot_r_y - mid_hip_y) if (foot_r_vis and mid_hip_y is not None) else None
-            knee_rel_y_left = (knee_l.y - mid_hip_y) if (knee_l_vis and mid_hip_y is not None) else None
-            knee_rel_y_right = (knee_r.y - mid_hip_y) if (knee_r_vis and mid_hip_y is not None) else None
-
-            visible_rel_y = [v for v in (ankle_rel_y_left, ankle_rel_y_right) if v is not None]
-            leg_extension_max = max(visible_rel_y) if visible_rel_y else None
-            leg_extension_min = min(visible_rel_y) if visible_rel_y else None
-            leg_asymmetry = (
-                leg_extension_max - leg_extension_min
-                if (ankle_rel_y_left is not None and ankle_rel_y_right is not None)
-                else None
-            )
-            visible_leg_count = sum(1 for v in (foot_l_vis, foot_r_vis) if v)
-
-            session.merge(LocationHandsFeet(
-                image_id=image_id,
-                left_hand_x=lh.x if lh else None, left_hand_y=lh.y if lh else None, left_hand_vis=lh_vis,
-                right_hand_x=rh.x if rh else None, right_hand_y=rh.y if rh else None, right_hand_vis=rh_vis,
-
-                hip_left_x=hip_l.x if hip_l else None, hip_left_y=hip_l.y if hip_l else None, hip_left_vis=hip_l_vis,
-                hip_right_x=hip_r.x if hip_r else None, hip_right_y=hip_r.y if hip_r else None, hip_right_vis=hip_r_vis,
-                mid_hip_x=mid_hip_x, mid_hip_y=mid_hip_y,
-
-                knee_left_x=knee_l.x if knee_l else None, knee_left_y=knee_l.y if knee_l else None, knee_left_vis=knee_l_vis,
-                knee_right_x=knee_r.x if knee_r else None, knee_right_y=knee_r.y if knee_r else None, knee_right_vis=knee_r_vis,
-
-                foot_left_x=foot_l_x, foot_left_y=foot_l_y, foot_left_vis=foot_l_vis, foot_left_source=foot_l_source,
-                foot_right_x=foot_r_x, foot_right_y=foot_r_y, foot_right_vis=foot_r_vis, foot_right_source=foot_r_source,
-
-                ankle_rel_y_left=ankle_rel_y_left, ankle_rel_y_right=ankle_rel_y_right,
-                knee_rel_y_left=knee_rel_y_left, knee_rel_y_right=knee_rel_y_right,
-                leg_extension_max=leg_extension_max, leg_extension_min=leg_extension_min,
-                leg_asymmetry=leg_asymmetry, visible_leg_count=visible_leg_count,
-            ))
-        except Exception as e:
-            print(f"Error extracting landmarks for image_id {image_id}: {e}")
-
-    session.commit()
     last_id = results[-1][0]
-    print(f"Processed up to encoding_id = {last_id}")
+    print(f"Processed up to encoding_id = {last_id}, rows written = {processed_total}")
 
 session.close()
 mongo_client.close()
 engine.dispose()
-# Note: Ensure that the MongoDB and MySQL connections are properly closed after processing.
