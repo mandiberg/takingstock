@@ -32,7 +32,7 @@ INPUT = io.ROOTSSD # folder that holds SOUND_FOLDER and audiopduction folders
 #################################
 
 ######Tench's folders###########
-INPUT = "/Volumes/OWC5/tts_sport"
+INPUT = "/Volumes/OWC52/tts_sport"
 #################################
 
 TOPIC = 0  # non-batch only: which metas_{TOPIC}.csv to mix
@@ -44,7 +44,7 @@ BATCH_MODE = True          # set True to process cluster folders under BATCH_FOL
 # Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
 # Example layout:
 #   BATCH_FOLDER_NAME/clustercc1_p1_t0_om1_1788371815.2307808/metas.csv
-BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/_9000s_arms"
+BATCH_FOLDER_NAME = "/Volumes/OWC52/tts_sport/test"
 # Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
 # Empty list = every subfolder that contains metas.csv.
 BATCH_CLUSTERS = [
