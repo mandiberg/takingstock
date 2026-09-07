@@ -57,9 +57,9 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T45_nature'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-# SegmentHelper_name = 'SegmentHelper_TheGym'
+SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
@@ -105,10 +105,10 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = os.path.join(io.ROOT_DBx, "body3D_segmentbig_useall256_CSVs_test")
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
-# CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_T45_60test" # this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_FULL_BODY_c157v3_full_list_oneshot" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
+# CSV_MAIN_FOLDER = "/Volumes/LaCie"
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX_legpose_p1_legvariants" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM and INCLUDE_LEG_POSE_FEATURES in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -184,11 +184,18 @@ def resolve_arms_object_fusion_folder(
 
 
 HSV_SOURCE_MODE = "background"
-SKIP_OBJECT_NONE_CLUSTERS = [0] # set to 1 if you want to skip Nones
+SKIP_OBJECT_NONE_CLUSTERS = [] # set to 1 if you want to skip Nones
 DO_OBJECT_COLLAPSE = False #TEMP TK       # compute and apply per-topic object signature collapse mapping
 OBJECT_COLLAPSE_MIN = 1000       # minimum topic-count for a signature bin to be retained
 MULTIPOLICY = False
 
+# CONTROL LEG STUFF FOR ARMS CLUSTERS
+INCLUDE_LEG_POSE_FEATURES = True  # join LocationHandsFeet for leg-shape cluster separability testing
+LEG_POSE_FLOOR_PCT = 5.0             # minimum visible-leg percentage required before split test
+LEG_POSE_MIN_BUCKET_SIZE = 20        # minimum rows required on each side of the candidate valley
+LEG_POSE_MIN_GAP_RATIO = 0.35        # valley-to-peak ratio for a real split; not a literal empty-gap width
+LEG_POSE_ASYMMETRY_THRESHOLD = 0.15  # leg_asymmetry threshold for single- vs both-leg extended
+print("THISISTHENEWTHING")
 # overriding DB for testing
 # io.db["name"] = "stock"
 # io.db["name"] = "ministock"
@@ -204,10 +211,10 @@ CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
-MULTIPLIER_PADDING = 1 # this is how much extra padding every multiplier gets
+MULTIPLIER_PADDING = 2 # this is how much extra padding every multiplier gets
 # percentile is what point you take the upper/lower bounds of the dimensions for multiplier
 # 5 was leaving too many anomalies in there. 
-PERCENTILE = 80
+PERCENTILE = 40
 
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if "paris" in CURRENT_MODE:
@@ -257,7 +264,7 @@ elif "3D" in CURRENT_MODE:
     if "bod" in CURRENT_MODE:
         CLUSTER_TYPE = SORT_TYPE = "body3D"
         if "full" in CURRENT_MODE:
-            FULL_BODY = True # this requires is_feet, defaults to false
+            FULL_BODY = False # this requires is_feet, defaults to false
         EXPAND = True # expand with white for prints, as opposed to inpaint and crop. (not video, which is controlled by INPAINT_COLOR) 
     elif CURRENT_MODE == '3D_arms':
         # META = True
@@ -315,7 +322,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    FULL_BODY = True
+    FULL_BODY = False
     if FULL_BODY: matrix_family = "BodyPoses3D" 
     else: matrix_family = "ArmsPoses3D"
 
@@ -409,7 +416,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     IS_HAND_POSE_FUSION = True # do we use fusion clusters
     CHOP_FIRST = True # does a first pass chop before whatever sort happens - this is default now
 
-    OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion
+    OBJECT_NONE_CLUSTERS = [1] # if MULTIPOLICY these get HSV BG, else these don't run in fusion. 
+    # to turn off all object nones use SKIP_OBJECT_NONE_CLUSTERS 
     # MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
     MULTIPOLICY = True # controls whether it does multi-bucket fusion policy based on cluster size for HSV, clusters, and metabodyposes3D
 
@@ -419,7 +427,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = True # take all files, based off the very first sort order. (turn on for testing/speed)
+        ONE_SHOT = False # take all files, based off the very first sort order. (turn on for testing/speed)
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         KNN_LARGE_CLUSTERS = True
@@ -431,13 +439,13 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
             # use this to turn on multiplier CSV creation/augmentation
             FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
-            USE_BIIIIIG_FULL_BODY_MULTIPLIER = True # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
+            USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
 
 
-            # temp hack for T45 Nature
-            USE_POSE_CROP_DICT = True # override canonical multipliers for production
-            DO_ENRICH_IMAGE_METAS = False # don't bother getting topics/detections because it isn't used.
-            ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
+            # # temp hack for T45 Nature
+            # USE_POSE_CROP_DICT = True # override canonical multipliers for production
+            # DO_ENRICH_IMAGE_METAS = False # don't bother getting topics/detections because it isn't used.
+            # ONLY_SAVE_CACHE = False # if False in MODE=1 it will save images to each folder
 
             # OBJECT_NONE_CLUSTERS = [] # sneaky HACK to force non multi to run P1
             # MULTIPOLICY = False # MULTIPOLICY conflicts with GENERATE_FUSION_PAIRS 
@@ -515,6 +523,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             MIN_VIDEO_FUSION_COUNT = cutoff # this is the cut off for the CSV fusion pairs
             MIN_CYCLE_COUNT = max(int(cutoff/2), FORCE_TARGET_COUNT) # this is the cut off for the SQL query results
         else:
+            # # TEMP HACK for stills, to force small clusters to run
+            # # for fusion clusters that don't run on class_id, just take the MAX_ROWS_PER_OUTPUT_CSV
+            # MIN_VIDEO_FUSION_COUNT = 10 # this is the cut off for the CSV fusion pairs
+            # MIN_CYCLE_COUNT = 10 # at least 100 in the cluster 
+
             # for fusion clusters that don't run on class_id, just take the MAX_ROWS_PER_OUTPUT_CSV
             MIN_VIDEO_FUSION_COUNT = 100 # this is the cut off for the CSV fusion pairs
             MIN_CYCLE_COUNT = 64 # at least 100 in the cluster 
@@ -569,7 +582,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
         TOPIC_NO = [class_id]
     else:
         TOPIC_NO = [class_id] if class_token else [0] # if doing an affect topic fusion, this is the wrapper topic, OR keyword. add .01, .1 etc for sub selects from KEYWORD_DICT
-    OBJ_KEYWORD_CUTOFF = 120 # if below this number it is treated as an object_id and not a keyword with AND/NOT
+    OBJ_KEYWORD_CUTOFF = 160 # if below this number it is treated as an object_id and not a keyword with AND/NOT
     
     # this needs to be integrated into the search for each cluster, but doing here for the moment when doing single topic/cluster testing
     # this is CLUSTER_TYPE
@@ -917,6 +930,10 @@ elif IS_SEGONLY and io.platform == "darwin":
         FROM += " JOIN ImagesBackground ibg ON s.image_id = ibg.image_id "
         # WHERE += " AND ibg.lum > .3"
         SELECT += ", ibg.lum, ibg.lum_bb, ibg.hue, ibg.hue_bb, ibg.sat, ibg.sat_bb, ibg.val, ibg.val_bb, ibg.lum_torso, ibg.lum_torso_bb " # add description here, after resegmenting
+    if INCLUDE_LEG_POSE_FEATURES:
+        # LEFT JOIN: not every image has a LocationHandsFeet row yet, and it must not filter the segment
+        FROM += " LEFT JOIN LocationHandsFeet lhf ON s.image_id = lhf.image_id "
+        SELECT += ", lhf.mid_hip_x, lhf.knee_left_x, lhf.knee_right_x, lhf.foot_left_x, lhf.foot_right_x, lhf.ankle_rel_y_left, lhf.ankle_rel_y_right, lhf.leg_extension_max, lhf.leg_extension_min, lhf.leg_asymmetry, lhf.visible_leg_count, lhf.foot_left_vis, lhf.foot_right_vis "
     ###
     if SUBSELECT_ON_CLASS_ID > 0:
         # HACKY TK FIX THIS LATER
@@ -3332,63 +3349,98 @@ def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
 
 def enrich_image_metas(df):
     print("enriching image metas")
+    total_start = time.perf_counter()
+
     KEYWORD_TO_SCORE_DIVISOR = 4
     RANDOM_DIVISOR = 5
-    if 'description' not in df.columns:
-        df['description'] = None
+
+    if "description" not in df.columns:
+        df["description"] = None
+
     def count_keywords_in_description(description, keywords):
         print("count_keywords_in_description called with description:", description)
-        keywords = ["banknote", "money", "dollar", "euro", "pounds", "credit", "financ", "card", "currenc", "cash", "rupee", "yen", "yuan", 'ruble', "mark", "rupee", "peso", "franc", "lira", "shekel", "ether", "crypto", "bitcoin"]
+        keywords = [
+            "banknote", "money", "dollar", "euro", "pounds", "credit", "financ",
+            "card", "currenc", "cash", "rupee", "yen", "yuan", "ruble", "mark",
+            "peso", "franc", "lira", "shekel", "ether", "crypto", "bitcoin"
+        ]
         if not description or not isinstance(description, str):
             return 0
         description_lower = description.lower()
         count = sum(1 for keyword in keywords if keyword in description_lower)
-        print(f"count_keywords_in_description called with description: {description}, count: {count}")
-        # score is calculated as the count divided by 4 + a random number between .0 and .2
-        random_number = (random() / RANDOM_DIVISOR)  # Random number between 0.0 and 0.2
+        random_number = random() / RANDOM_DIVISOR
         raw_score = (count / KEYWORD_TO_SCORE_DIVISOR) + random_number
-        score = min(raw_score, .9)  # Ensure the score does not exceed 1.0
-        print(f"count_keywords_in_description called with description: {description}, count: {count}, score: {score}, random_number: {random_number}")
-        return score
+        return min(raw_score, 0.9)
 
-    parts = SegmentHelper_name.split("_")
-    topic_id = None
-    if 'topic_score' not in df.columns:
-        image_ids = df['image_id'].dropna().tolist()
-        topic_scores = {}
-        if image_ids:
-            try:
-                score_rows = session.query(ImagesTopics.image_id, ImagesTopics.topic_id, ImagesTopics.topic_score).filter(
-                    ImagesTopics.image_id.in_(image_ids),
-                ).all()
-                topic_scores = {image_id: (topic_id,topic_score) for image_id, topic_id, topic_score in score_rows}
-            except Exception as e:
-                traceback.print_exc()
-                print(str(e))
-                topic_scores = {}
-        print(f"going to unpack {len(topic_scores)} rows from {len(df.index)} rows")
-        print(f"first score is {list(topic_scores.items())[0] if topic_scores else 'none'}")
-        # df[['New_Col1', 'New_Col2']] = pd.DataFrame(df['A'].map(my_map).tolist(), index=df.index)
+    # normalize once
+    image_ids = pd.to_numeric(df["image_id"], errors="coerce").dropna().astype("int64").unique().tolist()
+    if "topic_score" not in df.columns:
+        df["topic_id"] = None
+        df["topic_score"] = None
 
-        # map() yields NaN (not a tuple) for unmatched image_ids, which breaks .tolist()
-        # into an inhomogeneous array; fill those with (None, None) to keep shape consistent.
-        mapped_topic_scores = df['image_id'].map(topic_scores).apply(
-            lambda value: value if isinstance(value, tuple) else (None, None)
-        )
-        df[['topic_id', 'topic_score']] = pd.DataFrame(mapped_topic_scores.tolist(), index=df.index)
-        print(
-            f"Assigned topic_score for {len(topic_scores)} of {len(df.index)} rows "
-            f"using topic_id={topic_id}"
-        )
-            
-    # Only backfill topic_score from description when no usable score already exists.
-    topic_score_missing_mask = df['topic_score'].isna() | (pd.to_numeric(df['topic_score'], errors='coerce') == 0)
+    topic_query_start = time.perf_counter()
+    topic_scores = {}
+    if image_ids:
+        try:
+            if SegmentHelper_name:
+                helper_table = f"`{SegmentHelper_name}`"
+                bound_ids = tuple(image_ids)
+                query_sql = f"""
+                    SELECT it.image_id, it.topic_id, it.topic_score
+                    FROM ImagesTopics it
+                    JOIN {helper_table} sh ON sh.image_id = it.image_id
+                    WHERE sh.image_id IN :image_ids
+                      AND it.topic_score IS NOT NULL
+                """
+                # print(f"[enrich_image_metas] topic query SQL:\n{query_sql}")
+                # print(f"[enrich_image_metas] topic query image_ids sample={bound_ids[:10]}")
+                rows = session.execute(
+                    text(query_sql),
+                    {"image_ids": bound_ids},
+                ).fetchall()
+            else:
+                rows = session.execute(
+                    select(ImagesTopics.image_id, ImagesTopics.topic_id, ImagesTopics.topic_score)
+                    .where(ImagesTopics.image_id.in_(image_ids))
+                    .where(
+                        or_(
+                            ImagesTopics.topic_score.is_(None),
+                            ImagesTopics.topic_score == 0
+                        )
+                    )
+                ).fetchall()
+
+            topic_scores = {
+                int(image_id): (int(topic_id), float(topic_score)) if topic_id is not None else (None, None)
+                for image_id, topic_id, topic_score in rows
+            }
+        except Exception:
+            traceback.print_exc()
+            topic_scores = {}
+    # print(
+    #     f"[enrich_image_metas] topic query elapsed={time.perf_counter() - topic_query_start:.3f}s "
+    #     f"rows={len(df.index)} unique_ids={len(image_ids)} matched_rows={len(topic_scores)}"
+    # )
+
+    map_start = time.perf_counter()
+    mapped_topic_scores = df["image_id"].map(topic_scores).apply(
+        lambda value: value if isinstance(value, tuple) else (None, None)
+    )
+    df[["topic_id", "topic_score"]] = pd.DataFrame(mapped_topic_scores.tolist(), index=df.index)
+    # print(f"[enrich_image_metas] topic map elapsed={time.perf_counter() - map_start:.3f}s")
+
+    backfill_start = time.perf_counter()
+    topic_score_missing_mask = df["topic_score"].isna() | (pd.to_numeric(df["topic_score"], errors="coerce") == 0)
     if topic_score_missing_mask.any():
-        df.loc[topic_score_missing_mask, 'topic_score'] = df.loc[
-            topic_score_missing_mask, 'description'
+        missing_count = int(topic_score_missing_mask.sum())
+        print(f"[enrich_image_metas] backfill candidates={missing_count}")
+        df.loc[topic_score_missing_mask, "topic_score"] = df.loc[
+            topic_score_missing_mask, "description"
         ].apply(lambda desc: count_keywords_in_description(desc, []))
-    
-    image_ids = df['image_id'].dropna().tolist()
+    # print(f"[enrich_image_metas] topic backfill elapsed={time.perf_counter() - backfill_start:.3f}s")
+
+    detection_query_start = time.perf_counter()
+    image_ids = df["image_id"].dropna().tolist()
     detection_payloads = {}
     if image_ids:
         try:
@@ -3412,19 +3464,32 @@ def enrich_image_metas(df):
                 image_id: json.dumps(detections, ensure_ascii=False)
                 for image_id, detections in grouped_detections.items()
             }
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
-            print(str(e))
             detection_payloads = {}
-    if 'detections_json' not in df.columns:
-        df['detections_json'] = df['image_id'].map(detection_payloads).fillna("[]")
+    # print(
+    #     f"[enrich_image_metas] detection query elapsed={time.perf_counter() - detection_query_start:.3f}s "
+    #     f"rows={len(image_ids)} payload_rows={len(detection_payloads)}"
+    # )
+
+    if "detections_json" not in df.columns:
+        detection_map_start = time.perf_counter()
+        df["detections_json"] = df["image_id"].map(detection_payloads).fillna("[]")
+        # print(f"[enrich_image_metas] detection map elapsed={time.perf_counter() - detection_map_start:.3f}s")
     else:
-        df['detections_json'] = df['detections_json'].fillna("[]")
-    if 'detection_count' not in df.columns:
-        df['detection_count'] = df['detections_json'].apply(
+        df["detections_json"] = df["detections_json"].fillna("[]")
+
+    if "detection_count" not in df.columns:
+        detection_count_start = time.perf_counter()
+        df["detection_count"] = df["detections_json"].apply(
             lambda value: len(json.loads(value)) if isinstance(value, str) and value else 0
         )
-    return df 
+        # print(f"[enrich_image_metas] detection_count elapsed={time.perf_counter() - detection_count_start:.3f}s")
+
+    total_elapsed = time.perf_counter() - total_start
+    # print(f"[enrich_image_metas] total elapsed={total_elapsed:.3f}s row_count={len(df.index)}")
+    return df
+
 def _build_sorted_artifact_paths(csv_folder, file_prefix, segment_count):
     stem = f"df_sorted_{file_prefix}_ct{segment_count}"
     base_path = os.path.join(csv_folder, stem)
@@ -3835,7 +3900,7 @@ def _mode1_worker_init(cfg: dict) -> None:
 
 def _mode1_find_parts(parts: list) -> tuple:
     """Module-level version of find_parts; used by the top-level pool worker."""
-    cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
+    cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = leg_pose_variant = None
     for part in parts:
         if part.startswith("ct"):
             segment_count = part.split("ct")[1]
@@ -3845,6 +3910,8 @@ def _mode1_find_parts(parts: list) -> tuple:
             topic_no = part.split("t")[1]
         elif part.startswith("c"):
             cluster_no = part.split("c")[1]
+        elif part.startswith("lp"):
+            leg_pose_variant = part.split("lp", 1)[1]
         elif part.startswith("oml"):
             continue
         elif part.startswith("sb"):
@@ -3855,7 +3922,7 @@ def _mode1_find_parts(parts: list) -> tuple:
             continue
         elif part.startswith("h"):
             background_hsv_no = part.split("h", 1)[1]
-    return segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no
+    return segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no, leg_pose_variant
 
 
 def _mode1_normalize_token(value):
@@ -4080,7 +4147,7 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     return merged_multiplier
 
 
-def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
+def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, leg_pose_variant=None):
     """Standalone set_multiplier_and_dims for pool workers (no main() closures).
 
     Mirrors the logic of the nested set_multiplier_and_dims but reads from
@@ -4090,16 +4157,58 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
     """
     cluster_no = _mode1_normalize_token(cluster_no)
     pose_no = _mode1_normalize_token(pose_no)
+    normalized_leg_variant = None
+    try:
+        if leg_pose_variant is not None:
+            normalized_leg_variant = float(str(leg_pose_variant).replace("lp", "").strip())
+    except (TypeError, ValueError):
+        normalized_leg_variant = None
+
     use_pose_crop = bool(USE_POSE_CROP_DICT and (pose_no is not None or cluster_no is not None))
     canonical_multiplier = None
     learned_record = None
+    variant_registry_miss = False
+    exact_variant_key = None
     if not use_pose_crop:
-        canonical_multiplier = (canonical_registry or {}).get((cluster_no, pose_no))
+        if cluster_no is not None and pose_no is not None:
+            if normalized_leg_variant is not None:
+                exact_variant_key = (cluster_no, pose_no, normalized_leg_variant)
+                if VERBOSE: print(
+                    "[MODE1 MULTIPLIER TRACE] exact variant lookup start "
+                    f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+                    f"exact_key={exact_variant_key} registry_size={len(canonical_registry or {})}"
+                )
+                if exact_variant_key in (canonical_registry or {}):
+                    canonical_multiplier = (canonical_registry or {})[exact_variant_key]
+                    if VERBOSE: print(
+                        "[MODE1 MULTIPLIER TRACE] exact variant match used "
+                        f"key={exact_variant_key} value={canonical_multiplier}"
+                    )
+                else:
+                    variant_registry_miss = True
+                    if VERBOSE: print(
+                        "[MODE1 MULTIPLIER TRACE] exact variant miss trigger "
+                        f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+                        f"missing_key={exact_variant_key} legacy_base_key={(cluster_no, pose_no)}"
+                    )
+            else:
+                legacy_key = (cluster_no, pose_no)
+                if VERBOSE: print(
+                    "[MODE1 MULTIPLIER TRACE] legacy lookup start "
+                    f"arms={cluster_no} object_signature={pose_no} key={legacy_key} "
+                    f"registry_size={len(canonical_registry or {})}"
+                )
+                if legacy_key in (canonical_registry or {}):
+                    canonical_multiplier = (canonical_registry or {})[legacy_key]
+                    if VERBOSE: print(
+                        "[MODE1 MULTIPLIER TRACE] legacy match used "
+                        f"key={legacy_key} value={canonical_multiplier}"
+                    )
     if canonical_multiplier is not None:
         sort.image_edge_multiplier = list(canonical_multiplier)
         print(
             "[canonical multipliers] using stored multiplier "
-            f"for arms={cluster_no} object_signature={pose_no}: {sort.image_edge_multiplier}"
+            f"for arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant}: {sort.image_edge_multiplier}"
         )
     elif use_pose_crop:
         if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
@@ -4122,8 +4231,10 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         if crop_dict_index is not None:
             sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
-    elif image_edge_multiplier is None:
-        # Dynamic fallback with object-bbox awareness.
+    elif image_edge_multiplier is None or variant_registry_miss:
+        # Dynamic fallback with object-bbox awareness. Missing leg-pose keys in
+        # MODE 1 should still trigger a fresh estimate and a registry write for
+        # the variant-specific multiplier set.
         sort.image_edge_multiplier = _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, MULTIPLIER_PADDING)
         print(
             "No multiplier found in canonical registry or pose crop dict; "
@@ -4140,12 +4251,30 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry):
             learned_record = {
                 "arms_cluster_id": int(cluster_no),
                 "object_signature_cluster_id": int(pose_no),
+                "leg_pose_variant": normalized_leg_variant,
                 "multiplier": [float(value) for value in sort.image_edge_multiplier],
             }
             print(
-                "[canonical multipliers][worker] learned candidate "
-                f"arms={cluster_no} object_signature={pose_no} mult={learned_record['multiplier']}"
+                "[MODE1 MULTIPLIER TRACE] dynamic multiplier created "
+                f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+                f"mult={learned_record['multiplier']}"
             )
+            if normalized_leg_variant is not None:
+                variant_key = (int(cluster_no), int(pose_no), int(normalized_leg_variant))
+                canonical_registry[variant_key] = list(learned_record["multiplier"])
+                print(
+                    "[MODE1 MULTIPLIER TRACE] stored exact variant registry entry "
+                    f"key={variant_key} value={canonical_registry[variant_key]}"
+                )
+            print(
+                "[canonical multipliers][worker] learned candidate "
+                f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} mult={learned_record['multiplier']}"
+            )
+    print(
+        "[MODE1 MULTIPLIER TRACE] implementation "
+        f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+        f"sort.image_edge_multiplier={sort.image_edge_multiplier}"
+    )
     sort.face_height_output = face_height_output
     sort.set_output_dims()
     return learned_record
@@ -4405,13 +4534,14 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
 
     try:
         parts = csv_file.replace(".csv", "").split("_")
-        segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no = _mode1_find_parts(parts)
+        segment_count, pose_no, topic_no, cluster_no, background_hsv_no, object_hsv_no, leg_pose_variant = _mode1_find_parts(parts)
         if len(parts) >= 3:
             cluster_no = parts[2]
 
         print(
             f"assembling cluster {cluster_no}, topic {topic_no}, pose {pose_no}, "
-            f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no} from csv file: {csv_file}"
+            f"background_hsv {background_hsv_no}, object_hsv {object_hsv_no}, "
+            f"leg_pose_variant {leg_pose_variant} from csv file: {csv_file}"
         )
 
         csv_counter_state = set_my_counter_dict(
@@ -4461,7 +4591,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             }
 
         multiplier_start = time.perf_counter()
-        learned_multiplier = _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry)
+        learned_multiplier = _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry, leg_pose_variant=leg_pose_variant)
         if learned_multiplier is not None:
             learned_multipliers.append(learned_multiplier)
         timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (
@@ -4599,6 +4729,33 @@ def main():
 
     global MODE0_TIMING_CALLBACK
     MODE0_TIMING_CALLBACK = add_mode0_timing
+
+    leg_pose_log_rows = []
+
+    def record_leg_pose_result(result):
+        leg_pose_log_rows.append(dict(result))
+        status = "SEPARABLE" if result.get("is_separable") else "not separable"
+        print(
+            f"[leg-pose] {status} cluster={result.get('cluster_label')} "
+            f"visible_leg_pct={result.get('visible_leg_pct')}% rows={result.get('total_rows')} "
+            f"reason={result.get('reason')}"
+        )
+
+    def write_leg_pose_log():
+        if not leg_pose_log_rows:
+            return
+        try:
+            if not os.path.exists(CSV_FOLDER):
+                os.makedirs(CSV_FOLDER)
+            log_path = os.path.join(CSV_FOLDER, "leg_pose_separability_log.csv")
+            pd.DataFrame(leg_pose_log_rows).to_csv(log_path, index=False)
+            separable_count = sum(1 for r in leg_pose_log_rows if r.get("is_separable"))
+            print(
+                f"[leg-pose] wrote {len(leg_pose_log_rows)} cluster checks to {log_path} "
+                f"({separable_count} separable, {len(leg_pose_log_rows) - separable_count} not separable)"
+            )
+        except Exception as exc:
+            print(f"[leg-pose] failed to write log: {exc}")
 
     def print_mode0_timing_summary():
         if not mode0_timing_enabled:
@@ -4864,17 +5021,33 @@ def main():
         filename = f"canonical_multipliers_{cluster}_{arms_dim}_ObjectFusion_{object_dim}.csv"
         return os.path.join(data_dir, filename)
 
+    def normalize_leg_pose_variant(value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            token = value.strip()
+            if not token or token.lower() in ("none", "nan"):
+                return None
+            value = token.replace("lp", "")
+        try:
+            return int(math.ceil(float(value)))
+        except (TypeError, ValueError):
+            return None
+
     def write_canonical_multiplier_registry():
         nonlocal canonical_multiplier_csv_path
         if canonical_multiplier_csv_path is None:
             canonical_multiplier_csv_path = resolve_canonical_multiplier_csv_path()
 
         rows = []
-        for (arms_cluster_id, object_signature_cluster_id), multipliers in sorted(canonical_multiplier_registry.items()):
+        for key, multipliers in sorted(canonical_multiplier_registry.items(), key=lambda item: str(item[0])):
+            arms_cluster_id, object_signature_cluster_id = key[:2]
+            leg_pose_variant = key[2] if len(key) > 2 else None
             rows.append(
                 {
                     "arms_cluster_id": int(arms_cluster_id),
                     "object_signature_cluster_id": int(object_signature_cluster_id),
+                    "leg_pose_variant": None if leg_pose_variant is None else int(leg_pose_variant),
                     "mult_top": float(multipliers[0]),
                     "mult_right": float(multipliers[1]),
                     "mult_bottom": float(multipliers[2]),
@@ -4915,6 +5088,7 @@ def main():
             if arms_cluster_id is None or object_signature_cluster_id is None:
                 continue
 
+            leg_pose_variant = normalize_leg_pose_variant(row.get("leg_pose_variant"))
             multiplier_values = [
                 row.get("mult_top", None),
                 row.get("mult_right", None),
@@ -4927,6 +5101,8 @@ def main():
                 continue
 
             key = (arms_cluster_id, object_signature_cluster_id)
+            if leg_pose_variant is not None:
+                key = (arms_cluster_id, object_signature_cluster_id, leg_pose_variant)
             canonical_multiplier_registry[key] = parsed_values
             loaded_count += 1
 
@@ -4934,16 +5110,40 @@ def main():
             f"[canonical multipliers] loaded {loaded_count} rows from {canonical_multiplier_csv_path}"
         )
 
-    def get_canonical_multiplier(cluster_no, pose_no):
+    def get_canonical_multiplier(cluster_no, pose_no, leg_pose_variant=None):
         if not should_use_canonical_multiplier_registry():
             return None
         arms_cluster_id = normalize_cluster_token(cluster_no)
         object_signature_cluster_id = normalize_cluster_token(pose_no)
         if arms_cluster_id is None or object_signature_cluster_id is None:
             return None
-        return canonical_multiplier_registry.get((arms_cluster_id, object_signature_cluster_id))
 
-    def register_canonical_multiplier(cluster_no, pose_no, multiplier_values):
+        normalized_variant = normalize_leg_pose_variant(leg_pose_variant)
+        if normalized_variant is not None:
+            variant_key = (arms_cluster_id, object_signature_cluster_id, normalized_variant)
+            candidate = canonical_multiplier_registry.get(variant_key)
+            if candidate is not None:
+                print(
+                    "[MODE1 MULTIPLIER TRACE] exact variant key selected "
+                    f"key={variant_key} value={candidate}"
+                )
+                return candidate
+            print(
+                "[MODE1 MULTIPLIER TRACE] exact variant key missing; legacy fallback forbidden "
+                f"key={variant_key} legacy_key={(arms_cluster_id, object_signature_cluster_id)}"
+            )
+            return None
+
+        legacy_key = (arms_cluster_id, object_signature_cluster_id)
+        candidate = canonical_multiplier_registry.get(legacy_key)
+        if candidate is not None:
+            print(
+                "[MODE1 MULTIPLIER TRACE] legacy key used (no leg variant present) "
+                f"key={legacy_key} value={candidate}"
+            )
+        return candidate
+
+    def register_canonical_multiplier(cluster_no, pose_no, multiplier_values, leg_pose_variant=None):
         if not should_use_canonical_multiplier_registry():
             return
         arms_cluster_id = normalize_cluster_token(cluster_no)
@@ -4953,15 +5153,26 @@ def main():
         if multiplier_values is None or len(multiplier_values) != 4:
             return
 
+        normalized_variant = normalize_leg_pose_variant(leg_pose_variant)
         key = (arms_cluster_id, object_signature_cluster_id)
+        if normalized_variant is not None:
+            key = (arms_cluster_id, object_signature_cluster_id, normalized_variant)
         if key in canonical_multiplier_registry:
+            print(
+                "[MODE1 MULTIPLIER TRACE] registration skipped existing key "
+                f"key={key} existing={canonical_multiplier_registry[key]}"
+            )
             return
 
         canonical_multiplier_registry[key] = [float(value) for value in multiplier_values]
         print(
+            "[MODE1 MULTIPLIER TRACE] register canonical multiplier "
+            f"key={key} value={canonical_multiplier_registry[key]}"
+        )
+        print(
             "[canonical multipliers] learned new combo "
             f"arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
-            f"mult={canonical_multiplier_registry[key]}"
+            f"leg_variant={normalized_variant} mult={canonical_multiplier_registry[key]}"
         )
         write_canonical_multiplier_registry()
 
@@ -5100,6 +5311,7 @@ def main():
         return mapping
 
     def classify_fusion_pair_route(cluster_topic_no, route_counts, object_column_totals, arms_to_meta_map):
+        print(f"[classify_fusion_pair_route] for {cluster_topic_no} with MULTIPOLICY={MULTIPOLICY}, HSV_SOURCE_MODE={HSV_SOURCE_MODE}, USE_HSV={USE_HSV}")
         default_policy = {
             "bucket": "legacy_single_policy",
             "hsv_source": "object" if HSV_SOURCE_MODE == "object" else "background",
@@ -5169,7 +5381,8 @@ def main():
         # Object-none override: always route to non-HSV fusion policy.
         # This keeps large OBJECT_NONE_CLUSTERS on the standard non-HSV
         # path (including CHOP_FIRST + iterative sorting behavior).
-        if object_cluster_id in OBJECT_NONE_CLUSTERS or KNN_LARGE_CLUSTERS:
+        print("OBJECT_KEEP_CLUSTERS:", OBJECT_KEEP_CLUSTERS)
+        if (object_cluster_id in OBJECT_NONE_CLUSTERS or KNN_LARGE_CLUSTERS):
             if cell_count >= int(MIN_VIDEO_FUSION_COUNT):
                 print(
                     f"Routing arms_cluster {arms_cluster_id} and object_cluster {object_cluster_id} "
@@ -5382,6 +5595,39 @@ def main():
         )
         return partition_groups
 
+    def partition_segment_by_leg_pose(df_segment, leg_pose_check):
+        """Split df_segment into (label, subset_df) groups using label_by_leg_pose.
+
+        Ordered largest-group-first so sbNNN numbering in logs stays stable/readable.
+        """
+        labels = cl.label_by_leg_pose(
+            df_segment,
+            leg_pose_check["boundary"],
+            asymmetry_threshold=LEG_POSE_ASYMMETRY_THRESHOLD,
+        )
+        partition_df = df_segment.copy()
+        partition_df["_leg_pose_label"] = labels
+
+        groups = []
+        for label, group_df in partition_df.groupby("_leg_pose_label"):
+            if group_df.empty:
+                continue
+            variant = cl.derive_leg_pose_multiplier_variant(
+                label,
+                group_df.get("leg_extension_max", pd.Series(dtype=float)),
+            )
+            group_df = group_df.drop(columns=["_leg_pose_label"]).reset_index(drop=True)
+            if variant is not None:
+                group_df["_leg_pose_multiplier_variant"] = variant
+            groups.append((label, group_df))
+
+        groups.sort(key=lambda item: len(item[1].index), reverse=True)
+        print(
+            f"[leg-pose] partitioned into {len(groups)} buckets: "
+            f"{[(label, len(g.index), g.get('_leg_pose_multiplier_variant').iloc[0] if '_leg_pose_multiplier_variant' in g.columns and not g.empty else None) for label, g in groups]}"
+        )
+        return groups
+
     def one_shot_sort_dataframe(df_segment):
         global ONE_SHOT, TSP_SORT, CHOP_ITTER_TSP_SORT, CHOP_FIRST
 
@@ -5565,7 +5811,7 @@ def main():
 
 
             # this is to save files from a segment to the SSD
-            if VERBOSE: print("will I save segment? ", SAVE_SEGMENT)
+            if VERBOSE: print("will I save segment to SSD? ", SAVE_SEGMENT)
             if SAVE_SEGMENT:
                 Base.metadata.create_all(engine)
                 print(df_segment.size)
@@ -5608,15 +5854,39 @@ def main():
                 # sort.counter_dict["start_img_name"] = "median"
                 base_file_prefix = const_prefix(this_topic, cluster_no, pose_no, effective_hsv_meta)
 
+                leg_pose_check = None
+                leg_pose_partition_groups = None
+                if MODE == 0 and is_fusion_sort and INCLUDE_LEG_POSE_FEATURES:
+                    leg_pose_check = cl.assess_leg_pose_separability(
+                        df_segment,
+                        floor_pct=LEG_POSE_FLOOR_PCT,
+                        min_bucket_size=LEG_POSE_MIN_BUCKET_SIZE,
+                        min_gap_ratio=LEG_POSE_MIN_GAP_RATIO,
+                        cluster_label=base_file_prefix,
+                    )
+                    record_leg_pose_result(leg_pose_check)
+                    if leg_pose_check["is_separable"]:
+                        leg_pose_partition_groups = partition_segment_by_leg_pose(df_segment, leg_pose_check)
+
                 should_partition_before_sort = (
                     MODE == 0
                     and is_fusion_sort
+                    and leg_pose_partition_groups is None
                     and len(df_segment.index) > MAX_ROWS_PER_OUTPUT_CSV
                 )
 
                 mode0_jobs = []
+                # (label_or_none, subset_df) pairs driving sbNNN CSV output; populated
+                # either from leg-pose buckets or from size-based KMeans partitioning
+                partition_units = None
 
-                if should_partition_before_sort:
+                if leg_pose_partition_groups is not None:
+                    print(
+                        f"[leg-pose] {base_file_prefix}: routing {len(leg_pose_partition_groups)} "
+                        "leg-pose buckets through sbNNN partition plumbing"
+                    )
+                    partition_units = leg_pose_partition_groups
+                elif should_partition_before_sort:
                     print(
                         f"[partition] oversized segment detected ({len(df_segment.index)} rows); "
                         "partitioning before process_linear"
@@ -5624,13 +5894,27 @@ def main():
                     partition_start = time.perf_counter()
                     partition_groups = partition_segment_with_kmeans(df_segment, MAX_ROWS_PER_OUTPUT_CSV)
                     add_mode0_timing("partition", time.perf_counter() - partition_start)
+                    partition_units = [(None, group_df) for group_df in partition_groups]
 
-                    for subset_idx, subset_df in enumerate(partition_groups, start=1):
+                if partition_units is not None:
+                    for subset_idx, (subset_label, subset_df) in enumerate(partition_units, start=1):
                         if subset_df.empty:
                             continue
 
                         subset_suffix = f"sb{subset_idx:03d}"
                         subset_prefix = f"{base_file_prefix}_{subset_suffix}"
+                        subset_variant = None
+                        if "_leg_pose_multiplier_variant" in subset_df.columns:
+                            unique_variants = subset_df["_leg_pose_multiplier_variant"].dropna().unique().tolist()
+                            if len(unique_variants) == 1:
+                                subset_variant = unique_variants[0]
+                        if subset_variant is not None:
+                            subset_prefix = f"{subset_prefix}_lp{subset_variant}"
+                        if subset_label is not None:
+                            print(
+                                f"[partition] {subset_suffix} -> leg-pose label={subset_label} "
+                                f"rows={len(subset_df.index)} variant={subset_variant}"
+                            )
 
                         if len(subset_df.index) > MAX_ROWS_PER_OUTPUT_CSV:
                             print(
@@ -5786,6 +6070,7 @@ def main():
                 arms_cluster_id = normalize_cluster_token(record.get("arms_cluster_id"))
                 object_signature_cluster_id = normalize_cluster_token(record.get("object_signature_cluster_id"))
                 multiplier_values = record.get("multiplier")
+                leg_pose_variant = normalize_leg_pose_variant(record.get("leg_pose_variant"))
 
                 if arms_cluster_id is None or object_signature_cluster_id is None:
                     continue
@@ -5798,6 +6083,8 @@ def main():
                     continue
 
                 key = (arms_cluster_id, object_signature_cluster_id)
+                if leg_pose_variant is not None:
+                    key = (arms_cluster_id, object_signature_cluster_id, leg_pose_variant)
                 existing = canonical_multiplier_registry.get(key)
                 if existing is not None:
                     try:
@@ -5809,7 +6096,7 @@ def main():
                         print(
                             "[canonical multipliers][mode1] duplicate learned key ignored (first-write-wins) "
                             f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
-                            f"existing={existing_values} candidate={parsed_values}"
+                            f"leg_variant={leg_pose_variant} existing={existing_values} candidate={parsed_values}"
                         )
                     continue
 
@@ -5818,7 +6105,7 @@ def main():
                 print(
                     "[canonical multipliers][mode1] accepted learned key "
                     f"csv={source_csv} arms={arms_cluster_id} object_signature={object_signature_cluster_id} "
-                    f"mult={parsed_values}"
+                    f"leg_variant={leg_pose_variant} mult={parsed_values}"
                 )
 
         load_canonical_multiplier_registry_once()
@@ -5832,7 +6119,7 @@ def main():
         mode1_shared_cfg = {
             "CSV_FOLDER": CSV_FOLDER,
             "mode1_enable_db_dedupe": mode1_enable_db_dedupe,
-            "canonical_registry": dict(canonical_multiplier_registry),
+            "canonical_registry": canonical_multiplier_registry,
         }
 
         cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
@@ -5867,6 +6154,7 @@ def main():
                         result.get("learned_multipliers", []),
                         result.get("csv_file"),
                     )
+                    mode1_shared_cfg["canonical_registry"] = canonical_multiplier_registry
                     if not result.get("success"):
                         print(
                             f"[MODE1 WORKER] error in {result.get('csv_file')}: "
@@ -5887,6 +6175,7 @@ def main():
                     result.get("learned_multipliers", []),
                     result.get("csv_file"),
                 )
+                mode1_shared_cfg["canonical_registry"] = canonical_multiplier_registry
                 if not result.get("success"):
                     print(
                         f"[MODE1 SERIAL] error in {result.get('csv_file')}: "
@@ -6420,6 +6709,7 @@ def main():
                 mode0_pool.join()
 
         print_mode0_timing_summary()
+        write_leg_pose_log()
 
 
 if __name__ == '__main__':

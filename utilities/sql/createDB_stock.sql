@@ -248,16 +248,50 @@ CREATE TABLE Counters (
 );
 
 
+-- Schema v2: hip/knee points, ankle->heel->toe fallback tracking, and derived
+-- sided leg-shape features (mid-hip relative) for cluster separability testing.
 CREATE TABLE LocationHandsFeet (
     image_id INT PRIMARY KEY,
     left_hand_x FLOAT,
     left_hand_y FLOAT,
+    left_hand_vis BOOLEAN,
     right_hand_x FLOAT,
     right_hand_y FLOAT,
-    left_foot_x FLOAT,
-    left_foot_y FLOAT,
-    right_foot_x FLOAT,
-    right_foot_y FLOAT
+    right_hand_vis BOOLEAN,
+
+    hip_left_x FLOAT,
+    hip_left_y FLOAT,
+    hip_left_vis BOOLEAN,
+    hip_right_x FLOAT,
+    hip_right_y FLOAT,
+    hip_right_vis BOOLEAN,
+    mid_hip_x FLOAT,
+    mid_hip_y FLOAT,
+
+    knee_left_x FLOAT,
+    knee_left_y FLOAT,
+    knee_left_vis BOOLEAN,
+    knee_right_x FLOAT,
+    knee_right_y FLOAT,
+    knee_right_vis BOOLEAN,
+
+    foot_left_x FLOAT,
+    foot_left_y FLOAT,
+    foot_left_vis BOOLEAN,
+    foot_left_source VARCHAR(5),
+    foot_right_x FLOAT,
+    foot_right_y FLOAT,
+    foot_right_vis BOOLEAN,
+    foot_right_source VARCHAR(5),
+
+    ankle_rel_y_left FLOAT,
+    ankle_rel_y_right FLOAT,
+    knee_rel_y_left FLOAT,
+    knee_rel_y_right FLOAT,
+    leg_extension_max FLOAT,
+    leg_extension_min FLOAT,
+    leg_asymmetry FLOAT,
+    visible_leg_count INT
 );
 
 
