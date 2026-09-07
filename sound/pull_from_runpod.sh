@@ -3,7 +3,7 @@
 #
 # Downloads all batch_*.zip files from the RunPod downloads/ folder,
 # then deletes each one from RunPod after a successful transfer.
-# Also downloads have_barked.csv from the parent directory (always, even
+# Also downloads metas_audio.csv from the parent directory (always, even
 # if there are no zip files ready yet).
 # Runs continuously, polling RunPod once per hour.
 #
@@ -20,10 +20,10 @@ set -euo pipefail
 # -----------------------------------------------------------------------
 RUNPOD_KEY="$HOME/.ssh/id_ed25519"
 RUNPOD_USER="root"
-RUNPOD_HOST="149.36.0.150"
-RUNPOD_PORT="27819"
+RUNPOD_HOST="47.47.180.65"
+RUNPOD_PORT="28050"
 REMOTE_DIR="/root/install_make_tts/downloads"
-LOCAL_DIR="/Users/tenchc/Documents/GitHub/taking_stock_production/tts_downloads_metas124"
+LOCAL_DIR="/Users/tenchc/Documents/GitHub/taking_stock_production/tts_sport_coqui"
 POLL_INTERVAL=3600   # seconds between polls (1 hour)
 # -----------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ mkdir -p "$LOCAL_DIR"
 
 echo "Connecting to ${RUNPOD_USER}@${RUNPOD_HOST}:${RUNPOD_PORT}"
 echo "Remote zips: ${REMOTE_DIR}"
-echo "Remote CSV:  ${REMOTE_PARENT}/have_barked.csv"
+echo "Remote CSV:  ${REMOTE_PARENT}/metas_audio.csv"
 echo "Local:       ${LOCAL_DIR}"
 echo "Polling ${RUNPOD_USER}@${RUNPOD_HOST}:${RUNPOD_PORT} every $((POLL_INTERVAL / 60)) minute(s)."
 echo "Press Ctrl-C to stop."
@@ -92,13 +92,13 @@ run_once() {
     fi
 
     # -----------------------------------------------------------------------
-    # 2. have_barked.csv — always pulled, never deleted (it's a running log)
+    # 2. metas_audio.csv — always pulled, never deleted (it's a running log)
     # -----------------------------------------------------------------------
     echo ""
-    echo -n "Pulling have_barked.csv ... "
+    echo -n "Pulling metas_audio.csv ... "
     if scp "${SCP_OPTS[@]}" \
-            "${RUNPOD_USER}@${RUNPOD_HOST}:${REMOTE_PARENT}/have_barked.csv" \
-            "${LOCAL_DIR}/have_barked.csv"; then
+            "${RUNPOD_USER}@${RUNPOD_HOST}:${REMOTE_PARENT}/metas_audio.csv" \
+            "${LOCAL_DIR}/metas_audio.csv"; then
         echo "OK"
     else
         echo "FAILED (file may not exist yet)"

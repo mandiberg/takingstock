@@ -1,5 +1,15 @@
+"""Quadraphonic soundtrack mixer.
+
+Same pipeline as build_soundtrack.py, but each clip is placed on 2, 3, or 4
+speakers of a quad square according to the existing quiet / mid / loud volume
+branches. Output is a 4-channel WAV (FL FR BL BR).
+"""
 import pandas as pd
 import os
+import csv
+import shutil
+import subprocess
+import time
 import soundfile as sf
 import numpy as np
 import librosa
@@ -16,177 +26,49 @@ if os.path.exists('/Users/tenchc/Documents/GitHub/takingstock/'):
 from mp_db_io import DataIO
 
 
-
-TOPIC=11 # what folder are the files in?
-
-# --- Batch mode config ---
-BATCH_MODE = True          # set True to process every topic in BATCH_TOPICS
-BATCH_TOPICS = [
-"cc100_p2263_t0_1781354008.2844028",
-"cc100_p733_t0_1781354008.284462",
-"cc100_p734_t0_1781354008.284565",
-"cc106_p2341_t0_1781354008.284698",
-"cc129_p2263_t0_1781354008.284726",
-"cc129_p2341_t0_1781354008.2849338",
-"cc129_p586_t0_1781354040.627423",
-"cc129_p727_t0_1781354043.751498",
-"cc138_p1685_t0_1781354046.6547031",
-"cc140_p2341_t0_1781354051.225558",
-"cc140_p734_t0_1781354052.4769",
-"cc153_p727_t0_1781354057.051112",
-"cc164_p2263_t0_1781354079.1617",
-"cc164_p586_t0_1781354080.3379",
-"cc173_p2341_t0_1781354081.947423",
-"cc173_p734_t0_1781354089.871104",
-"cc174_p2341_t0_1781354091.804319",
-"cc174_p734_t0_1781354092.7694058",
-"cc176_p2341_t0_1781354112.926543",
-"cc18_p1685_t0_1781354131.618468",
-"cc18_p2263_t0_1781354132.692957",
-"cc18_p3052_t0_1781354149.487799",
-"cc18_p586_t0_1781354161.8375769",
-"cc18_p727_t0_1781354163.805249",
-"cc18_p733_t0_1781354166.225365",
-"cc18_p734_t0_1781354168.5396721",
-"cc181_p1685_t0_om1_1781354118.201664",
-"cc181_p1685_t0_om2_1781354124.696685",
-"cc181_p2230_t0_1781354129.427186",
-"cc207_p2341_t0_1781354171.375859",
-"cc207_p734_t0_1781354183.6664262",
-"cc218_p1685_t0_1781354198.566848",
-"cc221_p2341_t0_1781354205.85057",
-"cc221_p258_t0_1781354208.625665",
-"cc221_p727_t0_1781354209.569845",
-"cc232_p1685_t0_om2_1781354211.2346082",
-"cc240_p1685_t0_1781354217.0588748",
-"cc252_p2263_t0_1781354230.850847",
-"cc252_p2341_t0_1781354246.4691432",
-"cc252_p586_t0_1781354247.595505",
-"cc252_p727_t0_1781354249.5857542",
-"cc252_p734_t0_1781354250.786443",
-"cc272_p1685_t0_1781354251.9313269",
-"cc272_p258_t0_1781354261.960465",
-"cc276_p2263_t0_1781354281.597419",
-"cc276_p258_t0_1781354288.6031659",
-"cc276_p727_t0_1781354293.667905",
-"cc276_p734_t0_1781354293.898411",
-"cc285_p258_t0_1781354297.069623",
-"cc290_p1685_t0_1781354300.060731",
-"cc294_p727_t0_1781354317.528149",
-"cc299_p2341_t0_om1_1781354331.248721",
-"cc299_p2341_t0_om14-21_1781354322.510436",
-"cc299_p2341_t0_om2_1781354331.619519",
-"cc299_p2341_t0_om3-7+22_1781354334.404993",
-"cc299_p2341_t0_om8-13_1781354337.1965609",
-"cc299_p586_t0_1781354351.331156",
-"cc299_p734_t0_1781354364.050156",
-"cc32_p586_t0_1781354400.387258",
-"cc322_p1685_t0_1781354365.240767",
-"cc322_p727_t0_1781354369.3196921",
-"cc329_p1685_t0_1781354375.070813",
-"cc329_p727_t0_1781354377.228257",
-"cc329_p733_t0_1781354387.1715121",
-"cc336_p2263_t0_1781354406.687737",
-"cc376_p734_t0_1781354408.5397918",
-"cc396_p1685_t0_1781354411.103116",
-"cc410_p2263_t0_1781354415.480688",
-"cc410_p2341_t0_1781354420.493612",
-"cc410_p734_t0_1781354436.586436",
-"cc423_p1685_t0_1781354442.5726871",
-"cc423_p258_t0_1781354445.3870761",
-"cc460_p2263_t0_1781354450.339499",
-"cc460_p727_t0_1781354452.262708",
-"cc47_p2341_t0_1781354529.011594",
-"cc47_p734_t0_1781354536.7478101",
-"cc472_p2341_t0_om1_1781354472.9020731",
-"cc472_p2341_t0_om14-21_1781354469.327456",
-"cc472_p2341_t0_om2_1781354477.9506829",
-"cc472_p734_t0_om1_1781354487.61303",
-"cc472_p734_t0_om14-21_1781354482.0088792",
-"cc472_p734_t0_om2_1781354488.780426",
-"cc472_p734_t0_om8-13_1781354503.510774",
-"cc474_p734_t0_1781354506.477726",
-"cc479_p1685_t0_om1_1781354518.20244",
-"cc479_p1685_t0_om2_1781354520.133919",
-"cc479_p2230_t0_1781354521.776533",
-"cc485_p2263_t0_1781354543.565963",
-"cc487_p2263_t0_1781354551.327713",
-"cc487_p2341_t0_1781354556.994349",
-"cc487_p727_t0_1781354557.383531",
-"cc490_p2263_t0_1781354574.891683",
-"cc490_p2341_t0_1781354577.5796502",
-"cc490_p727_t0_1781354579.8854342",
-"cc490_p733_t0_1781354582.421941",
-"cc518_p586_t0_1781354587.988336",
-"cc523_p1685_t0_1781354609.543432",
-"cc528_p1685_t0_1781354619.2121432",
-"cc542_p2341_t0_1781354621.791092",
-"cc547_p2341_t0_1781354621.9293509",
-"cc547_p734_t0_1781354629.9248939",
-"cc56_p1685_t0_om1_1781354665.714916",
-"cc56_p1685_t0_om2_1781354674.618307",
-"cc56_p258_t0_1781354678.4502988",
-"cc566_p2341_t0_om1_1781354642.981844",
-"cc566_p2341_t0_om14-21_1781354630.351407",
-"cc566_p2341_t0_om2_1781354651.203597",
-"cc566_p2341_t0_om3-7+22_1781354658.6624482",
-"cc566_p2341_t0_om8-13_1781354659.610663",
-"cc572_p734_t0_1781354695.865389",
-"cc579_p2341_t0_1781354696.667917",
-"cc587_p734_t0_1781354697.1006231",
-"cc589_p2341_t0_1781354711.259119",
-"cc638_p2341_t0_1781354713.486352",
-"cc638_p734_t0_1781354717.318681",
-"cc65_p2341_t0_1781354724.511369",
-"cc701_p1685_t0_1781354730.3445451",
-"cc701_p258_t0_1781354742.1572878",
-"cc718_p2341_t0_om14-21_1781354750.796727",
-"cc718_p2341_t0_om2_1781354759.047947",
-"cc718_p2341_t0_om3-7+22_1781354762.185907",
-"cc718_p734_t0_1781354771.3586729",
-"cc720_p2341_t0_1781354781.573573",
-"cc720_p727_t0_1781354795.340511",
-"cc722_p2341_t0_1781354796.9534411",
-"cc722_p734_t0_1781354797.845109",
-"cc729_p734_t0_1781354810.9727528",
-"cc749_p2341_t0_1781354817.0406358",
-"cc749_p727_t0_1781354820.128577",
-"cc749_p733_t0_1781354832.535018",
-"cc752_p1685_t0_1781354835.697527",
-"cc752_p2263_t0_1781354837.6508071",
-"cc752_p2341_t0_1781354847.635193",
-"cc752_p586_t0_1781354855.974784",
-"cc752_p727_t0_om0_1781354864.7338738",
-"cc752_p727_t0_om1_1781354868.186869",
-"cc752_p727_t0_om14-21_1781354866.624934",
-"cc752_p727_t0_om2_1781354877.295719",
-"cc752_p727_t0_om8-13_1781354892.340652",
-"cc752_p733_t0_1781354899.558799",
-"cc757_p2341_t0_1781354901.525433",
-"cc764_p2263_t0_1781354903.177483",
-"cc83_p1685_t0_1781354907.8347661",
-"cc84_p2341_t0_1781354915.344958",
-"cc89_p258_t0_1781354926.761695",
-"cc89_p727_t0_1781354939.339426"
-]  # topics to process when BATCH_MODE = True
-# -------------------------
-
-CSV_FILE = f"metas_{TOPIC}.csv"  # overwritten per-topic when BATCH_MODE = True
-SOUND_FOLDER = "tts_files_test"
-SOUND_FOLDER = "tts_files_pitch_shift"
-# SOUND_FOLDER = "37_metas_hold_for_now"
-
-# TOPICFOLDER = "topic" + str(TOPIC)
-
-# start = time.time()
 ######Michael's folders##########
 io = DataIO()
 INPUT = io.ROOTSSD # folder that holds SOUND_FOLDER and audiopduction folders
 #################################
 
-######Satyam's folders###########
-# INPUT = "C:/Users/jhash/Documents/GitHub/facemap2/sound"
+######Tench's folders###########
+INPUT = "/Volumes/OWC5/tts_sport"
 #################################
+
+TOPIC = 0  # non-batch only: which metas_{TOPIC}.csv to mix
+# KEYS lists to union in search_for_keys (both batch and non-batch).
+KEY_TOPICS = [0, 3, 15, 45]
+
+# --- Batch mode config ---
+BATCH_MODE = True          # set True to process cluster folders under BATCH_FOLDER_NAME
+# Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
+# Example layout:
+#   BATCH_FOLDER_NAME/clustercc1_p1_t0_om1_1788371815.2307808/metas.csv
+BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/_9000s_arms"
+# Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
+# Empty list = every subfolder that contains metas.csv.
+BATCH_CLUSTERS = [
+    # "clustercc1_p1_t0_om1_1788371815.2307808",
+    # "clustercc8_p1_t0_om1_1788402205.695117",
+]
+METAS_CSV_NAME = "metas.csv"
+# Cluster metas.csv has no audio filename; the last field is topic weight.
+METAS_COLUMNS = ["image_id", "description", "topic_fit", "detections", "object", "weight"]
+METAS_AUDIO_COLUMNS = [
+    "image_id", "description", "topic_fit", "detections", "objects", "weight", "filename",
+]
+# -------------------------
+
+CSV_FILE = f"metas_{TOPIC}.csv"  # overwritten per-topic when BATCH_MODE = True
+SOUND_FOLDER = "."
+# SOUND_FOLDER = "37_metas_hold_for_now"
+METAS_AUDIO_CSV = os.path.join(INPUT, "metas_audio.csv")
+MISSING_IDS_CSV = os.path.join(INPUT, "missing_ids.csv")
+
+# TOPICFOLDER = "topic" + str(TOPIC)
+
+# start = time.time()
+
 
 # Choose a file starting with a given string
 # prefixed = [filename for filename in os.listdir('.') if filename.startswith("prefix")]
@@ -232,6 +114,12 @@ LOUD_RESET = 7
 loud_counter = []
 fake_loud = False
 channel_counter = 0
+
+# WAV / FFmpeg quad channel order: FL, FR, BL, BR
+N_CHANNELS = 4
+SPEAKER_NAMES = ("FL", "FR", "BL", "BR")
+# Clockwise around the room as indices into SPEAKERS / channels
+CYCLE = (0, 1, 3, 2)  # FL, FR, BR, BL
 KEYS = {
     0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
     1: ["outsid", "think", "sceneri", "landscap", "calm", "contempl", "peac", "retir", "pension", "blur"],
@@ -387,7 +275,7 @@ def scale_volume(row, cycler, audio_data, sample_rate):
     def is_bark_loud(row):
         # image_id = float(row['topic_fit'])  # Using topic_fit as the volume level 
         image_id = row['image_id']  # Using topic_fit as the volume level
-        path = existing_files.get(str(image_id))
+        path = existing_files.get(image_id_key(image_id))
         # if path containts meta, return True
         # TEMP CHANGE (was: if "bark_v5" in path: return True)
         if path is None: return False
@@ -452,6 +340,71 @@ def scale_volume(row, cycler, audio_data, sample_rate):
         # vol = .001
     return vol, fadeout,fadein
 
+
+def to_mono(audio):
+    if audio.ndim == 1:
+        return audio
+    return np.mean(audio, axis=1)
+
+
+def spatial_tier(row):
+    """Match scale_volume branches: quiet / loud(keys) / mid."""
+    volume_fit = float(row["topic_fit"])
+    if volume_fit < QUIET:
+        return "quiet"
+    key_index, _ = search_for_keys(row)
+    if len(key_index) > 0:
+        return "loud"
+    return "mid"
+
+
+def random_normalized_weights(n):
+    w = np.random.random(n)
+    s = w.sum()
+    if s <= 0:
+        return np.ones(n) / n
+    return w / s
+
+
+def spatial_gains(tier):
+    """Weights for FL, FR, BL, BR that sum to 1 over the chosen speakers."""
+    gains = np.zeros(N_CHANNELS)
+    start = np.random.randint(0, 4)
+    if tier == "quiet":
+        idxs = [CYCLE[start], CYCLE[(start + 1) % 4]]
+    elif tier == "mid":
+        idxs = [CYCLE[(start + i) % 4] for i in range(3)]
+    else:
+        idxs = list(CYCLE)
+    weights = random_normalized_weights(len(idxs))
+    for idx, weight in zip(idxs, weights):
+        gains[idx] = weight
+    return gains
+
+
+def apply_quad_gains(mono, gains):
+    return np.column_stack([mono * g for g in gains])
+
+
+def tag_quad_wav(path):
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        print("ffmpeg not found — wrote 4-channel WAV without a quad channel_layout tag")
+        return
+    tmp = path + ".quadtmp.wav"
+    try:
+        subprocess.run(
+            [ffmpeg, "-y", "-i", path, "-channel_layout", "quad", "-c:a", "pcm_s16le", tmp],
+            check=True,
+            capture_output=True,
+        )
+        os.replace(tmp, path)
+        print(f"Tagged quad channel_layout: {path}")
+    except Exception as e:
+        print(f"ffmpeg quad tag skipped: {e}")
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
 # def search_for_keys(row):
 #     # search the first three words of the description for each key in KEYS
 #     # if any of the keys are found, set the volume to 1
@@ -469,6 +422,18 @@ def scale_volume(row, cycler, audio_data, sample_rate):
 #         print("No keys found in", row['description'])
 #     return found
 
+def keys_for_search():
+    """Union of KEYS stems for every id in KEY_TOPICS, first occurrence kept."""
+    stems = []
+    seen = set()
+    for t in KEY_TOPICS:
+        for key in KEYS.get(t, []):
+            if key not in seen:
+                seen.add(key)
+                stems.append(key)
+    return stems
+
+
 def search_for_keys(row):
     # search the first three words of the description for each key in KEYS
     # if any of the keys are found, set the volume to 1
@@ -479,16 +444,15 @@ def search_for_keys(row):
     found_list=[]
     desc_split=row['description'].lower().split(" ")
     desc_count=len(desc_split)
+    active_keys = keys_for_search()
     for index,word in enumerate(desc_split):
-        # TEMP CHANGE (was: for key in KEYS[TOPIC]:)
-        for key in KEYS[37]:
+        for key in active_keys:
             if key in word:
                 print(" ---- ", key, "found in", word, row['description'],row['image_id'])
                 found_list.append(index)
                 break
     if len(found_list)==0:
-        # TEMP CHANGE (was: print("No keys found in", row['description'],"for topic model",KEYS[TOPIC]))
-        print("No keys found in", row['description'],"for topic model",KEYS[11])
+        print("No keys found in", row['description'],"for topic models", KEY_TOPICS)
     return found_list,desc_count
 
 def test_repeat(description, last_description):
@@ -505,20 +469,369 @@ def test_repeat(description, last_description):
 # existing_files is populated per-topic inside main()
 existing_files = {}
 
+AUDIO_EXTS = {".wav", ".mp3", ".flac"}
+HASH_TOP = tuple("0123456789ABCDEF")
+
+
+def sound_dir():
+    return os.path.normpath(os.path.join(INPUT, SOUND_FOLDER))
+
+
+def hashed_audio_path(root, filename):
+    """Two-level MD5 folders keyed on the full filename, including extension."""
+    filename = os.path.basename(filename)
+    level1, level2 = io.get_hash_folders(filename)
+    return os.path.join(root, level1, level2, filename)
+
+
+def resolve_audio_path(filename):
+    """Prefer hashed layout; fall back to a flat file under SOUND_FOLDER."""
+    root = sound_dir()
+    filename = os.path.basename(filename)
+    hashed = hashed_audio_path(root, filename)
+    if os.path.isfile(hashed):
+        return hashed
+    flat = os.path.join(root, filename)
+    if os.path.isfile(flat):
+        return flat
+    return hashed
+
+
+def image_id_key(value):
+    try:
+        if pd.isna(value):
+            return None
+        return str(int(float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _clean_filename(value):
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    name = os.path.basename(str(value).strip())
+    if not name or name.lower() in ("nan", "none"):
+        return None
+    return name
+
+
+def load_filenames_from_metas_audio(path):
+    """image_id -> basename from metas_audio.csv (last non-empty filename wins)."""
+    if not os.path.isfile(path):
+        print(f"metas_audio.csv not found: {path}")
+        return {}
+    df = pd.read_csv(path)
+    name_col = "filename" if "filename" in df.columns else "out_name" if "out_name" in df.columns else None
+    if name_col is None:
+        print(f"{path} has no 'filename' or 'out_name' column")
+        return {}
+    df["image_id"] = pd.to_numeric(df["image_id"], errors="coerce")
+    df[name_col] = df[name_col].map(_clean_filename)
+    df = df.dropna(subset=["image_id", name_col])
+    df["image_id"] = df["image_id"].astype(int)
+    df = df.drop_duplicates(subset="image_id", keep="last")
+    by_id = {str(iid): fname for iid, fname in zip(df["image_id"], df[name_col])}
+    print(f"Loaded {len(by_id)} filenames from {path}")
+    return by_id
+
+
+def existing_audio_by_id(folder):
+    """Walk hash trees (or the whole folder) and map image_id -> basename."""
+    lists = walk_audio_filenames_by_id(folder)
+    return {iid: pick_audio_filename(names) for iid, names in lists.items()}
+
+
+def hash_dir_roots(folder):
+    """Top-level 0-9/A-F hash directories under folder."""
+    roots = []
+    for top in HASH_TOP:
+        path = os.path.join(folder, top)
+        if os.path.isdir(path):
+            roots.append(path)
+    return roots
+
+
+def walk_audio_filenames_by_id(folder):
+    """image_id -> [basenames] from hash folders, or a full walk if none exist."""
+    by_id = {}
+    if not os.path.isdir(folder):
+        return by_id
+    roots = hash_dir_roots(folder)
+    if not roots:
+        roots = [folder]
+    n_files = 0
+    for root in roots:
+        for walk_root, _dirs, files in os.walk(root):
+            if "_x" in walk_root.split(os.sep):
+                continue
+            for fname in files:
+                ext = os.path.splitext(fname)[1].lower()
+                if ext not in AUDIO_EXTS:
+                    continue
+                key = image_id_key(os.path.splitext(fname)[0].split("_")[0])
+                if key is None:
+                    continue
+                n_files += 1
+                by_id.setdefault(key, [])
+                if fname not in by_id[key]:
+                    by_id[key].append(fname)
+    print(f"  scrape indexed {n_files} audio file(s) for {len(by_id)} image_id(s)")
+    return by_id
+
+
+def pick_audio_filename(names):
+    """Prefer wav, then coqui, then a stable last name."""
+    names = [n for n in names if n]
+    if not names:
+        return None
+
+    def score(name):
+        lower = name.lower()
+        return (
+            1 if lower.endswith(".wav") else 0,
+            1 if "_coqui_" in lower else 0,
+            name,
+        )
+
+    return sorted(names, key=score)[-1]
+
+
+def audio_on_disk(filename):
+    filename = _clean_filename(filename)
+    if not filename:
+        return False
+    path = resolve_audio_path(filename)
+    return os.path.isfile(path)
+
+
+_filenames_from_csv = None
+_walked_audio_by_id = None
+_walked_audio_all = None
+_metas_audio_fieldnames = None
+
+
+def filenames_from_metas_audio():
+    global _filenames_from_csv
+    if _filenames_from_csv is None:
+        _filenames_from_csv = load_filenames_from_metas_audio(METAS_AUDIO_CSV)
+    return _filenames_from_csv
+
+
+def walked_audio_by_id():
+    """Walk hash folders once per process; keep every clip per image_id."""
+    global _walked_audio_by_id, _walked_audio_all
+    if _walked_audio_by_id is None:
+        root = sound_dir()
+        print(f"Scraping hash-folder audio in {root} …")
+        _walked_audio_all = walk_audio_filenames_by_id(root)
+        _walked_audio_by_id = {
+            iid: pick_audio_filename(names) for iid, names in _walked_audio_all.items()
+        }
+        print(f"Walk found {len(_walked_audio_by_id)} image_id(s) with audio")
+    return _walked_audio_by_id
+
+
+def metas_audio_fieldnames():
+    """Header of metas_audio.csv, guaranteeing a filename column."""
+    global _metas_audio_fieldnames
+    if _metas_audio_fieldnames is not None:
+        return _metas_audio_fieldnames
+    names = list(METAS_AUDIO_COLUMNS)
+    if os.path.isfile(METAS_AUDIO_CSV) and os.path.getsize(METAS_AUDIO_CSV) > 0:
+        with open(METAS_AUDIO_CSV, "r", encoding="utf-8-sig", newline="") as f:
+            header = list(csv.DictReader(f).fieldnames or [])
+        if header:
+            names = header
+    if "filename" not in names:
+        names.append("filename")
+    _metas_audio_fieldnames = names
+    return names
+
+
+def _csv_cell(value):
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return value
+
+
+def cluster_row_to_metas_audio(row, filename, fieldnames):
+    """Map a cluster metas.csv row onto metas_audio.csv columns + scraped filename."""
+    data = row.to_dict() if hasattr(row, "to_dict") else dict(row)
+    objects = data.get("objects", data.get("object", ""))
+    weight = data.get("weight", "")
+    if weight is None or (isinstance(weight, float) and pd.isna(weight)):
+        maybe = data.get("filename")
+        if maybe is not None and _clean_filename(maybe) is None:
+            weight = maybe
+    out = {}
+    for key in fieldnames:
+        if key == "filename":
+            out[key] = filename
+        elif key == "objects":
+            out[key] = _csv_cell(objects)
+        elif key == "weight":
+            out[key] = _csv_cell(weight)
+        elif key == "object":
+            out[key] = _csv_cell(data.get("object", objects))
+        else:
+            out[key] = _csv_cell(data.get(key, ""))
+    return out
+
+
+def _ensure_csv_trailing_newline(path):
+    if not os.path.isfile(path) or os.path.getsize(path) == 0:
+        return
+    with open(path, "rb+") as f:
+        f.seek(-1, os.SEEK_END)
+        if f.read(1) != b"\n":
+            f.write(b"\n")
+
+
+def append_metas_audio_rows(rows):
+    """Append scraped cluster rows (with filename) to metas_audio.csv."""
+    if not rows:
+        return 0
+    fieldnames = metas_audio_fieldnames()
+    path = METAS_AUDIO_CSV
+    exists = os.path.isfile(path) and os.path.getsize(path) > 0
+    if exists:
+        _ensure_csv_trailing_newline(path)
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        if not exists:
+            writer.writeheader()
+        writer.writerows(rows)
+    return len(rows)
+
+
+def append_scraped_cluster_rows(df, scraped):
+    """Write metas.csv data + scraped filename for ids not yet in metas_audio.csv."""
+    global _filenames_from_csv
+    if not scraped:
+        return 0
+    csv_names = filenames_from_metas_audio()
+    keys = df["image_id"].map(image_id_key)
+    fieldnames = metas_audio_fieldnames()
+    rows = []
+    for iid, filename in scraped:
+        if iid in csv_names:
+            continue
+        matches = df[keys == iid]
+        if matches.empty:
+            continue
+        row = cluster_row_to_metas_audio(matches.iloc[-1], filename, fieldnames)
+        rows.append(row)
+        csv_names[iid] = filename
+    written = append_metas_audio_rows(rows)
+    if _filenames_from_csv is not None:
+        _filenames_from_csv.update(csv_names)
+    return written
+
+
+_missing_ids_written = 0
+_missing_ids_fieldnames = None
+
+
+def index_audio_for_topic(df):
+    """Resolve audio for this cluster's ids; scrape hash folders; backfill metas_audio.csv.
+
+    Returns (existing, still_missing). existing maps image_id -> audio basename.
+    Ids found on disk but missing from metas_audio.csv are appended with the
+    cluster metas.csv fields plus the scraped filename.
+    """
+    csv_names = filenames_from_metas_audio()
+    walked = walked_audio_by_id()
+    df_ids = {k for k in (image_id_key(v) for v in df["image_id"]) if k is not None}
+    existing = {}
+    still_missing = []
+    scraped = []
+    csv_ok = 0
+    csv_stale = 0
+    for iid in df_ids:
+        csv_name = _clean_filename(csv_names.get(iid))
+        if csv_name and audio_on_disk(csv_name):
+            existing[iid] = csv_name
+            csv_ok += 1
+            continue
+        if csv_name:
+            csv_stale += 1
+        walked_name = _clean_filename(walked.get(iid))
+        if walked_name:
+            existing[iid] = walked_name
+            if iid not in csv_names:
+                scraped.append((iid, walked_name))
+            continue
+        still_missing.append(iid)
+
+    appended = append_scraped_cluster_rows(df, scraped)
+    print(f"  metas_audio.csv hits on disk: {csv_ok}; "
+          f"csv filename missing on disk: {csv_stale}; "
+          f"scrape filled: {len(scraped)}; still missing: {len(still_missing)}")
+    if appended:
+        print(f"  appended {appended} row(s) to {METAS_AUDIO_CSV}")
+    return existing, still_missing
+
+
+def collect_missing_id_rows(df, missing_ids, cluster):
+    """Append metas rows for ids with no audio to missing_ids.csv immediately."""
+    global _missing_ids_written, _missing_ids_fieldnames
+    if not missing_ids:
+        return 0
+    missing_set = set(missing_ids)
+    keys = df["image_id"].map(image_id_key)
+    rows = df[keys.isin(missing_set)].copy()
+    if rows.empty:
+        return 0
+    rows.insert(0, "cluster", cluster)
+    path = MISSING_IDS_CSV
+    exists = os.path.isfile(path) and os.path.getsize(path) > 0
+    if exists:
+        _ensure_csv_trailing_newline(path)
+        if _missing_ids_fieldnames is None:
+            with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                _missing_ids_fieldnames = list(csv.DictReader(f).fieldnames or [])
+        fieldnames = _missing_ids_fieldnames
+        for col in fieldnames:
+            if col not in rows.columns:
+                rows[col] = ""
+        rows = rows[fieldnames]
+    else:
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+        _missing_ids_fieldnames = list(rows.columns)
+    rows.to_csv(path, mode="a", header=not exists, index=False)
+    n = len(rows)
+    _missing_ids_written += n
+    print(f"  appended {n} missing-id row(s) to {path}")
+    return n
+
+
+def write_missing_ids_csv(path=None):
+    """Summarize missing_ids.csv appends for this run."""
+    path = path or MISSING_IDS_CSV
+    if _missing_ids_written == 0:
+        print(f"No missing ids appended to {path}")
+        return
+    print(f"Appended {_missing_ids_written} missing-id row(s) this run to {path}")
+
+
 def build_quiet_background(quiet_files, total_duration, vol=0.04):
     """Build a full-duration looping quiet background layer (t=0 to total_duration).
 
-    Cycles through *quiet_files* end-to-end, applying a gentle random pan to
-    each clip, and returns a stereo numpy array ready to be mixed into the
-    combined audio.  Using a fixed full-duration layer guarantees the murmur
-    is always present regardless of where quiet-tier CSV rows fall.
+    Cycles through *quiet_files* end-to-end. Each clip is placed on two random
+    adjacent speakers with a random split (quiet-tier spatial rule).
     """
     if not quiet_files:
         return None
 
     files = list(dict.fromkeys(quiet_files))  # deduplicate, preserve order
     total_samples = int(total_duration * TARGET_SAMPLE_RATE)
-    background = np.zeros((total_samples, 2))
+    background = np.zeros((total_samples, N_CHANNELS))
     cursor = 0
     file_idx = 0
     consecutive_errors = 0
@@ -537,16 +850,11 @@ def build_quiet_background(quiet_files, total_duration, vol=0.04):
             consecutive_errors += 1
             continue
 
-        audio, _ = conform_sample_rate(audio, sr)
-        # apply a slight random volume wobble so the loop doesn't sound static
+        audio, _ = conform_sample_rate(to_mono(audio), sr)
         clip_vol = vol * np.random.uniform(0.7, 1.3)
-        audio = audio * clip_vol
-        if len(audio.shape) == 1:
-            audio = np.column_stack((audio, audio))
-        # gentle pan: keep within centre range so the murmur doesn't pull hard
-        pan = np.random.uniform(0.25, 0.75)
-        audio[:, 0] *= (1.0 - pan)
-        audio[:, 1] *= pan
+        mono = audio * clip_vol
+        gains = spatial_gains("quiet")
+        audio = apply_quad_gains(mono, gains)
         end = min(cursor + len(audio), total_samples)
         background[cursor:end] += audio[:end - cursor]
         cursor = end
@@ -555,8 +863,7 @@ def build_quiet_background(quiet_files, total_duration, vol=0.04):
 
 
 def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chunk_index):
-    left_channel_data = []
-    right_channel_data = []
+    channel_data = [[] for _ in range(N_CHANNELS)]
     quiet_files_used = []   # paths of files placed in the quiet tier
     quiet_max_end_time = 0  # latest end time seen for a quiet-tier clip
     max_end_time = 0
@@ -591,8 +898,9 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         #     print(image_id,"^^^^^^ image_id not in existing files ^^^^^^^^^^^")
         #     print("existing files",existing_files)
 
-        if pd.notna(description) and str(image_id) in existing_files.keys():
-            input_file = existing_files.get(str(image_id))
+        iid = image_id_key(image_id)
+        if pd.notna(description) and iid is not None and iid in existing_files:
+            input_file = existing_files.get(iid)
             print("Using existing file:", input_file)
         elif pd.notna(description) and image_id:
             if not existing_files:
@@ -615,7 +923,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
             print("No good files found")
             continue
 
-        input_path = os.path.join(INPUT,SOUND_FOLDER,input_file)
+        input_path = resolve_audio_path(input_file)
 
 
         # Read the audio file
@@ -626,6 +934,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
             continue
         print("length at start",len(audio_data))
         print("location",input_path)
+        audio_data = to_mono(audio_data)
         # print("Audio data shape:", audio_data.shape, "Sample rate:", sample_rate)
         audio_data, sample_rate = conform_sample_rate(audio_data, sample_rate)
         # print("Audio data shape:", audio_data.shape, "Sample rate:", sample_rate)
@@ -642,10 +951,6 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         #     if type(row['topic_fit']) == str: continue
         #     else: volume_fit = 0.5
         # # # Adjusting volume level and applying panning
-
-        # pan = float(row['pan'])  # Using pan as the panning level
-        # set pan to random value between -1 and 1
-        pan = np.random.uniform(-1, 1)
 
         # fadeout = len(row['description']) *.5
         volume_scale, fadeout,fadein = scale_volume(row, cycler, audio_data, sample_rate)
@@ -688,12 +993,6 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
                 print("Loud offset:", loud_offset)
         if volume_scale > QUIET:
             loud_counter.append(len(audio_data)/sample_rate)
-            # if len(loud_counter) is odd pan left, if even pan right
-            # trying to alternate the loud audio from side to side
-            if channel_counter % 2 == 1:
-                pan = np.random.uniform(-1, 0)
-            else: 
-                pan = np.random.uniform(0, 1)
             channel_counter += 1
 
         # Apply fadeout to the audio data
@@ -702,13 +1001,12 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         # Apply fadein to the audio data
         if fadein>0:apply_fadein(audio_data_adjusted, sample_rate, fadein)
         ####################
-        # If the audio is mono, duplicate the channel for both left and right channels
-        if len(audio_data_adjusted.shape) == 1:
-            audio_data_adjusted = np.column_stack((audio_data_adjusted, audio_data_adjusted))
-
-        # Apply panning to the audio data
-        audio_data_adjusted[:, 0] *= (1 - pan)  # Left channel
-        audio_data_adjusted[:, 1] *= pan  # Right channel
+        tier = spatial_tier(row)
+        gains = spatial_gains(tier)
+        audio_data_adjusted = apply_quad_gains(audio_data_adjusted, gains)
+        print(f"Spatial {tier}:", " ".join(
+            f"{name}={g:.2f}" for name, g in zip(SPEAKER_NAMES, gains) if g > 1e-6
+        ))
 
         # # Append audio data to respective lists
         # left_channel_data.append(audio_data_adjusted[:, 0])
@@ -726,35 +1024,35 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
             quiet_max_end_time = max(quiet_max_end_time, end_time)
         
         # Create arrays with the correct offset
-        left_channel = np.zeros(int(np.ceil(end_time * TARGET_SAMPLE_RATE)))
-        right_channel = np.zeros(int(np.ceil(end_time * TARGET_SAMPLE_RATE)))
+        n_samples = int(np.ceil(end_time * TARGET_SAMPLE_RATE))
+        placed = [np.zeros(n_samples) for _ in range(N_CHANNELS)]
         
         # Insert the audio data at the correct position
         start_sample = int(start_time * TARGET_SAMPLE_RATE)
-        end_sample = min(start_sample + len(audio_data_adjusted), len(left_channel))
-        
-        left_channel[start_sample:end_sample] = audio_data_adjusted[:end_sample-start_sample, 0]
-        right_channel[start_sample:end_sample] = audio_data_adjusted[:end_sample-start_sample, 1]
-        
-        left_channel_data.append(left_channel)
-        right_channel_data.append(right_channel)
+        end_sample = min(start_sample + len(audio_data_adjusted), n_samples)
+        n_copy = end_sample - start_sample
+        for ch in range(N_CHANNELS):
+            placed[ch][start_sample:end_sample] = audio_data_adjusted[:n_copy, ch]
+            channel_data[ch].append(placed[ch])
     
     # If no audio was collected (all rows skipped), return silence
-    if not left_channel_data:
+    if not channel_data[0]:
         print("process_audio_chunk: no audio collected for this chunk, returning silence")
-        silence = np.zeros((TARGET_SAMPLE_RATE, 2))
+        silence = np.zeros((TARGET_SAMPLE_RATE, N_CHANNELS))
         return silence, 0.0, quiet_files_used, quiet_max_end_time
 
     # Mix the audio data for the chunk
-    max_length = max(len(data) for data in left_channel_data + right_channel_data)
-    mixed_audio = np.zeros((max_length, 2))
+    max_length = max(len(data) for ch in channel_data for data in ch)
+    mixed_audio = np.zeros((max_length, N_CHANNELS))
     
-    for left_channel, right_channel in zip(left_channel_data, right_channel_data):
-        mixed_audio[:len(left_channel), 0] += left_channel
-        mixed_audio[:len(right_channel), 1] += right_channel
+    n_clips = len(channel_data[0])
+    for i in range(n_clips):
+        for ch in range(N_CHANNELS):
+            clip = channel_data[ch][i]
+            mixed_audio[:len(clip), ch] += clip
     
     # Clear memory
-    del left_channel_data, right_channel_data
+    del channel_data
     gc.collect()
     
     # save the mixed audio to a file
@@ -776,11 +1074,16 @@ def merge_audio(combined_audio, chunk_audio_without_silence):
     chunk_audio_first_10s = chunk_audio_without_silence[:overlap_samples]
 
     # Ensure both segments are the same length by padding the shorter one with zeros
-    if len(combined_audio_last_10s) < overlap_samples:
-        combined_audio_last_10s = np.pad(combined_audio_last_10s, (0, overlap_samples - len(combined_audio_last_10s)), 'constant')
+    def _pad_to(arr, n):
+        if len(arr) >= n:
+            return arr[:n]
+        extra = n - len(arr)
+        if arr.ndim == 1:
+            return np.pad(arr, (0, extra), "constant")
+        return np.pad(arr, ((0, extra), (0, 0)), "constant")
 
-    if len(chunk_audio_first_10s) < overlap_samples:
-        chunk_audio_first_10s = np.pad(chunk_audio_first_10s, (0, overlap_samples - len(chunk_audio_first_10s)), 'constant')
+    combined_audio_last_10s = _pad_to(combined_audio_last_10s, overlap_samples)
+    chunk_audio_first_10s = _pad_to(chunk_audio_first_10s, overlap_samples)
 
     # Mix the audio by adding the arrays together
     overlapped_segment = combined_audio_last_10s + chunk_audio_first_10s
@@ -791,13 +1094,108 @@ def merge_audio(combined_audio, chunk_audio_without_silence):
     return combined_audio
 
 
-def run_topic(topic):
-    """Process a single topic and write its output file."""
+def resolve_batch_folder(folder_name):
+    """Return an absolute path to the parent folder of cluster directories."""
+    if os.path.isabs(folder_name):
+        return folder_name
+    return os.path.join(INPUT, folder_name)
+
+
+def metas_csv_has_header(path):
+    """True if the first field of the first line is image_id."""
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
+        first = f.readline()
+    if not first:
+        return False
+    first_field = first.split(",", 1)[0].strip().strip('"').lower()
+    return first_field == "image_id"
+
+
+def metas_read_csv_kwargs(path):
+    """Kwargs so headerless cluster metas.csv files still expose named columns."""
+    if metas_csv_has_header(path):
+        return {}
+    return {"header": None, "names": METAS_COLUMNS}
+
+
+def normalize_metas_df(df):
+    """Cluster metas.csv stores topic weight, not an audio filename."""
+    if df is None or df.empty:
+        return df
+    if "weight" not in df.columns and "filename" in df.columns:
+        audio_names = df["filename"].map(_clean_filename)
+        if audio_names.notna().sum() == 0:
+            df = df.rename(columns={"filename": "weight"})
+    return df
+
+
+def read_metas_csv(path, **kwargs):
+    merged = metas_read_csv_kwargs(path)
+    merged.update(kwargs)
+    chunksize = merged.pop("chunksize", None)
+    if chunksize:
+        return (
+            normalize_metas_df(chunk)
+            for chunk in pd.read_csv(path, chunksize=chunksize, **merged)
+        )
+    return normalize_metas_df(pd.read_csv(path, **merged))
+
+
+def cluster_csv_path(folder):
+    return os.path.join(folder, METAS_CSV_NAME)
+
+
+def resolve_cluster_folder(entry, parent):
+    """Resolve a BATCH_CLUSTERS entry to an absolute cluster folder path."""
+    if os.path.isabs(entry):
+        return entry
+    return os.path.join(parent, entry)
+
+
+def list_cluster_jobs(parent, names=None):
+    """Return (folder_name, metas.csv path) for each cluster folder to mix.
+
+    If names is empty, every subdirectory of parent that contains metas.csv
+    is included. Otherwise each name is a folder under parent, or an absolute
+    cluster path.
+    """
+    if not os.path.isdir(parent):
+        raise FileNotFoundError(f"Batch folder not found: {parent}")
+
+    if names:
+        candidates = [resolve_cluster_folder(n, parent) for n in names]
+    else:
+        candidates = [
+            os.path.join(parent, name)
+            for name in sorted(os.listdir(parent))
+            if os.path.isdir(os.path.join(parent, name))
+        ]
+
+    jobs = []
+    for folder in candidates:
+        csv_path = cluster_csv_path(folder)
+        label = os.path.basename(os.path.normpath(folder))
+        if not os.path.isdir(folder):
+            print(f"Skipping {label}: not a directory ({folder})")
+            continue
+        if not os.path.isfile(csv_path):
+            print(f"Skipping {label}: no {METAS_CSV_NAME} in {folder}")
+            continue
+        jobs.append((label, csv_path))
+    return jobs
+
+
+def run_topic(topic, csv_path=None):
+    """Process a single topic/cluster and write its output file."""
     global TOPIC, CSV_FILE, OFFSET, existing_files, loud_counter, channel_counter, fake_loud
 
     # configure globals for this topic
     TOPIC = topic
-    CSV_FILE = f"metas_{TOPIC}.csv"
+    if csv_path is None:
+        CSV_FILE = f"metas_{TOPIC}.csv"
+        csv_path = os.path.join(INPUT, "audioproduction", CSV_FILE)
+    else:
+        CSV_FILE = os.path.basename(csv_path)
     OFFSET = OFFSET_DICT.get(TOPIC, 0.0743)
 
     # reset stateful globals so each topic starts clean
@@ -805,38 +1203,36 @@ def run_topic(topic):
     channel_counter = 0
     fake_loud = False
 
-    output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}.wav")
-    if os.path.exists(output_path):
-        print(f"[Topic {TOPIC}] Output already exists, skipping: {output_path}")
-        return
+    output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}_quad.wav")
 
+    topic_t0 = time.time()
     print(f"\n{'='*60}")
-    print(f"[Topic {TOPIC}] Starting — CSV: {CSV_FILE}  OFFSET: {OFFSET}")
-    chosen_keys = KEYS.get(TOPIC, None)
-    if chosen_keys is not None:
-        print(f"[Topic {TOPIC}] KEYS chosen: {chosen_keys}")
-    else:
-        print(f"[Topic {TOPIC}] WARNING: TOPIC {TOPIC} not found in KEYS dict — search_for_keys will fall back to KEYS[11]: {KEYS[11]}")
+    print(f"[Topic {TOPIC}] Starting — CSV: {csv_path}  OFFSET: {OFFSET}")
+    missing_key_topics = [t for t in KEY_TOPICS if t not in KEYS]
+    if missing_key_topics:
+        print(f"[Topic {TOPIC}] WARNING: KEY_TOPICS not in KEYS dict: {missing_key_topics}")
+    print(f"[Topic {TOPIC}] KEY_TOPICS {KEY_TOPICS} → {keys_for_search()}")
     print(f"{'='*60}")
 
-    io = DataIO()
-    df = pd.read_csv(os.path.join(INPUT, "audioproduction", CSV_FILE))
+    df = read_metas_csv(csv_path)
 
-    raw_files = io.get_img_list(os.path.join(INPUT, SOUND_FOLDER))
-
-    existing_files = {os.path.basename(f).split("_")[0]: f for f in raw_files}
-    existing_files = {k: v for k, v in existing_files.items() if int(k) in df['image_id'].values}
+    print(f"[Topic {TOPIC}] Resolving audio via metas_audio.csv + hash-folder scrape")
+    existing_files, missing_ids = index_audio_for_topic(df)
+    collect_missing_id_rows(df, missing_ids, TOPIC)
     print(f"[Topic {TOPIC}] Existing files after INTERSECT:", len(existing_files))
-    # TEMP CHANGE: print sample keys and paths to debug filename mismatch
     for k, v in list(existing_files.items())[:5]:
-        print(f"  existing_files key: {repr(k)}  ->  {v}")
+        print(f"  existing_files key: {repr(k)}  ->  {resolve_audio_path(v)}")
+
+    if os.path.exists(output_path):
+        print(f"[Topic {TOPIC}] Output already exists, skipping: {output_path}")
+        return None
 
     combined_audio = None
     start_index = 0
     all_quiet_files = []      # accumulate quiet-tier file paths across all chunks
     quiet_coverage_end = 0.0  # track the furthest end time of any quiet-tier clip
 
-    chunks = pd.read_csv(os.path.join(INPUT, "audioproduction", CSV_FILE), chunksize=CHUNK_SIZE)
+    chunks = read_metas_csv(csv_path, chunksize=CHUNK_SIZE)
     for chunk_index, chunk in enumerate(chunks):
         chunk_audio, chunk_end_time, chunk_quiet_files, chunk_quiet_end = process_audio_chunk(chunk, existing_files, INPUT, start_index, chunk_index)
         print(f"[Topic {TOPIC}] Chunk audio length/sample:", len(chunk_audio)/TARGET_SAMPLE_RATE, "Chunk end time:", chunk_end_time)
@@ -850,7 +1246,8 @@ def run_topic(topic):
             print(chunk_index, "Combined audio shape:", combined_audio.shape, "Chunk audio shape:", chunk_audio.shape)
         else:
             non_silent_index_raw = np.argmax(np.abs(chunk_audio) > 0)
-            non_silent_index = int(np.floor(non_silent_index_raw / 2))
+            nch = chunk_audio.shape[1] if chunk_audio.ndim > 1 else 1
+            non_silent_index = int(np.floor(non_silent_index_raw / nch))
             print("Non-silent index:", non_silent_index)
             print("combined_audio shape:", combined_audio.shape, "chunk_audio shape:", chunk_audio.shape)
             np.set_printoptions(threshold=100)
@@ -885,18 +1282,44 @@ def run_topic(topic):
     print(f"[Topic {TOPIC}] Combined audio shape before writing:", combined_audio.shape)
     print(f"[Topic {TOPIC}] Writing to file:", output_path)
     sf.write(output_path, combined_audio, TARGET_SAMPLE_RATE, format='wav')
+    tag_quad_wav(output_path)
+    elapsed = time.time() - topic_t0
+    print(f"[Topic {TOPIC}] Time to process output file: {elapsed:.1f}s")
     del combined_audio
     gc.collect()
+    return elapsed
 
 
 def main():
+    global _missing_ids_written, _missing_ids_fieldnames
+    _missing_ids_written = 0
+    _missing_ids_fieldnames = None
+    filenames_from_metas_audio()
+    walked_audio_by_id()
+    elapsed_times = []
     if BATCH_MODE:
-        print(f"Batch mode ON — processing topics: {BATCH_TOPICS}")
-        for topic in BATCH_TOPICS:
-            run_topic(topic)
+        batch_dir = resolve_batch_folder(BATCH_FOLDER_NAME)
+        jobs = list_cluster_jobs(batch_dir, BATCH_CLUSTERS)
+        print(f"Batch mode ON — found {len(jobs)} cluster folder(s) in {batch_dir}")
+        if not jobs:
+            print(f"No cluster folders with {METAS_CSV_NAME} found.")
+            return
+        for topic, csv_path in jobs:
+            elapsed = run_topic(topic, csv_path=csv_path)
+            if elapsed is not None:
+                elapsed_times.append(elapsed)
         print("\nBatch complete.")
     else:
-        run_topic(TOPIC)
+        elapsed = run_topic(TOPIC)
+        if elapsed is not None:
+            elapsed_times.append(elapsed)
+    write_missing_ids_csv()
+    if elapsed_times:
+        avg = sum(elapsed_times) / len(elapsed_times)
+        print(f"Average processing time per cluster: {avg:.1f}s "
+              f"({len(elapsed_times)} cluster(s))")
+    else:
+        print("Average processing time per cluster: n/a (no clusters processed)")
 
 if __name__ == "__main__":
     main()
