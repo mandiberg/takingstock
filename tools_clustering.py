@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 from my_declarative_base import Base, Images, Detections, Encodings
 import pickle
+import math
 import numpy as np
 import json
 import os
@@ -444,20 +445,58 @@ class ToolsClustering:
             return int(original_class_id)
         return int(class_id)
 
+    def canonicalize_full_signature(self, slot_class_ids):
+        """Apply the full signature canonicalization pipeline to a slot dict.
+
+        This is the canonicalization pass used for both initial row hashing and any
+        post-collapse remap decisions. After a slot is zeroed or rewritten to a
+        canonical class, we must re-run the full normalization rules before the
+        token/hash is finalized.
+        """
+        if slot_class_ids is None:
+            slot_class_ids = {}
+
+        prepared = {}
+        slot_label_to_col = {slot_label: slot_col for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP}
+        for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
+            raw_value = slot_class_ids.get(slot_label)
+            if raw_value is None and slot_col in slot_class_ids:
+                raw_value = slot_class_ids.get(slot_col)
+            if raw_value is None:
+                prepared[slot_label] = 0
+                continue
+
+            class_id = self.extract_slot_class_id(raw_value)
+            if class_id > 0:
+                class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
+            prepared[slot_label] = class_id
+
+        normalized = self._canonicalize_signature_slot_values(prepared)
+        n_objects = sum(1 for class_id in normalized.values() if int(class_id or 0) > 0)
+        token_parts = [f"{slot_label}:{int(normalized.get(slot_label, 0) or 0)}" for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP]
+        token = "|".join(token_parts)
+        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+
+        # if self.VERBOSE:
+        #     raw_preview = {k: v for k, v in prepared.items() if v not in (0, None)}
+        #     print(
+        #         f"[SIGNATURE CANON] input={slot_class_ids} prepared={prepared} "
+        #         f"normalized={normalized} token={token} hash={sig_hash[:12]} n_objects={n_objects} "
+        #         f"nonzero_input={raw_preview}"
+        #     )
+
+        return normalized, token, sig_hash, n_objects
+
     def build_slot_signature_fields(self, row):
         """Build deterministic token/hash/object-count for a row."""
-        token_parts = []
-        n_objects = 0
-
+        slot_class_ids = {}
         for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
             class_id = self.extract_slot_class_id(row.get(slot_col))
             if class_id > 0:
                 class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
-                n_objects += 1
-            token_parts.append(f"{slot_label}:{class_id}")
+            slot_class_ids[slot_label] = class_id
 
-        token = "|".join(token_parts)
-        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+        _, token, sig_hash, n_objects = self.canonicalize_full_signature(slot_class_ids)
         return token, sig_hash, n_objects
 
     def append_object_signature_fields(self, df):
@@ -553,16 +592,18 @@ class ToolsClustering:
         for _score, slot_col, _class_id in candidates[:slot_limit]:
             selected_slots.add(slot_col)
 
-        token_parts = []
-        n_objects = 0
+        slot_class_ids = {}
         for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
             class_id = 0
             if slot_col in selected_slots:
                 class_id = self.extract_slot_class_id(row.get(slot_col))
                 if class_id > 0:
                     class_id = self._canonicalize_signature_class_id(class_id, slot_col=slot_col)
-                    n_objects += 1
-            token_parts.append(f"{slot_label}:{class_id}")
+            slot_class_ids[slot_label] = class_id
+
+        normalized = self._canonicalize_signature_slot_values(slot_class_ids)
+        n_objects = sum(1 for value in normalized.values() if int(value or 0) > 0)
+        token_parts = [f"{slot_label}:{int(normalized.get(slot_label, 0) or 0)}" for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP]
 
         token = "|".join(token_parts)
         sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
@@ -768,20 +809,127 @@ class ToolsClustering:
             print("Skipping KMeans/ObjectFusion cluster writes because SIGNATURES_ONLY=True")
         print("=== END SIGNATURE RUN SUMMARY ===\n")
 
-    def _build_token_from_slot_labels(self, slot_class_ids):
-        """Build (token, hash) from a {slot_label: class_id} dict."""
-        parts = []
+    def _replace_anchor_class_in_slots(
+        self,
+        normalized,
+        anchor_class_id,
+        slots,
+        replace_values,
+        trigger_slots=None,
+        clear_slots=(),
+    ):
+        """If an anchor class appears in trigger slots, rewrite matching secondary/empty classes to it.
+
+        This keeps the pattern reusable for future family rules such as:
+        - anchor 140 + slots in (0, 32, 86) => 140
+        - anchor 157 + slot == 0 => 157
+        - any other class_id where an obvious empty or noisy class should collapse into the canonical class.
+        """
+        if replace_values is None:
+            replace_values = ()
+        elif isinstance(replace_values, (int, np.integer)):
+            replace_values = (int(replace_values),)
+        else:
+            replace_values = tuple(replace_values)
+
+        trigger_slots = trigger_slots or slots
+        if not any(normalized.get(slot, 0) == anchor_class_id for slot in trigger_slots):
+            return normalized
+
+        for slot in slots:
+            current = normalized.get(slot, 0)
+            if current in replace_values:
+                normalized[slot] = anchor_class_id
+
+        for slot in clear_slots:
+            current = normalized.get(slot, 0)
+            if current in replace_values:
+                normalized[slot] = 0
+
+        return normalized
+
+    def _canonicalize_signature_slot_values(self, slot_class_ids):
+        """Normalize noisy signature slots before hashing or collapse mapping."""
+        normalized = {}
         slot_label_to_col = {slot_label: slot_col for slot_col, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP}
         for _, slot_label in self.OBJECT_SIGNATURE_SLOT_MAP:
-            class_id = int(slot_class_ids.get(slot_label, 0) or 0)
+            raw_class_id = slot_class_ids.get(slot_label, 0)
+            try:
+                class_id = int(float(raw_class_id)) if raw_class_id is not None else 0
+            except (TypeError, ValueError):
+                class_id = 0
             if class_id > 0:
                 class_id = self._canonicalize_signature_class_id(
                     class_id,
                     slot_col=slot_label_to_col.get(slot_label),
                 )
-            parts.append(f"{slot_label}:{class_id}")
-        token = "|".join(parts)
-        sig_hash = hashlib.sha1(token.encode('utf-8')).hexdigest()
+            normalized[slot_label] = class_id
+
+        # Bicycle is a single object regardless of which hand slot it was assigned to. Normalize
+        # any bike in either hand to the dominant shared bike signature used elsewhere in the topic.
+        if normalized.get('LH', 0) == 1 or normalized.get('RH', 0) == 1:
+            normalized['LH'] = 1
+            normalized['RH'] = 1
+
+        # Only reinterpret gun/weight misassignments when a bike is actually in one of the hands.
+        # If bike is not in a hand, keep those classes as-is and do not rewrite them.
+        hand_slots = ('LH', 'RH')
+        bike_in_hand = any(normalized.get(slot, 0) == 1 for slot in hand_slots)
+        if bike_in_hand:
+            for slot in hand_slots:
+                current = normalized.get(slot, 0)
+                if current in (86, 108, 109, 155, 156, 157):
+                    normalized[slot] = 1
+            for lower_slot in ('SH', 'WA', 'FT'):
+                if normalized.get(lower_slot, 0) in (86, 108, 109, 155, 156, 157):
+                    normalized[lower_slot] = 0
+
+        # Reuse a generic family-rule helper so future classes can follow the same pattern.
+        self._replace_anchor_class_in_slots(
+            normalized,
+            anchor_class_id=140,
+            slots=hand_slots,
+            replace_values=(0, 32, 86),
+            trigger_slots=hand_slots,
+        )
+
+        # WEIGHTS CORRECTIONS
+        # if kettlebell in hand, replace any weights 86
+        self._replace_anchor_class_in_slots(
+            normalized,
+            anchor_class_id=155,
+            slots=hand_slots,
+            replace_values=(86),
+            trigger_slots=hand_slots,
+        )
+        # if barbellin hand, make both hands and replace any weights 86
+        self._replace_anchor_class_in_slots(
+            normalized,
+            anchor_class_id=156,
+            slots=hand_slots,
+            replace_values=(0,86),
+            trigger_slots=hand_slots,
+        )
+        # if kettlebell in hand, replace any weights 86
+        self._replace_anchor_class_in_slots(
+            normalized,
+            anchor_class_id=157,
+            slots=hand_slots,
+            replace_values=(86),
+            trigger_slots=hand_slots,
+        )
+
+        # Backpack/handbag duplicates on both shoulder and waist split the same object across
+        # locations; keep the shoulder placement and remove the waist duplicate.
+        for bag_class in (24, 26):
+            if normalized.get('SH', 0) == bag_class and normalized.get('WA', 0) == bag_class:
+                normalized['WA'] = 0
+
+        return normalized
+
+    def _build_token_from_slot_labels(self, slot_class_ids):
+        """Build (token, hash) from a {slot_label: class_id} dict."""
+        _, token, sig_hash, _ = self.canonicalize_full_signature(slot_class_ids)
         return token, sig_hash
 
     def compute_topic_collapse_mapping(self, topic_sig_counts, collapse_min):
@@ -878,7 +1026,11 @@ class ToolsClustering:
             remapped = False
             for class_id, slot_label in drop_order_list:
                 current_slots[slot_label] = 0  # zero this slot; stays zeroed for subsequent rounds
-                _, candidate_hash = self._build_token_from_slot_labels(current_slots)
+
+                # Explicit second canonicalization pass after collapse-style slot zeroing.
+                # This ensures any bike/weapon/backpack equivalence rules are re-applied to
+                # the remapped signature before we compare hashes for a target cluster.
+                current_slots, _, candidate_hash, _ = self.canonicalize_full_signature(current_slots)
 
                 if candidate_hash == null_hash:
                     break  # collapsed to all-zeros: discard
@@ -4353,3 +4505,282 @@ class ToolsClustering:
         print(f"Expected recompute rows (selected run scope): {expected_recompute_rows:,}")
         print(f"Affected existing rows (selected run scope): {affected_existing_selected:,}")
         print("=" * 70 + "\n")
+
+    # ================================================================================
+    # LEG-POSE SEPARABILITY (LocationHandsFeet-derived features)
+    # ================================================================================
+
+    def assess_leg_pose_separability(
+        self,
+        df,
+        floor_pct=5.0,
+        min_bucket_size=20,
+        min_gap_ratio=0.35,
+        cluster_label=None,
+    ):
+        """
+        Gap-based heuristic: does this cluster contain two visually distinct
+        leg configurations (e.g. seated vs. standing) that should be split?
+
+        Looks for the single largest gap in leg_extension_max among rows with
+        at least one visible foot/ankle/heel/toe. A gap only counts as real
+        separation when it is wide relative to the overall spread (min_gap_ratio)
+        AND leaves at least min_bucket_size rows on each side, so a couple of
+        outliers can't masquerade as a second population.
+
+        Does not mutate df or apply any split — read-only diagnostic.
+        Requires the LocationHandsFeet-derived columns (visible_leg_count,
+        leg_extension_max) to already be present on df, e.g. via the
+        LEFT JOIN LocationHandsFeet added to make_video.py's selectSQL.
+
+        Returns a stats dict, always including 'is_separable' and 'reason'.
+        """
+        total_rows = len(df.index)
+        result = {
+            "cluster_label": cluster_label,
+            "total_rows": total_rows,
+            "visible_leg_rows": 0,
+            "visible_leg_pct": 0.0,
+            "is_separable": False,
+            "reason": None,
+            "boundary": None,
+            "gap_size": None,
+            "gap_ratio": None,
+            "low_bucket_size": None,
+            "high_bucket_size": None,
+        }
+
+        required_cols = {"visible_leg_count", "leg_extension_max"}
+        if total_rows == 0 or not required_cols.issubset(df.columns):
+            result["reason"] = f"no rows or missing columns {required_cols - set(df.columns)}"
+            return result
+
+        visible_mask = pd.to_numeric(df["visible_leg_count"], errors="coerce").fillna(0) > 0
+        visible_rows = int(visible_mask.sum())
+        visible_pct = (visible_rows / total_rows) * 100.0
+        result["visible_leg_rows"] = visible_rows
+        result["visible_leg_pct"] = round(visible_pct, 2)
+
+        if visible_pct < floor_pct:
+            result["reason"] = f"visible_leg_pct {visible_pct:.1f}% below floor {floor_pct}%"
+            return result
+
+        values = pd.to_numeric(df.loc[visible_mask, "leg_extension_max"], errors="coerce").dropna()
+        values = values[values >= 0]
+        if len(values) < (2 * min_bucket_size):
+            result["reason"] = (
+                f"only {len(values)} usable non-negative leg_extension_max rows, need >= {2 * min_bucket_size}"
+            )
+            return result
+
+        # Ignore negative/outlier noise and look for a real valley between two
+        # populated modes. The old rule used the largest adjacent gap in the
+        # sorted values, which fails when the distribution is broad and bimodal
+        # without a clean empty gap. Here we instead histogram the positive values,
+        # search for the deepest local trough between two local peaks, and judge
+        # the split by how much the valley drops relative to adjacent peak counts.
+        pos_values = values.to_numpy(dtype=float)
+        if pos_values.size == 0:
+            result["reason"] = "no non-negative leg_extension_max values after noise filtering"
+            return result
+
+        hist_min = float(pos_values.min())
+        hist_max = float(pos_values.max())
+        if hist_max <= hist_min:
+            result["reason"] = "leg_extension_max has zero spread after noise filtering"
+            return result
+
+        # For this pose family, the split boundary is usually not at the extreme tails
+        # but in the middle of the leg-extension shape: a low-value folded mode near ~1,
+        # then a trough around ~2-3, then a standing/extended mode around ~4-5.
+        search_min = 1.0
+        search_max = 5.0
+        midrange = pos_values[(pos_values >= search_min) & (pos_values <= search_max)]
+        if midrange.size < (2 * min_bucket_size):
+            result["reason"] = (
+                f"only {midrange.size} usable rows in the 1..5 candidate window, need >= {2 * min_bucket_size}"
+            )
+            return result
+
+        n_bins = max(20, min(80, int(np.sqrt(midrange.size))))
+        hist, bin_edges = np.histogram(midrange, bins=n_bins, range=(search_min, search_max))
+        if hist.size < 3:
+            result["reason"] = "not enough histogram bins in the 1..5 candidate window to detect a valley"
+            return result
+
+        # Smooth the counts slightly to suppress tiny local noise while preserving a
+        # real valley between the low and extended pose modes.
+        smoothed = np.convolve(hist, np.ones(3) / 3.0, mode="same")
+        best_idx = None
+        best_gap = -1.0
+        best_left_peak = 0.0
+        best_right_peak = 0.0
+        best_valley = 0.0
+
+        for i in range(1, len(smoothed) - 1):
+            left_peak = float(np.max(smoothed[:i]))
+            right_peak = float(np.max(smoothed[i + 1:]))
+            valley = float(smoothed[i])
+            if left_peak <= valley or right_peak <= valley:
+                continue
+
+            # Compare the trough against the smaller adjacent peak. This matches the
+            # actual pose pattern: the split is a valley between two populated modes,
+            # not an empty gap against the largest peak.
+            smaller_peak = float(min(left_peak, right_peak))
+            gap_size = float(smaller_peak - valley)
+            if gap_size <= 0:
+                continue
+            gap_ratio = gap_size / float(max(smaller_peak, 1.0))
+
+            if gap_size > best_gap:
+                best_gap = gap_size
+                best_idx = i
+                best_left_peak = left_peak
+                best_right_peak = right_peak
+                best_valley = valley
+                best_gap_ratio = gap_ratio
+
+        if best_idx is None:
+            result["reason"] = "no meaningful midrange valley found between the low and extended pose modes"
+            return result
+
+        # Convert the valley to the original feature space.
+        boundary = float((bin_edges[best_idx] + bin_edges[best_idx + 1]) / 2.0)
+        left_count = float(np.sum(midrange < boundary))
+        right_count = float(np.sum(midrange >= boundary))
+        if left_count < min_bucket_size or right_count < min_bucket_size:
+            result["reason"] = (
+                f"midrange valley at {boundary:.3f} leaves too few rows on one side "
+                f"(left={left_count:.0f}, right={right_count:.0f}; need >= {min_bucket_size})"
+            )
+            return result
+
+        gap_ratio = best_gap / float(max(min(best_left_peak, best_right_peak), 1.0))
+        result.update({
+            "gap_size": round(best_gap, 4),
+            "gap_ratio": round(gap_ratio, 4),
+            "boundary": round(float(boundary), 4),
+            "low_bucket_size": int(left_count),
+            "high_bucket_size": int(right_count),
+        })
+
+        if gap_ratio >= min_gap_ratio:
+            result["is_separable"] = True
+            result["reason"] = (
+                f"midrange valley gap_ratio {gap_ratio:.2f} >= min_gap_ratio {min_gap_ratio} "
+                f"at boundary {boundary:.3f} (left={int(left_count)}, right={int(right_count)})"
+            )
+        else:
+            result["reason"] = (
+                f"midrange valley gap_ratio {gap_ratio:.2f} below min_gap_ratio {min_gap_ratio} "
+                f"(valley={best_valley:.1f}, left_peak={best_left_peak:.1f}, right_peak={best_right_peak:.1f})"
+            )
+
+        return result
+
+    def derive_leg_pose_multiplier_variant(self, leg_pose_label, leg_extension_values=None):
+        """Return the canonical integer bucket used for multiplier registry keys.
+
+        The raw modal leg length is allowed to vary around a multiplier bucket,
+        but registry lookups should remain stable and compatible. We therefore
+        bucket values using ceiling so that 0.2/0.7/0.8 all map to 1, while
+        4.0/4.5/4.7 map to 5 and 5.5 maps to 6.
+        """
+        if leg_pose_label is None or str(leg_pose_label).lower() in ("none", "nan", "not_visible"):
+            return None
+
+        if leg_extension_values is None:
+            return None
+
+        values = pd.to_numeric(pd.Series(leg_extension_values), errors="coerce").dropna()
+        if values.empty:
+            return None
+
+        modal_leg_length = float(np.median(values.to_numpy(dtype=float)))
+        return int(math.ceil(modal_leg_length))
+
+    def label_by_leg_pose(self, df, boundary, asymmetry_threshold=0.15):
+        """
+        Assign a per-row leg-pose bucket label using a boundary from
+        assess_leg_pose_separability. Categories:
+            'not_visible'                    no foot/ankle/heel/toe visible on either side
+            'folded_left_on_right_knee'      left foot sits on right knee / crossed-left
+            'folded_right_on_left_knee'      right foot sits on left knee / crossed-right
+            'standing_raised_left_leg'       left knee/foot raised to the side while right leg is planted
+            'standing_raised_right_leg'      right knee/foot raised to the side while left leg is planted
+            'extended_single'                one leg extended, asymmetric (splits, one-leg-standing, foot-on-object)
+            'extended_both'                  both legs extended, symmetric (standing/planted)
+        Returns a pandas Series of labels aligned to df.index.
+
+        There are two distinct pose families below the separability boundary:
+        1) seated/folded crossed legs, where vertical ankle/knee ordering is enough;
+        2) standing with one leg raised, where the leg is not fully folded and the
+           raised knee/foot stands out to the side of the hip midline while the
+           planted leg stays low. This family requires both a vertical threshold and
+           a lateral x-offset signal.
+        """
+        visible = pd.to_numeric(df["visible_leg_count"], errors="coerce").fillna(0) > 0
+        leg_max = pd.to_numeric(df["leg_extension_max"], errors="coerce")
+        asymmetry = pd.to_numeric(df["leg_asymmetry"], errors="coerce").fillna(0)
+
+        def series_or_zero(col_name):
+            if col_name in df.columns:
+                return pd.to_numeric(df[col_name], errors="coerce").fillna(0)
+            return pd.Series(0.0, index=df.index)
+
+        ankle_left = series_or_zero("ankle_rel_y_left")
+        ankle_right = series_or_zero("ankle_rel_y_right")
+        knee_left = series_or_zero("knee_rel_y_left")
+        knee_right = series_or_zero("knee_rel_y_right")
+        knee_left_x = series_or_zero("knee_left_x")
+        knee_right_x = series_or_zero("knee_right_x")
+        foot_left_x = series_or_zero("foot_left_x")
+        foot_right_x = series_or_zero("foot_right_x")
+        mid_hip_x = series_or_zero("mid_hip_x")
+
+        ankle_diff = ankle_left - ankle_right
+        knee_diff = knee_left - knee_right
+
+        # Distinguish the seated crossed-leg family from the standing raised-leg family.
+        # The raised-leg family is not a fully folded pose: the raised leg remains
+        # vertically mid-level relative to the planted leg, while the knee and foot are
+        # offset away from the hip midline in the direction of the raised leg.
+        raised_leg_left = (
+            visible
+            & (asymmetry >= asymmetry_threshold)
+            & (leg_max >= boundary)
+            & ((ankle_right - ankle_left) > 0.35)
+            & ((knee_left_x - mid_hip_x) < -0.15)
+            & ((foot_left_x - mid_hip_x) < -0.10)
+        )
+        raised_leg_right = (
+            visible
+            & (asymmetry >= asymmetry_threshold)
+            & (leg_max >= boundary)
+            & ((ankle_left - ankle_right) > 0.35)
+            & ((knee_right_x - mid_hip_x) > 0.15)
+            & ((foot_right_x - mid_hip_x) > 0.10)
+        )
+
+        # Fully seated/folded crossed legs use the vertical ordering of ankles and,
+        # if needed, a knee-height fallback when ankles are nearly tied.
+        folded = visible & (leg_max < boundary)
+        ankle_tie = folded & (pd.Series(np.abs(ankle_diff), index=df.index) <= 0.15)
+
+        tie_rows = ankle_tie & (knee_left != knee_right)
+        folded_left = (folded & (ankle_left > ankle_right)) & ~tie_rows & ~raised_leg_left
+        folded_right = (folded & (ankle_right > ankle_left)) & ~tie_rows & ~raised_leg_right
+        folded_left = folded_left | (tie_rows & (knee_left > knee_right))
+        folded_right = folded_right | (tie_rows & (knee_right > knee_left))
+
+        labels = pd.Series("not_visible", index=df.index)
+        labels[raised_leg_left] = "standing_raised_left_leg"
+        labels[raised_leg_right] = "standing_raised_right_leg"
+        labels[folded_left] = "folded_left_on_right_knee"
+        labels[folded_right] = "folded_right_on_left_knee"
+
+        extended = visible & (leg_max >= boundary)
+        labels[extended & (asymmetry >= asymmetry_threshold) & ~raised_leg_left & ~raised_leg_right] = "extended_single"
+        labels[extended & (asymmetry < asymmetry_threshold)] = "extended_both"
+        return labels

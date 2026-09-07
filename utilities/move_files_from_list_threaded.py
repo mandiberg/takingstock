@@ -41,10 +41,10 @@ IS_SSD =True  # if True it will use the SSD path, if False it will use the RAID 
 # Define the path to the CSV file
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
 
-VERBOSE = False  
+VERBOSE = True  
 # set origin before constructing io
-ORIGIN_SSD = "/Volumes/OWC52/segment_images_32_sportsball"
-# ORIGIN_SSD = "/Volumes/LaCie/output_folder"
+# ORIGIN_SSD = "/Volumes/OWC52/segment_images_32_sportsball"
+ORIGIN_SSD = "/Volumes/LaCie/output_folder"
 # ORIGIN_SSD = "/Volumes/RAID18/is_not_face18"
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
 if not IS_SSD: ORIGIN_SSD = None
@@ -59,13 +59,17 @@ FROM_SSD_TO_SSD = False # overrides io settings to move from the ORIGIN_SSD to D
 IS_TEST = False # this is old, does a shorter run or something. 
 TESTING_PRINT_ONLY = False # if True doesn't move, just prints what it would do
 OUTPUT_INTERVAL = 1000
-if FROM_SSD_TO_SSD == False: MOVE_ORIGINAL_FILE = False  # FORCE only allow moving files when going from SSD to SSD
+
+#############################################################################
+MOVE_ORIGINAL_FILE = True # CAREFUL!!!!!!!!! IF TRUE, DELETES ORIGINAL FILES
+#############################################################################
+
 ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
 # DEST = "/Volumes/OWC5/segment_images_newbigx"  # for testing
-# DEST = "/Volumes/OWC52/segment_images_thegym_intersect_86dumbbell"  # for testing
-DEST = "/Volumes/LaCie/segment_images_thegym"  # 250k for headphones
+# DEST = "/Volumes/OWC52/segment_images_TheGym_object_fix_32_37_86"  # for testing
+DEST = "/Volumes/LaCie/output_folder_arms9000sep4"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder
@@ -75,10 +79,6 @@ if IS_TEST:
 START = 0
 # START = 0  # for testing restart
 # first csv file is restart at 2297000
-
-#############################################################################
-MOVE_ORIGINAL_FILE = True # CAREFUL!!!!!!!!! IF TRUE, DELETES ORIGINAL FILES
-#############################################################################
 
 # check for site folders
 io.check_site_folders(DEST)
@@ -153,17 +153,35 @@ def move_file_pair(original_path, destination_path):
     return "moved"
 
 
-def is_cluster_files_csv(csv_path):
-    """Detect the newer cluster_files.csv export format."""
+def detect_csv_format(csv_path):
+    """Auto-detect the CSV structure from its header columns."""
     filename = os.path.basename(csv_path).lower()
     if "cluster_files" in filename:
-        return True
+        return "cache_path"
+
     try:
         with open(csv_path, mode='r', newline='') as file:
-            header = next(file, '').strip().lower()
-        return 'path_to_cache_file' in header
+            reader = csv.reader(file)
+            try:
+                header = next(reader)
+            except StopIteration:
+                return "unknown"
     except Exception:
-        return False
+        return "unknown"
+
+    normalized = [str(col).strip().lower() for col in header]
+    if 'path_to_cache_file' in normalized:
+        return "cache_path"
+    if 'site_name_id' in normalized and any(col in normalized for col in ['imagename', 'filepath', 'file_path', 'local_file_path']):
+        return "legacy_site_path"
+    if 'file_path' in normalized or 'path_to_file' in normalized or 'source_path' in normalized:
+        return "direct_path"
+    return "unknown"
+
+
+def is_cluster_files_csv(csv_path):
+    """Detect the newer cluster_files.csv export format."""
+    return detect_csv_format(csv_path) == "cache_path"
 
 
 def cluster_destination_path(cache_path):
@@ -181,51 +199,58 @@ def cluster_destination_path(cache_path):
 
 def worker_task(row_data):
     """Worker function for thread pool"""
-    # print("worker_task called with row_data:", row_data)
     row, row_idx = row_data
-    # if VERBOSE: print(f"Processing row {row_idx}: {row}")
+    csv_format = detect_csv_format(CSV_FILE_PATH)
+
     if USE_RAW_PATHS:
         filename = row[1]
         original_path = os.path.join(ORIGIN, filename)
         destination_path = os.path.join(DEST, filename)
-    else:
-        if VERBOSE: print(f"Processing row {row_idx}: {row}")
-        if is_cluster_files_csv(CSV_FILE_PATH):
-            if len(row) < 3:
-                if VERBOSE:
-                    print(f"Skipping malformed cluster_files row: {row}")
-                return "error"
-            original_path = str(row[2]).strip()
-            if not original_path:
-                return "error"
-            destination_path = cluster_destination_path(original_path)
-            return move_file_pair(original_path, destination_path)
+        return move_file_pair(original_path, destination_path)
 
-        # if not isinstance(row[1], int): return "error"
-        try:site_name_id = int(row[1]) if USE_DF_SORTED else int(row[0])
-        except ValueError:
+    if VERBOSE:
+        print(f"Processing row {row_idx}: {row}")
+
+    if csv_format == "cache_path":
+        if len(row) < 3:
             if VERBOSE:
-                print(f"Skipping invalid site_name_id line: {row[1] if USE_DF_SORTED else row[0]}")
+                print(f"Skipping malformed cache-path row: {row}")
             return "error"
-        site_root = io.folder_list[site_name_id]
-        last_folder = os.path.basename(site_root)
-        filepath = row[3] if USE_DF_SORTED else row[1]
-        original_path = os.path.join(site_root, filepath)
-        # print(f"Row {row_idx}: Moving from {original_path} to {destination_path}")
-        if USE_HASH_FOLDERS:
-            if FROM_SSD_TO_SSD:
-                original_path = os.path.join(ORIGIN_SSD, last_folder, filepath)
-                destination_path = os.path.join(DEST, last_folder, filepath)
-                # if not os.path.exists(destination_path):
-                #     if "000" in destination_path:
-                #         if VERBOSE:
-                #             print(f" not exist on SSD: {destination_path}, using RAID path instead.")
-                #     return None
-            else:
-                destination_path = os.path.join(DEST, last_folder, filepath)
+        original_path = str(row[2]).strip()
+        if not original_path:
+            return "error"
+        destination_path = cluster_destination_path(original_path)
+        return move_file_pair(original_path, destination_path)
+
+    if csv_format == "direct_path":
+        if len(row) < 2:
+            if VERBOSE:
+                print(f"Skipping malformed direct-path row: {row}")
+            return "error"
+        original_path = str(row[1]).strip()
+        destination_path = os.path.join(DEST, os.path.basename(original_path))
+        return move_file_pair(original_path, destination_path)
+
+    # Legacy site/path format
+    try:
+        site_name_id = int(row[1]) if USE_DF_SORTED else int(row[0])
+    except ValueError:
+        if VERBOSE:
+            print(f"Skipping invalid site_name_id line: {row[1] if USE_DF_SORTED else row[0]}")
+        return "error"
+    site_root = io.folder_list[site_name_id]
+    last_folder = os.path.basename(site_root)
+    filepath = row[3] if USE_DF_SORTED else row[1]
+    original_path = os.path.join(site_root, filepath)
+    if USE_HASH_FOLDERS:
+        if FROM_SSD_TO_SSD:
+            original_path = os.path.join(ORIGIN_SSD, last_folder, filepath)
+            destination_path = os.path.join(DEST, last_folder, filepath)
         else:
-            destination_path = os.path.join(DEST, os.path.basename(filepath))
-    
+            destination_path = os.path.join(DEST, last_folder, filepath)
+    else:
+        destination_path = os.path.join(DEST, os.path.basename(filepath))
+
     return move_file_pair(original_path, destination_path)
 
 
@@ -286,8 +311,15 @@ def move_files_from_csv(csv_file, start=0):
         total_lines = sum(1 for _ in file)
         file.seek(0)  # Reset file pointer to the beginning
         print(f"Total lines in CSV file: {total_lines}")
-        if is_cluster_files_csv(csv_file):
-            print("Detected cluster_files.csv format: using path_to_cache_file directly.")
+        detected_format = detect_csv_format(csv_file)
+        if detected_format == "cache_path":
+            print("Detected cache-path CSV format: preserving the full source tree under DEST.")
+        elif detected_format == "legacy_site_path":
+            print("Detected legacy site/path CSV format.")
+        elif detected_format == "direct_path":
+            print("Detected direct-path CSV format.")
+        else:
+            print("Detected unknown CSV format; using generic legacy fallback.")
         reader = csv.reader(file)
         next(reader)  # Skip the header row
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:

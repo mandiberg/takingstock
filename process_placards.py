@@ -98,7 +98,7 @@ yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 MODES = {1:"custom45", 2: "thegym", 3: "something_new"}
 # custom 45 is the main custom model. COCO is turned on for that. it skips existing detections/placements
 # thegym is just the yoga/balls/weights. COCO is off, and it reruns EVERYTHING including nodetections
-MODE_CHOICE = 1
+MODE_CHOICE = 2
 MODE_NAME = MODES[MODE_CHOICE]
 
 # first gym detection: 221696705
@@ -180,8 +180,8 @@ if MODE_NAME == "custom45":
     EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = new_excludes
 
     # FILE_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/segment_images_93" 
-    FILE_FOLDER = "/Volumes/OWC52/segment_images_80_sign"
-    # FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
+    # FILE_FOLDER = "/Volumes/OWC52/segment_images_80_sign"
+    FILE_FOLDER = "/Volumes/RAID54" # must be a folder holding the site folder(s)
 
 else:
     # rerun everything, don't skip anything -- especially bc these won't have signatures yet.
@@ -190,7 +190,7 @@ else:
     IGNORE_EXISTING_NO_DETECTIONS = False
     EXCLUDE_EXISTING_OBJECT_SIGNATURE_NONES = []
 
-    FILE_FOLDER = "/Volumes/OWC52/segment_images_32_sportsball"
+    FILE_FOLDER = "/Volumes/LaCie/segment_images_thegym"
 
 # redo any detection below this threshold
 DET_ID_THRESHOLD_CUSTOM = 139180213 # last reset after c45 on TheOffice

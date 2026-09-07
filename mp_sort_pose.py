@@ -138,7 +138,7 @@ class SortPose:
         self.this_nose_bridge_dist = self.NOSE_BRIDGE_DIST = None # to be set in first loop, and sort.this_nose_bridge_dist each time
         self.USE_HEAD_POSE = USE_HEAD_POSE
         # IQR_SCALE_FACTOR already set above after VERBOSE
-        self.MIN_DYN_BBOX_DIM = [1.0,1.0,1.0,1.0] # controls how closely AUTO_EDGE_CROP can get
+        self.MIN_DYN_BBOX_DIM = [1.5,1.5,1.5,1.5] # controls how closely AUTO_EDGE_CROP can get
         self.ROUND_STEP = 0.5 # fixed incriments for all calculated multipliers
         self.DYN_BBOX_FROM_IMAGE_DIMS = True # if True, use image dimensions to calculate dynamic multiplier rather than body landmarks
         self.DYN_BBOX_ROUND_TO = 0.25 # round to nearest 0.5 bbox for crop dimensions
