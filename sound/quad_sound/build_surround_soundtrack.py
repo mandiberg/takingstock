@@ -44,7 +44,7 @@ BATCH_MODE = True          # set True to process cluster folders under BATCH_FOL
 # Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
 # Example layout:
 #   BATCH_FOLDER_NAME/clustercc1_p1_t0_om1_1788371815.2307808/metas.csv
-BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/test"
+BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/test_clusters"
 # Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
 # Empty list = every subfolder that contains metas.csv.
 BATCH_CLUSTERS = [
@@ -109,6 +109,11 @@ FIT_VOL_MAX = 1
 FADEOUT = 7
 FADE_TIME = 1
 QUIET =.5
+# Quiet-tier volume range (matches scale_volume quiet branch).
+QUIET_VOL_MIN = .02
+QUIET_VOL_MAX = .08
+QUIET_PAD_FADE_IN = 3.0  # seconds to crossfade the tail pad into existing quiet
+QUIET_PAD_FADEOUT = 15   # per-clip fadeout, same default as scale_volume
 LOUD_ALOWED = 2
 LOUD_RESET = 7
 loud_counter = []
@@ -298,7 +303,7 @@ def scale_volume(row, cycler, audio_data, sample_rate):
 
     if volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
-        vol = scale_volume_linear(volume_fit, .02,.08)*cycler[0]
+        vol = scale_volume_linear(volume_fit, QUIET_VOL_MIN, QUIET_VOL_MAX)*cycler[0]
         # vol = .001
     elif len(key_index)>0:
         # if keys are found, set the volume and fade in out based on the keys found
@@ -864,45 +869,100 @@ def write_missing_ids_csv(path=None):
     print(f"Appended {_missing_ids_written} missing-id row(s) this run to {path}")
 
 
-def build_quiet_background(quiet_files, total_duration, vol=0.04):
-    """Build a full-duration looping quiet background layer (t=0 to total_duration).
-
-    Cycles through *quiet_files* end-to-end. Each clip is placed on two random
-    adjacent speakers with a random split (quiet-tier spatial rule).
-    """
-    if not quiet_files:
-        return None
-
-    files = list(dict.fromkeys(quiet_files))  # deduplicate, preserve order
-    total_samples = int(total_duration * TARGET_SAMPLE_RATE)
-    background = np.zeros((total_samples, N_CHANNELS))
-    cursor = 0
-    file_idx = 0
-    consecutive_errors = 0
-
-    while cursor < total_samples:
-        if consecutive_errors >= len(files):
-            print("build_quiet_background: all files unreadable, aborting pad")
-            break
-        filepath = files[file_idx % len(files)]
-        file_idx += 1
+def _load_quiet_clips(quiet_files):
+    """Load unique quiet files to mono at TARGET_SAMPLE_RATE."""
+    clips = []
+    for filepath in dict.fromkeys(quiet_files):
         try:
             audio, sr = sf.read(filepath)
-            consecutive_errors = 0
         except Exception as e:
             print(f"build_quiet_background: skipping {filepath}: {e}")
-            consecutive_errors += 1
             continue
-
         audio, _ = conform_sample_rate(to_mono(audio), sr)
-        clip_vol = vol * np.random.uniform(0.7, 1.3)
-        mono = audio * clip_vol
+        if len(audio) == 0:
+            continue
+        clips.append(audio)
+    return clips
+
+
+def _fadeout_mono(audio, duration, sample_rate=TARGET_SAMPLE_RATE):
+    """Squared fadeout without the verbose apply_fadeout prints."""
+    duration = check_fade_length(duration, audio, sample_rate)
+    length = int(duration * sample_rate)
+    if length <= 0:
+        return audio
+    end = audio.shape[0]
+    start = end - length
+    fade_curve = np.power(np.linspace(1.0, 0.0, length), 2)
+    audio[start:end] *= fade_curve
+    return audio
+
+
+def build_quiet_background(quiet_files, total_duration, start_time=0.0, offset=None,
+                           fade_in=QUIET_PAD_FADE_IN):
+    """Overlapping quiet bed from start_time to total_duration on the OFFSET grid.
+
+    Matches the main mixer: a new clip every OFFSET seconds, quiet-tier volume
+    and two-adjacent-speaker placement. Starts *fade_in* seconds before
+    start_time so the pad crossfades as the original quiet layer dies out.
+    The file pool is shuffled on every pass so the tail is not a literal repeat.
+    """
+    if not quiet_files or total_duration <= 0:
+        return None
+
+    offset = OFFSET if offset is None else offset
+    clips = _load_quiet_clips(quiet_files)
+    if not clips:
+        print("build_quiet_background: no readable quiet files, aborting pad")
+        return None
+
+    pad_start = max(0.0, start_time - fade_in)
+    if pad_start >= total_duration:
+        return None
+
+    total_samples = int(total_duration * TARGET_SAMPLE_RATE)
+    background = np.zeros((total_samples, N_CHANNELS))
+
+    n = len(clips)
+    order = np.arange(n)
+    np.random.shuffle(order)
+    order_pos = 0
+
+    t = pad_start
+    n_placed = 0
+    while t < total_duration:
+        clip = clips[order[order_pos]]
+        order_pos += 1
+        if order_pos >= n:
+            np.random.shuffle(order)
+            order_pos = 0
+
+        clip_vol = np.random.uniform(QUIET_VOL_MIN, QUIET_VOL_MAX)
+        mono = _fadeout_mono(clip * clip_vol, QUIET_PAD_FADEOUT)
         gains, _anchor = spatial_gains("quiet")
         audio = apply_quad_gains(mono, gains)
-        end = min(cursor + len(audio), total_samples)
-        background[cursor:end] += audio[:end - cursor]
-        cursor = end
 
+        start_sample = int(t * TARGET_SAMPLE_RATE)
+        if start_sample >= total_samples:
+            break
+        end_sample = min(start_sample + len(audio), total_samples)
+        n_copy = end_sample - start_sample
+        if n_copy > 0:
+            background[start_sample:end_sample] += audio[:n_copy]
+            n_placed += 1
+        t += offset
+
+    fade_begin = int(pad_start * TARGET_SAMPLE_RATE)
+    fade_samples = int(fade_in * TARGET_SAMPLE_RATE)
+    fade_end = min(fade_begin + fade_samples, total_samples)
+    n_fade = fade_end - fade_begin
+    if n_fade > 1:
+        fade_curve = np.power(np.linspace(0.0, 1.0, n_fade), 2)
+        background[fade_begin:fade_end] *= fade_curve[:, np.newaxis]
+
+    print(f"build_quiet_background: placed {n_placed} overlapping clips "
+          f"from {pad_start:.1f}s to {total_duration:.1f}s "
+          f"(offset={offset:.4f}s, {n} unique files)")
     return background
 
 
@@ -1305,15 +1365,18 @@ def run_topic(topic, csv_path=None):
         del chunk_audio
         gc.collect()
 
-    # --- Quiet-tier barrier: lay a continuous looping murmur under the entire track ---
-    # Rather than detecting when quiet audio ends, we always build a full-duration
-    # quiet background so the murmur is guaranteed to persist from start to finish.
+    # --- Quiet-tier tail pad: overlapping murmur from where original quiet dies out ---
     total_duration = len(combined_audio) / TARGET_SAMPLE_RATE
     print(f"[Topic {TOPIC}] Quiet tier reached {quiet_coverage_end:.1f}s / {total_duration:.1f}s total")
-    if all_quiet_files:
-        print(f"[Topic {TOPIC}] Building full-duration quiet background ({total_duration:.1f}s, "
-              f"{len(set(all_quiet_files))} unique files)…")
-        quiet_bg = build_quiet_background(all_quiet_files, total_duration)
+    gap = total_duration - quiet_coverage_end
+    if all_quiet_files and gap > OFFSET:
+        print(f"[Topic {TOPIC}] Building overlapping quiet pad ({gap:.1f}s gap, "
+              f"{len(set(all_quiet_files))} unique files, offset={OFFSET}s)…")
+        quiet_bg = build_quiet_background(
+            all_quiet_files,
+            total_duration,
+            start_time=quiet_coverage_end,
+        )
         if quiet_bg is not None:
             if len(quiet_bg) > len(combined_audio):
                 combined_audio = np.pad(
@@ -1322,9 +1385,11 @@ def run_topic(topic, csv_path=None):
                     'constant',
                 )
             combined_audio[:len(quiet_bg)] += quiet_bg
-            print(f"[Topic {TOPIC}] Quiet background mixed in ({len(quiet_bg)/TARGET_SAMPLE_RATE:.1f}s)")
+            print(f"[Topic {TOPIC}] Quiet pad mixed in ({len(quiet_bg)/TARGET_SAMPLE_RATE:.1f}s)")
+    elif not all_quiet_files:
+        print(f"[Topic {TOPIC}] No quiet-tier files collected — skipping quiet pad")
     else:
-        print(f"[Topic {TOPIC}] No quiet-tier files collected — skipping quiet background")
+        print(f"[Topic {TOPIC}] Quiet tier already covers the track, skipping pad")
 
     print(f"[Topic {TOPIC}] Combined audio shape before writing:", combined_audio.shape)
     print(f"[Topic {TOPIC}] Writing to file:", output_path)
