@@ -33,7 +33,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "T37_final_looping_video_source_files"
-FOLDER_NAME = "output_folder/_BODY_c157v3_2000s_preLAX"
+FOLDER_NAME = "output_folder/preLAX_sept9_720"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -42,10 +42,14 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 12  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
 CROP_AFTER_COUNT = None
+
+# Video-only minimum-image cutoff. Set to None or 0 to disable entirely.
+# This applies to the actual mp4 build, not the GIF preview export path.
+CUTOFF_THRESHOLD = 50
 
 # if you borked the installation file, turn this on to JUST rebuilt it
 DO_INSTALLATION_ONLY = False
@@ -178,30 +182,62 @@ GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
-VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
-# VID_DIMS_TEST = [1746,1746]
-# VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+# VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+# VID_DIMS_TEST = [1785,1785]
+VID_DIMS_TEST = [720, 720] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
 ############################
 USE_CANONICAL_RATIOS = True
+
+# to do scale aware video selection, you need to
+# 1. in merge, USE_CANONICAL_RATIOS must be true
+# 2. must run merge x number of times, for each size you want to have videos at
+# 3. all output files should be registered in the same installation.csv and have the size in the filename
+# that is all you need to do in takingstock
+# 
+# in taking-stock-install you need to set scale select to true
+ 
 ############################
 
 ADD_TO_EXISTING_INSTALLATION_CSV = True  # if True, append new rows to existing installation.csv instead of overwriting
 
 RATIOS_DICT = {
-    1080 : [ {0.665 : [718, 1080]}, 
+    720 : [ {0.500 : [360, 720]}, {0.563 : [408, 720]}, 
+{0.600 : [432, 720]}, {0.665 : [480, 720]}, 
+{0.750 : [540, 720]}, {0.798 : [576, 720]}, 
+{0.856 : [612, 720]}, {1.000 : [720, 720]}, 
+{1.169 : [840, 720]}, {1.253 : [900, 720]}, 
+{1.337 : [960, 720]}, {1.504: [1080 ,720]},
+{1.665: [1200, 720]}, {1.750 : [1260, 720]}, 
+    ],
+
+    1080 : [ {0.500 : [540, 1080]}, {0.563 : [612, 1080]}, 
+{0.600 : [648, 1080]}, {0.665 : [718, 1080]}, 
 {0.750 : [810,1080]}, {0.798 : [862,1080]}, 
 {0.856 : [924, 1080]}, {1.000 : [1080, 1080]}, 
 {1.169 : [1263, 1080]}, {1.253 : [1354, 1080]}, 
-{1.337 : [1444, 1080]}, {1.504: [1625 ,1080]}], 
+{1.337 : [1444, 1080]}, {1.504: [1625 ,1080]},
+{1.665: [1725, 1080]}, {1.750: [1890, 1080]},
+], 
 
-    1712 : [ {0.665 : [1129, 1712]}, 
-{0.750 : [1284,1712]}, {0.798 : [1366,1712]}, 
-{0.856 : [1465, 1712]}, {1.000 : [1712, 1712]}, 
-{1.169 : [2001,1712]}, {1.253 : [2145,1712]}, 
-{1.337 : [2288,1712]}, {1.504: [2574,1712]}],
+    1785 : [
+        {0.500 : [892, 1785]}, 
+        {0.563 : [1071, 1785]}, 
+        {0.600 : [1071, 1785]},
+        {0.665 : [1284, 1785]}, 
+        {0.750 : [1485, 1785]}, 
+        {0.798 : [1584, 1785]}, 
+        {0.856 : [1692, 1785]}, 
+        {1.000 : [1785, 1785]}, 
+        {1.169 : [2083, 1785]}, 
+        {1.253 : [2234, 1785]}, 
+        {1.337 : [2394, 1785]}, 
+        {1.504: [2693, 1785]}, 
+        {1.665: [2888, 1785]},
+        {1.750: [3084, 1785]}
+    ],
 
     2160 : [{0.665 : [1436, 2160]}, 
 {0.750 : [1620,2160]}, {0.798 : [1724,2160]}, 
@@ -211,8 +247,9 @@ RATIOS_DICT = {
 }
 
 LIMIT_DICT = {
+    720: [1280, 720],
     1080: [1920, 1080],
-    1712: [3043, 1712],
+    1785: [3840, 1785],
     2160: [3840, 2160]
 }
 
@@ -1986,6 +2023,9 @@ def write_video(img_array, subfolder_path=None):
     print("len img_array before cropping", len(img_array))
     if len(img_array) == 0:
         print("no jpg images found, skipping this folder")
+        return
+    elif CUTOFF_THRESHOLD not in (None, 0, False) and len(img_array) < int(CUTOFF_THRESHOLD):
+        print(f"video cutoff threshold enabled: len(img_array)={len(img_array)} < CUTOFF_THRESHOLD={CUTOFF_THRESHOLD}; skipping this folder")
         return
     elif SMOOTH_MERGE and OSCILATING_MERGE and len(img_array) < max(2, START_MERGE + 1):
         print(f"not enough images for smooth oscillating mode (need at least {max(2, START_MERGE + 1)}), skipping this folder")

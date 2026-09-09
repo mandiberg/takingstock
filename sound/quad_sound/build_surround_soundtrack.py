@@ -18,7 +18,7 @@ import gc
 # go get IO class from parent folder
 # caution: path[0] is reserved for script path (or '' in REPL)
 import sys
-if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+if sys.platform == "darwin": sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/takingstock/')
 elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHub/facemap2/')
 
 if os.path.exists('/Users/tenchc/Documents/GitHub/takingstock/'):
@@ -44,7 +44,7 @@ BATCH_MODE = True          # set True to process cluster folders under BATCH_FOL
 # Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
 # Example layout:
 #   BATCH_FOLDER_NAME/clustercc1_p1_t0_om1_1788371815.2307808/metas.csv
-BATCH_FOLDER_NAME = "/Volumes/OWC52/tts_sport/test"
+BATCH_FOLDER_NAME = "/Volumes/OWC52/tts_sport/_BODY_c157v3_2000s_preLAX_9000s"
 # Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
 # Empty list = every subfolder that contains metas.csv.
 BATCH_CLUSTERS = [
@@ -129,6 +129,7 @@ CYCLE = (0, 1, 3, 2)  # FL, FR, BR, BL
 # split randomly among the other speakers in that tier.
 ANCHOR_RANGE_MID = [0.50, 0.75]
 ANCHOR_RANGE_LOUD = [0.40, 0.70]
+DO_ANGULAR_LOUD = True # if True, it skips ANCHOR_RANGE_LOUD and does LOUD as stereo between two random adjacent speakers
 KEYS = {
     0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
     1: ["outsid", "think", "sceneri", "landscap", "calm", "contempl", "peac", "retir", "pension", "blur"],
@@ -388,7 +389,7 @@ def spatial_gains(tier):
     """
     gains = np.zeros(N_CHANNELS)
     start = np.random.randint(0, 4)
-    if tier == "quiet":
+    if tier == "quiet" or (tier == "loud" and DO_ANGULAR_LOUD):
         idxs = [CYCLE[start], CYCLE[(start + 1) % 4]]
         weights = random_normalized_weights(len(idxs))
         for idx, weight in zip(idxs, weights):
