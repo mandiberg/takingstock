@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 1
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
@@ -33,7 +33,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "T37_final_looping_video_source_files"
-FOLDER_NAME = "output_folder/_ARMS_T0_p1_legposes_sep9_reran"
+FOLDER_NAME = "output_folder/_ARMS_T45_p1_legposes_sep10_gatto"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -45,7 +45,7 @@ IS_CLUSTER = True
 PARALLEL_MERGE_WORKERS = 12  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = 80
+CROP_AFTER_COUNT = None
 
 # minimum-image cutoff. Set to None or 0 to disable entirely.
 # This applies to the actual mp4 build, not the GIF preview export path.
@@ -187,7 +187,7 @@ TEST_DIMS = [4000,4000]
 REG_DIMS = [3448,3448]
 # VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 # VID_DIMS_TEST = [1785,1785]
-VID_DIMS_TEST = [720, 720] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+VID_DIMS_TEST = [1000, 1000] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
@@ -214,6 +214,34 @@ RATIOS_DICT = {
 {1.169 : [840, 720]}, {1.253 : [900, 720]}, 
 {1.337 : [960, 720]}, {1.504: [1080 ,720]},
 {1.665: [1200, 720]}, {1.750 : [1260, 720]}, 
+    ],
+
+    1000 : [
+        {0.333 : [333, 1000]},
+        {0.400 : [400, 1000]},
+        {0.500 : [500, 1000]},
+        {0.563 : [563, 1000]},
+        {0.600 : [600, 1000]},
+        {0.665 : [665, 1000]},
+        {0.750 : [750, 1000]},
+        {0.798 : [798, 1000]},
+        {0.856 : [856, 1000]},
+        {1.000 : [1000, 1000]},
+        {1.169 : [1169, 1000]},
+        {1.253 : [1253, 1000]},
+        {1.337 : [1337, 1000]},
+        {1.504: [1504, 1000]},
+        {1.665: [1665, 1000]},
+        {1.750: [1750, 1000]},
+        {1.825: [1825, 1000]},
+        {1.900: [1900, 1000]},
+        {2.000: [2000, 1000]},
+        {2.100: [2100, 1000]},
+        {2.250: [2250, 1000]},
+        {2.375: [2375, 1000]},
+        {2.500: [2500, 1000]},
+        {2.750: [2750, 1000]},
+        {3.000: [3000, 1000]},
     ],
 
     1080 : [ {0.500 : [540, 1080]}, {0.563 : [612, 1080]}, 
@@ -251,6 +279,7 @@ RATIOS_DICT = {
 
 LIMIT_DICT = {
     720: [1280, 720],
+    1000: [3840, 1000],
     1080: [1920, 1080],
     1785: [3840, 1785],
     2160: [3840, 2160]
