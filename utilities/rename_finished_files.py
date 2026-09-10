@@ -26,19 +26,53 @@ It will output a new name like:
 TakingStock_T{TOPIC}_p{folder_arms_pose}_s{folder_signature}_obj_{obj}_h{folder_hsv}.mp4
 '''
 
-FOLDER = "/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/T11_final_looping_video_source_files"
+FOLDER = "/Users/michaelmandiberg/Downloads/gatto_images"
 MP4_ONLY = False 
 io = DataIO()
 DRY_RUN = False
+TITLE_TYPE = "print" # options are "print" "looping" "looping_vid"
 
-TOPIC = 37
+TOPIC_NAME_PATH = os.path.join(
+    ROOT_GITHUB,
+    "model_files",
+    "model_isface",
+    "topics64_topicnames.csv",
+)
+
+TOPIC_KEYWORDS = {}
+try:
+    topic_df = pd.read_csv(TOPIC_NAME_PATH)
+    for _, row in topic_df.iterrows():
+        topic_id = row.get("topic_id", None)
+        if pd.isna(topic_id):
+            continue
+        topic_terms = []
+        seen = set()
+        for key in ["topic name", "topic fullname"]:
+            value = row.get(key, "")
+            if pd.notna(value):
+                for piece in str(value).split(","):
+                    cleaned = piece.strip().replace('"', "")
+                    if cleaned and cleaned.lower() not in seen:
+                        seen.add(cleaned.lower())
+                        topic_terms.append(cleaned)
+        if topic_terms:
+            # keep a compact display with a trailing ellipsis when the topic list is long
+            if len(topic_terms) > 3:
+                topic_terms = topic_terms[:3] + ["etc."]
+            TOPIC_KEYWORDS[int(topic_id)] = ", ".join(topic_terms)
+except Exception as e:
+    print(f"Warning: could not load topic keyword map from {TOPIC_NAME_PATH}: {e}")
+
+TOPIC = 45
+TOPIC_KEYS = ""
 OVERRIDE_TOPIC = True # if true it will not respect the topic currently in the filename
 
 OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "utilities",
     "data",
-    "ImagesObjectSignatures_ObjectSignatures_202604272237.csv",
+    "ObjectSignatures_ImagesObjectSignatures_202609091654.csv",
 )
 OBJECT_SIGNATURE_EXPORT_PATH = OBJECT_SIGNATURE_EXPORT_PATH.replace("utilities/utilities", "utilities") # if called from utilities folder, fix path
 
@@ -126,7 +160,7 @@ def get_modal_cluster_id(main_folder, session):
 
     return modal_cluster_dict
 
-def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv):
+def format_title_looping(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv):
     title = ""
 
     obj_id_string = obj_name_string = hsv_name = hsv_value  = None
@@ -160,7 +194,7 @@ def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature
     else: 
         hsv_name = None
         hsv_value = None
-    print(f"format_title: topic: {topic}, folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, obj_id_string: {obj_id_string}, obj_name_string: {obj_name_string}, hsv_name: {hsv_name}, hsv_value: {hsv_value}")
+    print(f"format_title_looping: topic: {topic}, folder_arms_pose: {folder_arms_pose}, folder_hands_gesture: {folder_hands_gesture}, folder_signature: {folder_signature}, obj_id_string: {obj_id_string}, obj_name_string: {obj_name_string}, hsv_name: {hsv_name}, hsv_value: {hsv_value}")
     if obj_name_string is not None and hsv_name is not None:
         title += f"{obj_name_string}, {hsv_name} "
     elif obj_name_string is not None:
@@ -187,8 +221,54 @@ def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature
 
     # chomp any trailing comma and space
     title = title.rstrip(", ")
-    print(f"format_title: title: {title}")
+    print(f"format_title_looping: title: {title}")
     return title
+
+
+def format_title_print(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv):
+    metadata_parts = []
+    if topic is not None:
+        metadata_parts.append(f"Topic {topic}")
+    if folder_arms_pose is not None:
+        metadata_parts.append(f"Pose {folder_arms_pose}")
+    if folder_hands_gesture is not None:
+        metadata_parts.append(f"Gesture {folder_hands_gesture}")
+
+    object_name = None
+    object_metadata = None
+    if obj_str is not None:
+        obj_ids = [piece.strip() for piece in str(obj_str).split("-") if piece.strip()]
+        obj_names = [CLASS_MAP.get(int(obj_id), "Unknown") for obj_id in obj_ids if str(obj_id).strip()]
+        if obj_ids:
+            if len(obj_ids) == 1:
+                object_metadata = f"Object {obj_ids[0]}"
+            else:
+                object_metadata = f"Objects {', '.join(obj_ids)}"
+            if obj_names:
+                object_name = " and ".join(obj_names).replace("_", " ")
+                if len(obj_names) > 1:
+                    object_name = ", ".join(obj_names).replace("_", " ")
+
+        if object_metadata is not None:
+            metadata_parts.append(object_metadata)
+
+    title = ", ".join(metadata_parts)
+    if object_name is not None:
+        title = f"{title} – {object_name}" if title else str(object_name)
+
+    topic_keywords = TOPIC_KEYWORDS.get(int(topic), None) if topic is not None else None
+    if topic_keywords is not None and topic_keywords.strip():
+        title = f"{title}, ({topic_keywords})" if title else f"({topic_keywords})"
+
+    return title
+
+
+def format_title(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv):
+    if TITLE_TYPE in ("looping", "looping_vid"):
+        return format_title_looping(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv)
+    if TITLE_TYPE == "print":
+        return format_title_print(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv)
+    return format_title_looping(topic, folder_arms_pose, folder_hands_gesture, folder_signature, obj_str, folder_hsv)
 
 # go get modal cluster id for everything, just in case
 folder_modal_signatures = get_modal_cluster_id(FOLDER, session)

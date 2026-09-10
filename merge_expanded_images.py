@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 3
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
@@ -33,7 +33,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "T37_final_looping_video_source_files"
-FOLDER_NAME = "output_folder/preLAX_sept9_720"
+FOLDER_NAME = "output_folder/_ARMS_T0_p1_legposes_sep9_reran"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -45,11 +45,14 @@ IS_CLUSTER = True
 PARALLEL_MERGE_WORKERS = 12  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = None
+CROP_AFTER_COUNT = 80
 
-# Video-only minimum-image cutoff. Set to None or 0 to disable entirely.
+# minimum-image cutoff. Set to None or 0 to disable entirely.
 # This applies to the actual mp4 build, not the GIF preview export path.
+# Video-only, unless you turn on USE_THRESHOLD_FOR_IMAGES
 CUTOFF_THRESHOLD = 50
+USE_THRESHOLD_FOR_IMAGES = True
+
 
 # if you borked the installation file, turn this on to JUST rebuilt it
 DO_INSTALLATION_ONLY = False
@@ -291,7 +294,7 @@ OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "utilities",
     "data",
-    "ImagesObjectSignatures_ObjectSignatures_202604272237.csv",
+    "ObjectSignatures_ImagesObjectSignatures_202609091654.csv",
 )
 
 
@@ -677,6 +680,10 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
     print("merging images, this many images_to_build", len(images_to_build))
     if len(images_to_build) % 2 != 0:
         print("odd number of images, skipping last image")
+    if CUTOFF_THRESHOLD not in (None, 0, False) and len(images_to_build) < int(CUTOFF_THRESHOLD) and USE_THRESHOLD_FOR_IMAGES:
+        print(f"still cutoff threshold enabled: len(img_array)={len(images_to_build)} < CUTOFF_THRESHOLD={CUTOFF_THRESHOLD}; skipping this folder")
+        return
+    
     cluster_no = handpose_no = background_hsv_no = object_hsv_no = topic_no = None
     successes = 0
     if len(images_to_build) > 1:
