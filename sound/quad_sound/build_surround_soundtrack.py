@@ -44,7 +44,10 @@ BATCH_MODE = True          # set True to process cluster folders under BATCH_FOL
 # Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
 # Example layout:
 #   BATCH_FOLDER_NAME/clustercc1_p1_t0_om1_1788371815.2307808/metas.csv
-BATCH_FOLDER_NAME = "/Volumes/OWC52/tts_sport/_BODY_c157v3_2000s_preLAX_9000s"
+# BATCH_FOLDER_NAME = "/Volumes/OWC52/tts_sport/_BODY_c157v3_2000s_preLAX_9000s"
+BATCH_FOLDER_NAME = "/Volumes/LaCie/output_folder/_gattopardo_sept10/mergedforaudio"
+
+
 # Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
 # Empty list = every subfolder that contains metas.csv.
 BATCH_CLUSTERS = [
@@ -128,8 +131,8 @@ CYCLE = (0, 1, 3, 2)  # FL, FR, BR, BL
 # Fraction of total gain the anchor speaker gets (inclusive). Remainder is
 # split randomly among the other speakers in that tier.
 ANCHOR_RANGE_MID = [0.50, 0.75]
-ANCHOR_RANGE_LOUD = [0.40, 0.70]
-DO_ANGULAR_LOUD = True # if True, it skips ANCHOR_RANGE_LOUD and does LOUD as stereo between two random adjacent speakers
+ANCHOR_RANGE_LOUD = [0.50, 1.0] # gatto quad -> stereo hack
+DO_ANGULAR_LOUD = False # if True, it skips ANCHOR_RANGE_LOUD and does LOUD as stereo between two random adjacent speakers
 KEYS = {
     0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
     1: ["outsid", "think", "sceneri", "landscap", "calm", "contempl", "peac", "retir", "pension", "blur"],
@@ -301,7 +304,6 @@ def scale_volume(row, cycler, audio_data, sample_rate):
 
     # search_for_keys to see where the matching keys are
     key_index,desc_count=search_for_keys(row)
-
     if volume_fit < QUIET:
         # vol = scale_volume_exp(volume_fit, 3)
         vol = scale_volume_linear(volume_fit, QUIET_VOL_MIN, QUIET_VOL_MAX)*cycler[0]
@@ -310,7 +312,7 @@ def scale_volume(row, cycler, audio_data, sample_rate):
         # if keys are found, set the volume and fade in out based on the keys found
         fadein,fadeout=calculate_fades(key_index,desc_count, audio_data, sample_rate)
         vol = scale_volume_exp(volume_fit,SCALE_EXPONENT)*1
-        print(key_index)
+        print(f" 🔑 Key index: {key_index}, Description count: {desc_count}")
         # start,end=key_index[0],key_index[-1]
         # vol =0
         # if vol < .5: vol = .001
@@ -495,6 +497,7 @@ def search_for_keys(row):
     desc_split=row['description'].lower().split(" ")
     desc_count=len(desc_split)
     active_keys = keys_for_search()
+    # print(f" 🔑 Key search, active_keys: {active_keys}")
     for index,word in enumerate(desc_split):
         for key in active_keys:
             if key in word:
@@ -1060,7 +1063,7 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         # fadeout = len(row['description']) *.5
         volume_scale, fadeout,fadein = scale_volume(row, cycler, audio_data, sample_rate)
         audio_data_adjusted = audio_data * volume_scale
-        # print(f"volume_fit:", volume_fit, "scaled_vol" ,volume_scale, "Pan:", pan, fadeout)
+        print(f" ⚖️ scale_volume: ", volume_scale, "fadeout" ,fadeout, "fadein", fadein)
 
         # count the loud audio files
         # subtract OFFSET from each value in the loud counter

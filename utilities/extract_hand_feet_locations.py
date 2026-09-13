@@ -21,7 +21,7 @@ from sqlalchemy import Column, Integer, Float, Boolean, String
 from sqlalchemy.ext.declarative import declarative_base
 Base2 = declarative_base()
 
-HelperTable_name = "SegmentHelper_TheGym" # if you set to None, comment out the helpertable join in the query
+HelperTable_name = "SegmentHelper_extract_knee_legs_sept12" # if you set to None, comment out the helpertable join in the query
 class HelperTable(Base2):
     __tablename__ = HelperTable_name
     seg_image_id=Column(Integer,primary_key=True, autoincrement=True)
@@ -101,7 +101,7 @@ batch_size = 1000
 num_threads = 16
 # sept 6 2026 -- processd full encodings table up to 45014557
 # switching to the segment helper
-start_encoding_id = 95603649
+start_encoding_id = 45014557
 last_id = start_encoding_id
 VIS_THRESHOLD = 0.5  # matches existing body-landmark visibility convention elsewhere in the pipeline
 
@@ -262,7 +262,7 @@ while True:
     # and beyond the configured start point.
     query = (
         session.query(Encodings.encoding_id, Encodings.image_id)
-        .join(HelperTable, HelperTable.image_id == Encodings.image_id)
+        # .join(HelperTable, HelperTable.image_id == Encodings.image_id)
         .filter(
             Encodings.mongo_body_landmarks_norm.is_(True),
             Encodings.is_face.is_(True),
