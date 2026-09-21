@@ -57,18 +57,23 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T45_nature'
 # SegmentHelper_name = 'SegmentHelper_T3_player'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
 # SegmentHelper_name = 'SegmentHelper_T15_muscle'
 # SegmentHelper_name = 'SegmentHelper_TheGym'
+SegmentHelper_name = 'SegmentHelper_TheOffice'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = True
-# SSD_PATH = "/Volumes/LaCie/segment_images"
-SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
+IS_SSD = False
+SSD_PATH = "/Volumes/LaCie/segment_images_theoffice" # this controls where the source files are located, not cache files
+# SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
+
+# override for cache writes only. this controls where the cached files are written. if not None will override io.ROOT below
+CACHE_ROOT_OVERRIDE = "/Volumes/LaCie/output_folder/"  # e.g. None or "/Volumes/LaCie/segment_images_theoffice"
+
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 # DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
@@ -76,7 +81,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -95,8 +100,12 @@ if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
-print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
-print("Set io.ROOT to ROOTSSD:", io.ROOT)
+if CACHE_ROOT_OVERRIDE is not None:
+    print("Overriding io.ROOT with CACHE_ROOT_OVERRIDE:", CACHE_ROOT_OVERRIDE)
+    io.ROOT = os.path.join("/Volumes/LaCie/segment_images_theoffice", "output_folder")
+
+print("io.ROOTSSD:", io.ROOTSSD)
+print("io.ROOT:", io.ROOT)
 
 CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden below for heft keywords
 
@@ -109,11 +118,11 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_T45_p1_sep10" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM and INCLUDE_LEG_POSE_FEATURES in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_Thoma_sep20" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM and INCLUDE_LEG_POSE_FEATURES in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_Thoma_sep20" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
-MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
+MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
 ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
@@ -437,7 +446,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
-            GENERATE_FUSION_PAIRS = False 
+            GENERATE_FUSION_PAIRS = True 
 
             # use this to turn on multiplier CSV creation/augmentation
             FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
@@ -2400,6 +2409,19 @@ def format_multiplier_for_cache_path(multiplier_values, places=4):
     return '_'.join(format_one(value) for value in multiplier_values)
 
 
+
+
+def get_cache_root_for_base_folder(base_folder):
+    """Return the root for cache files, optionally redirecting to a dedicated SSD cache area."""
+    print(f"[get_cache_root_for_base_folder] base_folder: {base_folder}, CACHE_ROOT_OVERRIDE: {CACHE_ROOT_OVERRIDE}")
+    if not base_folder:
+        return None
+    if CACHE_ROOT_OVERRIDE:
+        source_leaf = os.path.basename(base_folder)
+        return os.path.join(CACHE_ROOT_OVERRIDE, source_leaf)
+    return os.path.dirname(base_folder)
+
+
 def resolve_row_io_paths(row):
     """Resolve source and cache paths for a row without mutating shared state."""
     def get_row_source_path_value(row_obj):
@@ -2442,13 +2464,15 @@ def resolve_row_io_paths(row):
         base_folder = source_folder
     else:
         base_folder = None
-
+    print(f"[resolve_row_io_paths] source_path: {source_path}, source_folder: {source_folder}, source_image_name: {source_image_name}, base_folder: {base_folder}")
     cropped_cache_file = None
     inpaint_cache_file = None
     aspect_ratio = format_multiplier_for_cache_path(sort.image_edge_multiplier)
     if base_folder and source_image_name:
-        folder_root = os.path.dirname(base_folder)
+        folder_root = get_cache_root_for_base_folder(base_folder)
         folder_name = os.path.basename(base_folder)
+        if folder_root is None:
+            folder_root = os.path.dirname(base_folder)
         if INPAINT_COLOR:
             cropped_cache_file = os.path.join(folder_root, folder_name + "_cropped_" + INPAINT_COLOR + "_" + aspect_ratio, source_image_name)
             inpaint_cache_file = os.path.join(folder_root, folder_name + "_inpaint_" + INPAINT_COLOR + "_" + aspect_ratio, source_image_name)

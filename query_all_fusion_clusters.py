@@ -47,7 +47,9 @@ CLUSTER_COUNT = 768
 ###############################################
 
 MODE = "ObjectSignatures" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D  or ObjectSignatures to 
-FULL_BODY = False # this is an override to force the use of BodyPoses3D instead of ArmsPoses3D for the fusion matrix
+FULL_BODY = True # this is an override to force the use of BodyPoses3D instead of ArmsPoses3D for the fusion matrix
+HELPER_TABLE = 'SegmentHelper_TheOffice'
+
 ###############################################
 
 
@@ -142,12 +144,11 @@ CLUSTER_DATA = {
 THIS_CLASS_ID = 0 # for object bbox normalization
 KEYWORDS = [THIS_CLASS_ID] 
 class_token = ID_SEGMENT_DICT.get(THIS_CLASS_ID, None)
-if class_token: HELPER_TABLE = f'SegmentHelperObject_{class_token}' 
-else: HELPER_TABLE = 'SegmentHelper_TheGym'
-# else: HELPER_TABLE = 'SegmentBig_isface'
+if class_token: helper_table = f'SegmentHelperObject_{class_token}' 
+else: helper_table = HELPER_TABLE
 
 
-print(f"Running with MODE: {MODE}, MODE_ID: {MODE_ID}, CLUSTER_TYPE: {CLUSTER_TYPE}, CLUSTER_COUNT: {CLUSTER_COUNT}, HELPER_TABLE: {HELPER_TABLE}, OBJECT_HSV_EXPORT_CLASS_IDS: {OBJECT_HSV_EXPORT_CLASS_IDS}, ARMS_OBJECT_FOCUS_CLUSTER_IDS: {ARMS_OBJECT_FOCUS_CLUSTER_IDS}, ARMS_CLUSTER_COUNT: {ARMS_CLUSTER_COUNT}, OBJECTFUSION_CLUSTER_COUNT: {OBJECTFUSION_CLUSTER_COUNT}")
+print(f"Running with MODE: {MODE}, MODE_ID: {MODE_ID}, CLUSTER_TYPE: {CLUSTER_TYPE}, CLUSTER_COUNT: {CLUSTER_COUNT}, helper_table: {helper_table}, OBJECT_HSV_EXPORT_CLASS_IDS: {OBJECT_HSV_EXPORT_CLASS_IDS}, ARMS_OBJECT_FOCUS_CLUSTER_IDS: {ARMS_OBJECT_FOCUS_CLUSTER_IDS}, ARMS_CLUSTER_COUNT: {ARMS_CLUSTER_COUNT}, OBJECTFUSION_CLUSTER_COUNT: {OBJECTFUSION_CLUSTER_COUNT}")
 
 # Create engine and session
 engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
@@ -623,7 +624,7 @@ SELECT
     
 FROM {CLUSTER_TABLE} ibp
 JOIN SegmentBig_isface so ON so.image_id = ibp.image_id
-JOIN {HELPER_TABLE} sh ON sh.image_id = ibp.image_id
+JOIN {helper_table} sh ON sh.image_id = ibp.image_id
 JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
 JOIN ClustersMetaHSV cmhsv ON cmhsv.cluster_id = ihsv.cluster_id
 JOIN Images{MODE} it ON it.image_id = so.image_id
@@ -635,7 +636,7 @@ ORDER BY
 """
 
 # FROM SegmentBig_isface so
-# JOIN {HELPER_TABLE} sh ON sh.image_id = so.image_id
+# JOIN {helper_table} sh ON sh.image_id = so.image_id
 # JOIN {CLUSTER_TABLE} ibp ON ibp.image_id = so.image_id
 # JOIN ImagesHSV ihsv ON ihsv.image_id = so.image_id
 
@@ -998,7 +999,7 @@ if "ObjectFusion" in CLUSTER_TYPE or "Topics_Objects" in CLUSTER_TYPE:
     print(f"Running {matrix_family}/ObjectFusion matrix CSV exports...")
     export_armsposes3d_objectfusion_csvs(
         root_base_folder=os.path.join(os.path.dirname(__file__), "utilities", "data"),
-        helper_table=HELPER_TABLE,
+        helper_table=helper_table,
         row_cluster_count=ARMS_CLUSTER_COUNT,
         col_cluster_count=OBJECTFUSION_CLUSTER_COUNT,
         object_cluster_table_name=CLUSTER_DATA[CLUSTER_TYPE]["object_cluster_table_name"],
@@ -1048,7 +1049,7 @@ if MODE in ["Keywords", "ArmsPoses3D"] or "Detections" in MODE:
             sql_query_template = sql_query_template.replace("WHERE it.{MODE_ID} = {THIS_MODE_ID}", "WHERE 1=1") # remove the where clause for class_id
             print("After:", sql_query_template)
                 
-        sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id)).replace("{CLUSTER_TABLE}", this_cluster_table).replace("{HELPER_TABLE}", HELPER_TABLE) 
+        sql_query_template = sql_query_template.replace("{MODE}", MODE).replace("{MODE_ID}", MODE_ID).replace("{THIS_MODE_ID}", str(keyword_id)).replace("{CLUSTER_TABLE}", this_cluster_table).replace("{helper_table}", helper_table) 
         print(sql_query_template)
         query = sql_query_template.format(keyword_id=keyword_id)
         save_query_results_to_csv(query, keyword_id)
