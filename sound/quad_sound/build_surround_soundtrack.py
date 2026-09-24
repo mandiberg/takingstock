@@ -1,8 +1,9 @@
-"""Quadraphonic soundtrack mixer.
+"""Surround soundtrack mixer.
 
-Same pipeline as build_soundtrack.py, but each clip is placed on 2, 3, or 4
-speakers of a quad square according to the existing quiet / mid / loud volume
-branches. Output is a 4-channel WAV (FL FR BL BR).
+At startup, pick quad or stereo.
+Quad places each clip on 2, 3, or 4 speakers (FL FR BL BR).
+Stereo places the same quiet / mid / loud tiers in L/R, so a two-speaker
+quad pair is not folded into a hard pan.
 """
 import pandas as pd
 import os
@@ -14,6 +15,7 @@ import soundfile as sf
 import numpy as np
 import librosa
 import gc
+from pick import pick
 
 # go get IO class from parent folder
 # caution: path[0] is reserved for script path (or '' in REPL)
@@ -32,7 +34,7 @@ INPUT = io.ROOTSSD # folder that holds SOUND_FOLDER and audiopduction folders
 #################################
 
 ######Tench's folders###########
-INPUT = "/Volumes/OWC52/tts_sport"
+INPUT = "/Volumes/OWC5/tts_sport"
 #################################
 
 TOPIC = 0  # non-batch only: which metas_{TOPIC}.csv to mix
@@ -44,7 +46,7 @@ BATCH_MODE = True          # set True to process cluster folders under BATCH_FOL
 # Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
 # Example layout:
 #   BATCH_FOLDER_NAME/clustercc1_p1_t0_om1_1788371815.2307808/metas.csv
-BATCH_FOLDER_NAME = "/Volumes/OWC52/tts_sport/test"
+BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_sport/test_clusters"
 # Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
 # Empty list = every subfolder that contains metas.csv.
 BATCH_CLUSTERS = [
@@ -120,15 +122,21 @@ loud_counter = []
 fake_loud = False
 channel_counter = 0
 
+# Set by choose_output_mode() before any mix. Quad is the default so the
+# module can be imported without prompting.
+OUTPUT_MODE = "quad"  # "quad" or "stereo"
 # WAV / FFmpeg quad channel order: FL, FR, BL, BR
 N_CHANNELS = 4
 SPEAKER_NAMES = ("FL", "FR", "BL", "BR")
+STEREO_SPEAKER_NAMES = ("L", "R")
 # Clockwise around the room as indices into SPEAKERS / channels
 CYCLE = (0, 1, 3, 2)  # FL, FR, BR, BL
 # Fraction of total gain the anchor speaker gets (inclusive). Remainder is
 # split randomly among the other speakers in that tier.
 ANCHOR_RANGE_MID = [0.50, 0.75]
 ANCHOR_RANGE_LOUD = [0.40, 0.70]
+# Stereo quiet is a blend, not a side-wall pair. Each side stays in this range.
+STEREO_QUIET_RANGE = (0.30, 0.70)
 KEYS = {
     0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
     1: ["outsid", "think", "sceneri", "landscap", "calm", "contempl", "peac", "retir", "pension", "blur"],
@@ -380,12 +388,59 @@ def _anchor_share(range_lo_hi):
     return float(np.random.uniform(lo, hi))
 
 
-def spatial_gains(tier):
-    """Weights for FL, FR, BL, BR that sum to 1 over the chosen speakers.
+def choose_output_mode():
+    """Ask once per run. Quad stays 4-channel; stereo places in L/R."""
+    global OUTPUT_MODE, N_CHANNELS
+    title = "Choose soundtrack output:"
+    options = [
+        "quad (4-channel FL FR BL BR)",
+        "stereo",
+    ]
+    _option, index = pick(options, title)
+    if index == 1:
+        OUTPUT_MODE = "stereo"
+        N_CHANNELS = 2
+    else:
+        OUTPUT_MODE = "quad"
+        N_CHANNELS = 4
+    print(f"Output mode: {OUTPUT_MODE} ({N_CHANNELS} channels)")
 
+
+def stereo_gains(tier):
+    """L/R weights that sum to 1.
+
+    Quiet keeps each side inside STEREO_QUIET_RANGE so a clip cannot hard-pan.
+    Mid and loud give one side the anchor share and the other side the rest.
+    Loud alternates the anchor side with channel_counter, which ticks once
+    per above-quiet clip just before this is called.
+    """
+    if tier == "quiet":
+        lo, hi = STEREO_QUIET_RANGE
+        left = float(np.random.uniform(lo, hi))
+        return np.array([left, 1.0 - left]), None
+
+    if tier == "mid":
+        side = int(np.random.randint(0, 2))
+        lo_hi = ANCHOR_RANGE_MID
+    else:
+        side = (channel_counter - 1) % 2 if channel_counter else 0
+        lo_hi = ANCHOR_RANGE_LOUD
+    share = _anchor_share(lo_hi)
+    gains = np.zeros(2)
+    gains[side] = share
+    gains[1 - side] = 1.0 - share
+    return gains, (STEREO_SPEAKER_NAMES[side], share, lo_hi)
+
+
+def spatial_gains(tier):
+    """Weights that sum to 1 over the chosen speakers.
+
+    Quad: FL, FR, BL, BR. Stereo: L, R via stereo_gains.
     Returns (gains, anchor_info). anchor_info is None for quiet, else
     (speaker_name, share, [lo, hi]).
     """
+    if OUTPUT_MODE == "stereo":
+        return stereo_gains(tier)
     gains = np.zeros(N_CHANNELS)
     start = np.random.randint(0, 4)
     if tier == "quiet":
@@ -1111,8 +1166,9 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
         if anchor_info is not None:
             name, share, lo_hi = anchor_info
             print(f"Anchor {name}={share:.2f} range=[{lo_hi[0]:.2f}, {lo_hi[1]:.2f}] ({tier})")
+        names = STEREO_SPEAKER_NAMES if len(gains) == 2 else SPEAKER_NAMES
         print(f"Spatial {tier}:", " ".join(
-            f"{name}={g:.2f}" for name, g in zip(SPEAKER_NAMES, gains) if g > 1e-6
+            f"{name}={g:.2f}" for name, g in zip(names, gains) if g > 1e-6
         ))
 
         # # Append audio data to respective lists
@@ -1310,11 +1366,12 @@ def run_topic(topic, csv_path=None):
     channel_counter = 0
     fake_loud = False
 
-    output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}_quad.wav")
+    suffix = "stereo" if OUTPUT_MODE == "stereo" else "quad"
+    output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}_{suffix}.wav")
 
     topic_t0 = time.time()
     print(f"\n{'='*60}")
-    print(f"[Topic {TOPIC}] Starting — CSV: {csv_path}  OFFSET: {OFFSET}")
+    print(f"[Topic {TOPIC}] Starting — CSV: {csv_path}  OFFSET: {OFFSET}  OUTPUT: {OUTPUT_MODE}")
     missing_key_topics = [t for t in KEY_TOPICS if t not in KEYS]
     if missing_key_topics:
         print(f"[Topic {TOPIC}] WARNING: KEY_TOPICS not in KEYS dict: {missing_key_topics}")
@@ -1394,7 +1451,8 @@ def run_topic(topic, csv_path=None):
     print(f"[Topic {TOPIC}] Combined audio shape before writing:", combined_audio.shape)
     print(f"[Topic {TOPIC}] Writing to file:", output_path)
     sf.write(output_path, combined_audio, TARGET_SAMPLE_RATE, format='wav')
-    tag_quad_wav(output_path)
+    if OUTPUT_MODE == "quad":
+        tag_quad_wav(output_path)
     elapsed = time.time() - topic_t0
     print(f"[Topic {TOPIC}] Time to process output file: {elapsed:.1f}s")
     del combined_audio
@@ -1406,6 +1464,7 @@ def main():
     global _missing_ids_written, _missing_ids_fieldnames
     _missing_ids_written = 0
     _missing_ids_fieldnames = None
+    choose_output_mode()
     filenames_from_metas_audio()
     walked_audio_by_id()
     elapsed_times = []
