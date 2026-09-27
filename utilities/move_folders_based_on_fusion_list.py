@@ -8,23 +8,22 @@ It parses clustercc and clusterc_ filenames
 '''
 FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheGym/_ARMS_T15_p1_legposes_sep9/"
 # FOLDER = "//Volumes/LaCie/output_folder/_3800_plus/videos"
-FOLDER = "/Volumes/LaCie/output_folder/_BODY_T45_p1_sept10_pt1/"
+FOLDER = "/Volumes/LaCie/segment_images_theoffice/output_folder/_Body_thoma_sept20/"
 MOVED_FOLDERS = "moved_folders"
 NEW_FOLDER = os.path.join(FOLDER, MOVED_FOLDERS)
 os.makedirs(NEW_FOLDER, exist_ok=True)
 
-FUSION_PAIR_DICT_DETECTIONS_THEOFFICE = {
+FUSION_PAIR_DICT_DETECTIONS_TOMOVE = {
     0: [
 
- # fullbody look closer - datto opening day
-# [134, 1], [147, 1], [167, 1], [170, 1], [197, 1], [216, 1], [284, 1], [297, 1], [316, 1], [344, 1], [346, 1], [351, 1], [353, 1], [355, 1], [360, 1], [366, 1], [369, 1], [370, 1], [371, 1], [387, 1], [389, 1], [393, 1], [394, 1], [396, 1], [399, 1], [4, 1], [404, 1], [410, 1], [413, 1], [414, 1], [416, 1], [426, 1], [427, 1], [442, 1], [444, 1], [445, 1], [447, 1], [448, 1], [470, 1], [474, 1], [475, 1], [497, 1], [514, 1], [519, 1], [52, 1], [524, 1], [57, 1], [58, 1], [589, 1], [605, 1], [610, 1], [637, 1], [641, 1], [649, 1], [651, 1], [652, 1], [654, 1], [669, 1], [671, 1], [68, 1], [680, 1], [686, 1], [698, 1], [701, 1], [703, 1], [704, 1], [705, 1], [707, 1], [710, 1], [712, 1], [721, 1], [724, 1], [729, 1], [732, 1], [736, 1], [746, 1], [749, 1], [755, 1], [756, 1], [757, 1], [760, 1], [761, 1], [763, 1], [765, 1], [83, 1], [85, 1], [88, 1], [9, 1], [91, 1], [92, 1], [94, 1],
+# exclude
+# [105, 1],[14, 1],[172, 1],[191, 1],[249, 1],[252, 1],[263, 1],[270, 1],[283, 1],[295, 1],[32, 1],[4, 1],[41, 1],[42, 76],[420, 1],[44, 1],[467, 1],[54, 1],[547, 1],[624, 1],[647, 1],[702, 1],[715, 1],[725, 1],[94, 1],[99, 1]
 
-# fiullbody recrop - gatto opening day
-# [123, 1], [126, 1], [135, 1], [152, 1], [172, 1], [183, 1], [196, 1], [200, 1], [206, 1], [214, 1], [217, 1], [222, 1], [229, 1], [234, 1], [245, 1], [249, 1], [260, 1], [263, 1], [264, 1], [265, 1], [275, 1], [285, 1], [295, 1], [296, 1], [312, 1], [318, 1], [332, 1], [336, 1], [343, 1], [345, 1], [364, 1], [412, 1], [424, 1], [450, 1], [593, 1], [635, 1], [643, 1], [648, 1], [694, 1], [695, 1], [709, 1], [731, 1], [86, 1], [97, 1], 
+# # closer  
+# [103, 1],[181, 1],[183, 1],[188, 1],[190, 1],[193, 1],[197, 1],[214, 1],[271, 1],[296, 1],[328, 1],[341, 1],[370, 1],[378, 1],[433, 1],[436, 1],[436, 15],[447, 1],[567, 1],[606, 1],[666, 1],[673, 1],[674, 1],[682, 1],[694, 1],[695, 1],[713, 1],[723, 1],[91, 1]
 
-# good nature
-[104, 1], [107, 1], [160, 1], [199, 1], [219, 1], [340, 1], [350, 1], [391, 1], [395, 1],
-
+# # recanon
+[109, 1],[132, 1],[133, 1],[135, 1],[152, 1],[156, 1],[196, 1],[200, 1],[260, 1],[265, 1],[275, 1],[284, 1],[312, 1],[343, 1],[345, 1],[364, 1],[387, 1],[404, 1],[406, 1],[412, 1],[514, 1],[581, 1],[698, 1],[707, 1],[731, 1],[86, 1],[97, 1]
 
     ]
 }
@@ -105,7 +104,7 @@ def main():
         folderpath = os.path.join(FOLDER, name)
         this_arms_pose, this_signature = extract_fustion_cluster(name)
         if this_arms_pose is not None and this_signature is not None:
-            for dict_arms, dict_sig in FUSION_PAIR_DICT_DETECTIONS_THEOFFICE[0]:
+            for dict_arms, dict_sig in FUSION_PAIR_DICT_DETECTIONS_TOMOVE[0]:
                 if dict_arms == this_arms_pose and dict_sig == this_signature:
                     print(f"FOUND {name} is in cluster {this_arms_pose} and p {this_signature}, files_only is {files_only}")
                     if os.path.isdir(folderpath):
