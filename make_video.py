@@ -222,7 +222,7 @@ CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
-MULTIPLIER_PADDING = 2 # this is how much extra padding every multiplier gets
+MULTIPLIER_PADDING = 1 # this is how much extra padding every OBJECT BBOXs multiplier gets
 # percentile is what point you take the upper/lower bounds of the dimensions for multiplier
 # 5 was leaving too many anomalies in there. 
 PERCENTILE = 40
@@ -450,6 +450,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
             # use this to turn on multiplier CSV creation/augmentation
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            RECALCULATE_CANONICALS = True # When this is True, and FORCE_CANONICAL_MULT_CREATION is true it ignores existing canonicals and recalcs and overwrites them
             USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
 
 
@@ -4135,11 +4136,13 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     print(f"[mode1 bbox-aware] obj_left_extent_samples: {obj_left_extent_samples}")
     
     # Use a high percentile so large held objects (bike/barbell) influence framing.
-    obj_multiplier = [
-        max(abs(float(np.percentile(obj_top_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[0])),
-        max(abs(float(np.percentile(obj_right_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[1])),
-        max(abs(float(np.percentile(obj_bottom_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[2])),
-        max(abs(float(np.percentile(obj_left_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[3])),
+    # Raw values only here; padding and the MIN_DYN_BBOX_DIM floor are applied below,
+    # in the same pad -> round -> floor order the body branch uses.
+    obj_multiplier_raw = [
+        abs(float(np.percentile(obj_top_extent_samples, PERCENTILE))),
+        abs(float(np.percentile(obj_right_extent_samples, PERCENTILE))),
+        abs(float(np.percentile(obj_bottom_extent_samples, PERCENTILE))),
+        abs(float(np.percentile(obj_left_extent_samples, PERCENTILE))),
     ]
 
     # body_multiplier is the amount that the image needs to be extended
@@ -4153,13 +4156,13 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     # when the left is negative, it means the object is to the left of the nose, and we need to extend
     # when the left is positive, it mean we don't extend to the right
 
-    
-
+    # Pad+round the raw object extent first, then floor by MIN_DYN_BBOX_DIM, mirroring
+    # calc_dynamic_multiplier_from_min_max_body_landmarks's pad -> round -> floor order.
     merged_multiplier = [
-    # round multiplier to confirm with merge_step using this pattern:
-    #  top_extent = max(self.round_up_step((top_raw + padding), self.ROUND_STEP), self.MIN_DYN_BBOX_DIM[0])
-        # already padded the body multiplier, but need to pad the obj now
-        max(sort.round_up_step(float(body_multiplier[i]), padding = 0), sort.round_up_step(float(obj_multiplier[i]), padding = padding))
+        max(
+            sort.round_up_step(float(body_multiplier[i]), padding=0),
+            max(abs(sort.round_up_step(float(obj_multiplier_raw[i]), padding=padding)), float(sort.MIN_DYN_BBOX_DIM[i])),
+        )
         for i in range(4)
     ]
 
@@ -4168,7 +4171,7 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     print(
         "[mode1 bbox-aware] merged dynamic multiplier "
         f"rows_with_object_bboxes={rows_with_object_bboxes} "
-        f"body={body_multiplier} obj={obj_multiplier} merged={merged_multiplier}"
+        f"body={body_multiplier} obj_raw={obj_multiplier_raw} merged={merged_multiplier}"
     )
     return merged_multiplier
 
@@ -4257,7 +4260,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, l
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         if crop_dict_index is not None:
             sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
-    elif image_edge_multiplier is None or variant_registry_miss:
+    elif image_edge_multiplier is None or variant_registry_miss or RECALCULATE_CANONICALS:
         # Dynamic fallback with object-bbox awareness. Missing leg-pose keys in
         # MODE 1 should still trigger a fresh estimate and a registry write for
         # the variant-specific multiplier set.
