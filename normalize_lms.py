@@ -37,11 +37,11 @@ NOSE_ID=0
 
 Base = declarative_base()
 VERBOSE = False
-IS_SSD = True
+IS_SSD = False
 SSD_PATH = "/Volumes/OWC5/segment_images_newbig"
 
 ### this code is set up you can only REPROCESS_HANDS OR USE_OBJ in one run ###
-USE_OBJ = True # do objet detections?
+USE_OBJ = False # do objet detections?
 if USE_OBJ: 
     REPROCESS_HANDS = False # do hands
     SKIP_BODY = True # skip body landmarks. 
@@ -58,10 +58,12 @@ DETECTIONS_ONLY = False
 if USE_OBJ and REPROCESS_HANDS:
     raise ValueError("USE_OBJ and REPROCESS_HANDS cannot both be True. Please set one to False.")
 # join on helper to limit scope and use SSD
-INNER_JOIN_HELPER = True
+INNER_JOIN_HELPER = False
 # if you do this, you need to use the correct THIS_CLASS_ID 
 # that will call an ID_SEGMENT_DICT to produce the table and folder names 
 
+# if not using helper, it may be helpful to specify a start_id
+START_ID = 0
 
 # INNER_JOIN_TABLE = "SegmentHelperObject_67_phone"
 # SSD_PATH = "/Volumes/SSD4_Green/segment_images_detected_63_67"
@@ -73,7 +75,7 @@ INNER_JOIN_HELPER = True
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 20000000
+LIMIT= 1000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -97,8 +99,8 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # overrides THIS_CLASS_ID
-    SegmentHelper_name = 'SegmentHelper_TheGym_bonus'
-    # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom_evens_quarters'
+    # SegmentHelper_name = 'SegmentHelper_TheStore'
+    SegmentHelper_name = "SegmentHelper_T11_Oct20_COCO_Custom"
     # SegmentFolder = SSD_PATH
     SegmentFolder = None
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
@@ -935,7 +937,9 @@ if USE_OBJ:
         print(f"SUBSELECT_ON_CLASS_ID: limiting OBJ query to {INNER_JOIN_HELPER} using INNER JOIN on SegmentHelper")
         distinct_image_ids_query = distinct_image_ids_query.\
         join(SegmentHelper, SegmentHelper.image_id == Detections.image_id)
-    #filter(Detections.class_id == THIS_CLASS_ID).\
+    if START_ID > 0: 
+        print(f"starting at {START_ID}")
+        distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.encoding_id >= START_ID)
     if not REPROCESSED_BODY:
         distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_body_landmarks_norm.is_(None))
     if not SKIP_BODY:
@@ -1076,7 +1080,7 @@ if VERBOSE:
 
 io.print_sqlalchemy_query(engine,distinct_image_ids_query)
 results = session.execute(distinct_image_ids_query).fetchall()
-print("query executed, results length", len(results))
+print(f"query executed, results length: {len(results)}, starting at {results[0]} going to {results[-1]}")
 # make a dictionary of image_id to shape
 for result in results:
     # if VERBOSE: print("result", result)

@@ -77,8 +77,10 @@ io.ROOT = "/Users/michaelmandiberg/Documents/GitHub/takingstock/model_files"
 
 # Satyam, you want to set this to False
 USE_SEGMENT = True # only used for indexing
-USE_BIGSEGMENT = False # sets declarative base object. Seem to need to be True for corpus generation. limit with ANGLE instead
-REDO_NEWBIGS = True # this is for the July 2026 fix to for redoing the newbigs final round
+USE_BIGSEGMENT = True # sets declarative base object. Seem to need to be True for corpus generation. limit with ANGLE instead
+REDO_NEWBIGS = True # this is for the July 2026 reprocessing
+# if USE_BIGSEGMENT it will use the regular segment, else it will only check the newbigs 
+# this branch queries keywords directly from the SQL data, skipping the mongo tokens which are currently absent and maybe stale
 IS_GETTYONLY = False # this is for the NOT FACE to constrain the database to only getty images for testing
 IS_NOT_FACE = False # this turns of the xyz angle filter for faces pointing forward and returns all images
 USE_EXISTING_MODEL = True # this is for the NOT FACE data, to use the FACE model, not used elsewhere
@@ -87,7 +89,7 @@ VERBOSE = True
 RANDOM = False # selects random image_ids from the DB. not tested. maybe runs very slow. 
 global_counter = 0
 QUERY_LIMIT = 1000
-QUERY_START_COUNTER = 119500000 # only used in write image topics
+QUERY_START_COUNTER = 90000000 # only used in write image topics
 ANGLE = 1 # controls x/y face angle in +/-, set to 9 for building the full model, then indexed
 MIN_TOKEN_LENGTH = 2 # minimum token length for the model
 
@@ -254,7 +256,11 @@ def set_query(query_start_counter=0):
     if MODE==2 and USE_BIGSEGMENT:
         print("assigning topics via bigsegment")
         # assigning topics
-        WHERE = f" {mongo_tokens} IS NOT NULL AND image_id NOT IN (SELECT image_id FROM {images_topics_table})"
+        where_limit = query_start_counter + QUERY_LIMIT*5000
+        where_counter = f" WHERE it.image_id > {query_start_counter} AND it.image_id < {where_limit}"
+            
+        WHERE = f" {mongo_tokens} IS NOT NULL AND i.image_id NOT IN (SELECT it.image_id FROM {images_topics_table} it {where_counter}) AND i.image_id > {query_start_counter} AND i.image_id < {where_limit}"
+        
     elif MODE==2 and USE_SEGMENT:
         print("assigning topics via small segment")
         # this is how I found it on july 25, before doing newface helper segment
@@ -435,7 +441,9 @@ def write_imagetopics(resultsjson,lda_model_tfidf,dictionary,MY_STOPWORDS):
             keyword_list = row["description"]
         # if VERBOSE: print("keyword_list: ",keyword_list)
         # keyword_list=" ".join(pickle.loads(row["tokenized_keyword_list"]))
-
+        if not keyword_list:
+            print(f"description is None, so continuing to next row")
+            continue
 
         # # handles empty keyword_list
         # if keyword_list:
@@ -718,7 +726,7 @@ def main():
 
     # 
     if MODE==2:
-        resultsjson = selectSQL()
+        resultsjson = selectSQL(QUERY_START_COUNTER)
         print("got results, count is: ",len(resultsjson))
     if MODE==0:gen_corpus()
     elif MODE==1:topic_model()

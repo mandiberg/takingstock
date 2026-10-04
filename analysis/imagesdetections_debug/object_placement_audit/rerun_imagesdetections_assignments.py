@@ -7,7 +7,7 @@ ToolsClustering.process_detections_for_df, then rewrites ImagesDetections rows
 for only the requested helper-table image_ids.
 
 python analysis/imagesdetections_debug/object_placement_audit/rerun_imagesdetections_assignments.py \
-  --helper-table SegmentHelper_TheGym_redo_placements_lastbit \
+  --helper-table SegmentHelper_TheOffice \
   --output-root /Users/michaelmandiberg/Documents/GitHub/facemap/analysis/imagesdetections_debug/object_placement_audit \
   --skip-backup \
   --cleanup-checkpoint \

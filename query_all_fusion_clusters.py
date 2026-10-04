@@ -47,8 +47,8 @@ CLUSTER_COUNT = 768
 ###############################################
 
 MODE = "ObjectSignatures" # Topics or Keywords or ObjectFusion_DetectionsOnly or ArmsPoses3D  or ObjectSignatures to 
-FULL_BODY = True # this is an override to force the use of BodyPoses3D instead of ArmsPoses3D for the fusion matrix
-HELPER_TABLE = 'SegmentHelper_TheOffice'
+FULL_BODY = False # this is an override to force the use of BodyPoses3D instead of ArmsPoses3D for the fusion matrix
+HELPER_TABLE = 'SegmentHelper_TheStore'
 
 ###############################################
 

@@ -6,9 +6,9 @@ It moves files with the fusion cluster pairs into a a subfolder in that director
 I believe it is designed to work with make_video MODES 0 and 1:
 It parses clustercc and clusterc_ filenames
 '''
-FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheGym/_ARMS_T15_p1_legposes_sep9/"
+FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/_BODY_Thoma_sep20/"
 # FOLDER = "//Volumes/LaCie/output_folder/_3800_plus/videos"
-FOLDER = "/Volumes/LaCie/segment_images_theoffice/output_folder/_Body_thoma_sept20/"
+# FOLDER = "/Volumes/LaCie/segment_images_theoffice/output_folder/_Body_thoma_sept20/"
 MOVED_FOLDERS = "moved_folders"
 NEW_FOLDER = os.path.join(FOLDER, MOVED_FOLDERS)
 os.makedirs(NEW_FOLDER, exist_ok=True)
@@ -17,13 +17,7 @@ FUSION_PAIR_DICT_DETECTIONS_TOMOVE = {
     0: [
 
 # exclude
-# [105, 1],[14, 1],[172, 1],[191, 1],[249, 1],[252, 1],[263, 1],[270, 1],[283, 1],[295, 1],[32, 1],[4, 1],[41, 1],[42, 76],[420, 1],[44, 1],[467, 1],[54, 1],[547, 1],[624, 1],[647, 1],[702, 1],[715, 1],[725, 1],[94, 1],[99, 1]
-
-# # closer  
-# [103, 1],[181, 1],[183, 1],[188, 1],[190, 1],[193, 1],[197, 1],[214, 1],[271, 1],[296, 1],[328, 1],[341, 1],[370, 1],[378, 1],[433, 1],[436, 1],[436, 15],[447, 1],[567, 1],[606, 1],[666, 1],[673, 1],[674, 1],[682, 1],[694, 1],[695, 1],[713, 1],[723, 1],[91, 1]
-
-# # recanon
-[109, 1],[132, 1],[133, 1],[135, 1],[152, 1],[156, 1],[196, 1],[200, 1],[260, 1],[265, 1],[275, 1],[284, 1],[312, 1],[343, 1],[345, 1],[364, 1],[387, 1],[404, 1],[406, 1],[412, 1],[514, 1],[581, 1],[698, 1],[707, 1],[731, 1],[86, 1],[97, 1]
+[103, 1],[105, 1],[14, 1],[172, 1],[181, 1],[183, 1],[188, 1],[190, 1],[191, 1],[193, 1],[197, 1],[214, 1],[249, 1],[252, 1],[263, 1],[270, 1],[271, 1],[283, 1],[295, 1],[296, 1],[32, 1],[328, 1],[341, 1],[370, 1],[378, 1],[4, 1],[41, 1],[42, 76],[420, 1],[433, 1],[436, 1],[436, 15],[44, 1],[447, 1],[467, 1],[54, 1],[547, 1],[567, 1],[606, 1],[624, 1],[647, 1],[666, 1],[673, 1],[674, 1],[682, 1],[694, 1],[695, 1],[702, 1],[713, 1],[715, 1],[723, 1],[725, 1],[91, 1],[94, 1],[99, 1],
 
     ]
 }

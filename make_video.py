@@ -60,21 +60,21 @@ SegmentTable_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'SegmentHelper_T45_nature'
 # SegmentHelper_name = 'SegmentHelper_T3_player'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-# SegmentHelper_name = 'SegmentHelper_T15_muscle'
+SegmentHelper_name = 'SegmentHelper_TheStore'
 # SegmentHelper_name = 'SegmentHelper_TheGym'
-SegmentHelper_name = 'SegmentHelper_TheOffice'
+# SegmentHelper_name = 'SegmentHelper_TheOffice'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = False
-SSD_PATH = "/Volumes/LaCie/segment_images_theoffice" # this controls where the source files are located, not cache files
+SSD_PATH = "/Volumes/LaCie/segment_images_thegym" # this controls where the source files are located, not cache files
 # SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 
 # override for cache writes only. this controls where the cached files are written. if not None will override io.ROOT below
-CACHE_ROOT_OVERRIDE = "/Volumes/LaCie/output_folder/"  # e.g. None or "/Volumes/LaCie/segment_images_theoffice"
+CACHE_ROOT_OVERRIDE = "/Volumes/LaCie/output_folder/"  # e.g. None or "/Volumes/LaCie/segment_images_thegym"
 
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 # DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
@@ -102,7 +102,7 @@ if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
 if CACHE_ROOT_OVERRIDE is not None:
     print("Overriding io.ROOT with CACHE_ROOT_OVERRIDE:", CACHE_ROOT_OVERRIDE)
-    io.ROOT = os.path.join("/Volumes/LaCie/segment_images_theoffice", "output_folder")
+    io.ROOT = os.path.join("/Volumes/LaCie/segment_images_thestore", "output_folder")
 
 print("io.ROOTSSD:", io.ROOTSSD)
 print("io.ROOT:", io.ROOT)
@@ -118,8 +118,8 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_ARMS_Thoma_sep20" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM and INCLUDE_LEG_POSE_FEATURES in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_Thoma_sep20" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_RUN_FOLDER = "SegmentHelper_TheStore/_arms_test" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM and INCLUDE_LEG_POSE_FEATURES in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheStore/_body_test" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -133,6 +133,8 @@ MODE1_TYPED_STRICT = False
 # Hard cap for MODE 1 assembly rows per CSV.
 # Set to an int (e.g., 40) to force a max output size; keep as None to disable.
 CYCLE_LIMIT = None
+MODE1_MIN_CLUSTER_ROWS = 50
+MODE1_MAX_ROWS_PER_RUN = 80
 MODE_TYPED_SCHEMA_VERSION = "typed_intermediate_v1"
 def resolve_arms_object_fusion_folder(
     root_data_path,
@@ -218,11 +220,13 @@ MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
+CROP_AFTER_COUNT = 80 # if None, won't crop. else if int, will stop generating output after that row
+CUTOFF_THRESHOLD = 50 # skip any cluster if there are less than this number of rows
 CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
-MULTIPLIER_PADDING = 1 # this is how much extra padding every OBJECT BBOXs multiplier gets
+MULTIPLIER_PADDING = 1 # this is how much extra padding every BODY_3D Lms + OBJECT BBOXs multiplier gets - if FULL_BODY is 2x'd below
 # percentile is what point you take the upper/lower bounds of the dimensions for multiplier
 # 5 was leaving too many anomalies in there. 
 PERCENTILE = 40
@@ -334,8 +338,11 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
     FULL_BODY = False
-    if FULL_BODY: matrix_family = "BodyPoses3D" 
-    else: matrix_family = "ArmsPoses3D"
+    if FULL_BODY: 
+        matrix_family = "BodyPoses3D" 
+        MULTIPLIER_PADDING = MULTIPLIER_PADDING+.5 # if body, double the padding
+    else: 
+        matrix_family = "ArmsPoses3D"
 
     # turning off face pair testing, as it was misbehaving
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
@@ -438,7 +445,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     FORCE_TOPIC_FIT_SCORE = True # adds topic score to csvs at the very end of linear sort
 
     if INSTALLATION_VIDEO:
-        ONE_SHOT = False # take all files, based off the very first sort order. (turn on for testing/speed)
+        ONE_SHOT = True # take all files, based off the very first sort order. (turn on for testing/speed)
         TSP_SORT = False
         CHOP_ITTER_TSP_SORT = False
         KNN_LARGE_CLUSTERS = True
@@ -446,13 +453,14 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
-            GENERATE_FUSION_PAIRS = False 
+            GENERATE_FUSION_PAIRS = True 
 
             # use this to turn on multiplier CSV creation/augmentation
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
-            RECALCULATE_CANONICALS = True # When this is True, and FORCE_CANONICAL_MULT_CREATION is true it ignores existing canonicals and recalcs and overwrites them
+            RECALCULATE_CANONICALS = False # When this is True, and FORCE_CANONICAL_MULT_CREATION is true it ignores existing canonicals and recalcs and overwrites them
             USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
-
+            # BIIIIIG_FULL_BODY_MULTIPLIER = [8, 11, 14, 11] # for mural prints
+            BIIIIIG_FULL_BODY_MULTIPLIER = [4, 6, 12, 6] # for life-sized prints
 
             # # temp hack for T45 Nature
             # USE_POSE_CROP_DICT = True # override canonical multipliers for production
@@ -1085,7 +1093,9 @@ cfg = {
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
-if USE_BIIIIIG_FULL_BODY_MULTIPLIER: sort.image_edge_multiplier = [8, 11, 14, 11]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
+if USE_BIIIIIG_FULL_BODY_MULTIPLIER: 
+    print("MAKING PRINTS: USE_BIIIIIG_FULL_BODY_MULTIPLIER is True, setting image_edge_multiplier to [8, 11, 14, 11]")
+    sort.image_edge_multiplier = BIIIIIG_FULL_BODY_MULTIPLIER  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
 
 # Keep EXPAND background fill consistent with INPAINT_COLOR.
 if INPAINT_COLOR == "black":
@@ -2566,7 +2576,7 @@ def prepare_crop_context(img, row):
     return context
 
 
-def linear_test_df(df_sorted, itter=None, counter_state=None):
+def linear_test_df(df_sorted, itter=None, counter_state=None, max_rows=None):
 
     if counter_state is not None:
         # Transitional hook: allow callers to pass explicit state while legacy
@@ -2598,6 +2608,10 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         assembly_stats[stage] = assembly_stats.get(stage, 0.0) + float(elapsed)
 
     sort.reset_face_pair_stats()
+
+    if max_rows is not None and int(max_rows) <= 0:
+        print("[MODE1 LIMIT] run-wide row limit reached; skipping assembly")
+        return 0
 
     def resolve_source_image_path(row):
         return resolve_row_io_paths(row)["source_path"]
@@ -2945,7 +2959,11 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
     metas_list = []
     description = None
     cropped_image = np.array([-10])
+    rows_processed = 0
     for index, row in df_sorted.iterrows():
+        if max_rows is not None and rows_processed >= int(max_rows):
+            break
+        rows_processed += 1
         print('-- linear_test_df [-] in loop, index is', str(index))
         if sort.VERBOSE: print("row", row)
         sort.this_nose_bridge_dist = None
@@ -3242,7 +3260,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
     record_mode1_assembly_timing("assembly_output_write", assembly_stats["output_write"])
     record_mode1_assembly_timing("assembly_metas_write", assembly_stats["metas_write"])
     sort.print_face_pair_stats("linear_test_df cycle")
-    return
+    return rows_processed
 
 
 def process_row_for_cache_only(row):
@@ -3316,7 +3334,7 @@ def process_row_for_cache_only(row):
         return {"cache_file": None, "status": "failed", "cropped_image": None, "skip_reason": "exception"}
 
 
-def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
+def process_csv_cache_only(df_sorted, csv_path, num_workers=4, max_rows=None):
     """Thread pool orchestrator for MAKE_CACHE_MODE: parallel per-row cache generation."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -3342,6 +3360,8 @@ def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
     total = 0
     log_every = 200
     rows = [row for _, row in df_sorted.iterrows()]
+    if max_rows is not None:
+        rows = rows[:max(0, int(max_rows))]
     print(f"[cache_mode] processing {len(rows)} rows from {csv_path} with {num_workers} workers")
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = {executor.submit(process_row_for_cache_only, row): i for i, row in enumerate(rows)}
@@ -3369,7 +3389,13 @@ def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
                     f"rss_mb={rss_display} maxrss_mb={peak_rss_mb:.1f}"
                 )
     print(f"[cache_mode] done: generated={generated} skipped={skipped} failed={failed} total={total}")
-    return {"generated": generated, "skipped": skipped, "failed": failed, "total": total}
+    return {
+        "generated": generated,
+        "skipped": skipped,
+        "failed": failed,
+        "total": total,
+        "rows_processed": len(rows),
+    }
 
 
 
@@ -4198,6 +4224,17 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, l
     learned_record = None
     variant_registry_miss = False
     exact_variant_key = None
+    if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
+        # override takes priority over canonical registry/pose crop dict lookups
+        sort.image_edge_multiplier = BIIIIIG_FULL_BODY_MULTIPLIER
+        print(
+            "[MODE1 MULTIPLIER TRACE] USE_BIIIIIG_FULL_BODY_MULTIPLIER override "
+            f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+            f"sort.image_edge_multiplier={sort.image_edge_multiplier}"
+        )
+        sort.face_height_output = face_height_output
+        sort.set_output_dims()
+        return learned_record
     if not use_pose_crop:
         if cluster_no is not None and pose_no is not None:
             if normalized_leg_variant is not None:
@@ -4556,6 +4593,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
     csv_folder = cfg["CSV_FOLDER"]
     canonical_registry = cfg.get("canonical_registry", {})
     mode1_enable_db_dedupe = cfg.get("mode1_enable_db_dedupe", False)
+    max_rows_remaining = cfg.get("max_rows_remaining")
 
     timing: dict = {}
     file_start = time.perf_counter()
@@ -4640,9 +4678,19 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
 
         assembly_start = time.perf_counter()
         if MAKE_CACHE_MODE:
-            process_csv_cache_only(df_sorted, csv_file, num_workers=12)
+            assembly_result = process_csv_cache_only(
+                df_sorted,
+                csv_file,
+                num_workers=12,
+                max_rows=max_rows_remaining,
+            )
+            rows_processed = int(assembly_result.get("rows_processed", 0))
         else:
-            linear_test_df(df_sorted, counter_state=csv_counter_state)
+            rows_processed = linear_test_df(
+                df_sorted,
+                counter_state=csv_counter_state,
+                max_rows=max_rows_remaining,
+            )
         timing["assembly"] = timing.get("assembly", 0.0) + (time.perf_counter() - assembly_start)
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
         return {
@@ -4650,6 +4698,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             "success": True,
             "early_return": None,
             "error": None,
+            "rows_processed": rows_processed,
             "timing": timing,
             "learned_multipliers": learned_multipliers,
         }
@@ -6163,7 +6212,37 @@ def main():
             if f.endswith(".csv") and f.startswith("df_sorted_")
         ]
 
-        if PARALLEL_WORKERS > 1:
+        if MODE1_MIN_CLUSTER_ROWS is not None:
+            eligible_csv_files = []
+            for csv_file in csv_files_to_process:
+                segment_count, *_ = _mode1_find_parts(csv_file.replace(".csv", "").split("_"))
+                try:
+                    cluster_rows = int(segment_count)
+                except (TypeError, ValueError):
+                    print(f"[MODE1 LIMIT] cannot read cluster row count from {csv_file}; skipping")
+                    continue
+                if cluster_rows <= int(MODE1_MIN_CLUSTER_ROWS):
+                    print(
+                        f"[MODE1 LIMIT] skipping {csv_file}: cluster_rows={cluster_rows} "
+                        f"must be > {MODE1_MIN_CLUSTER_ROWS}"
+                    )
+                    continue
+                eligible_csv_files.append(csv_file)
+            csv_files_to_process = eligible_csv_files
+
+        max_rows_per_run = MODE1_MAX_ROWS_PER_RUN
+        if max_rows_per_run is not None:
+            try:
+                max_rows_per_run = max(0, int(max_rows_per_run))
+            except (TypeError, ValueError):
+                print(
+                    f"[MODE1 LIMIT] invalid MODE1_MAX_ROWS_PER_RUN={MODE1_MAX_ROWS_PER_RUN}; "
+                    "disabling run-wide limit"
+                )
+                max_rows_per_run = None
+        mode1_rows_processed = 0
+
+        if PARALLEL_WORKERS > 1 and max_rows_per_run is None:
             import multiprocessing as _mp
             worker_cfg = dict(mode1_shared_cfg)
             mode1_processed_files += len(csv_files_to_process)
@@ -6191,6 +6270,15 @@ def main():
                         )
         else:
             for csv_file in csv_files_to_process:
+                if max_rows_per_run is not None:
+                    remaining_rows = max_rows_per_run - mode1_rows_processed
+                    if remaining_rows <= 0:
+                        print(
+                            f"[MODE1 LIMIT] reached run-wide row limit of {max_rows_per_run}; "
+                            "stopping CSV processing"
+                        )
+                        break
+                    mode1_shared_cfg["max_rows_remaining"] = remaining_rows
                 print("csv_file", csv_file)
                 mode1_processed_files += 1
                 result = _mode1_process_one_csv_shared(
@@ -6205,6 +6293,7 @@ def main():
                     result.get("csv_file"),
                 )
                 mode1_shared_cfg["canonical_registry"] = canonical_multiplier_registry
+                mode1_rows_processed += int(result.get("rows_processed", 0))
                 if not result.get("success"):
                     print(
                         f"[MODE1 SERIAL] error in {result.get('csv_file')}: "
