@@ -21,8 +21,8 @@ set -euo pipefail
 # ─────────────────────────────────────────────────────────────────────────────
 # Paths — edit these or pass as environment variables
 # ─────────────────────────────────────────────────────────────────────────────
-INPUT_DIR="${INPUT_DIR:-/Users/tenchc/Documents/GitHub/taking_stock_production/tts_sport}"
-OUTPUT_DIR="${OUTPUT_DIR:-/Volumes/OWC5/tts_sport}"
+INPUT_DIR="${INPUT_DIR:-/Users/tenchc/Documents/GitHub/taking_stock_production/tts_sport_coqui}"
+OUTPUT_DIR="${OUTPUT_DIR:-/Volumes/OWC5/tts_office}"
 # ─────────────────────────────────────────────────────────────────────────────
 
 REPORT_FILE="${OUTPUT_DIR}/merge_report.txt"
