@@ -42,12 +42,19 @@ SSD_PATH = "/Volumes/OWC5/segment_images_newbig"
 
 ### this code is set up you can only REPROCESS_HANDS OR USE_OBJ in one run ###
 USE_OBJ = False # do objet detections?
+HANDS_OR_BODY = "body" # "body" or "hands"
+
 if USE_OBJ: 
     REPROCESS_HANDS = False # do hands
     SKIP_BODY = True # skip body landmarks. 
 else: 
-    REPROCESS_HANDS = True # do hands
-    SKIP_BODY = False
+    if HANDS_OR_BODY == "body":
+        REPROCESS_HANDS = False # do hands
+        SKIP_BODY = False
+    else:
+        REPROCESS_HANDS = True # do hands
+        SKIP_BODY = True
+
 SKIP_EXISTING = False # Skips images with a normed bbox but that have Images.h - I think only applies to phone bbox
 ACCEPT_EXSISTING_HANDS = True # if true, it will accept existing data and update bool in SQL to true
 REPROCESSED_BODY = True 
@@ -58,13 +65,20 @@ DETECTIONS_ONLY = False
 if USE_OBJ and REPROCESS_HANDS:
     raise ValueError("USE_OBJ and REPROCESS_HANDS cannot both be True. Please set one to False.")
 # join on helper to limit scope and use SSD
-INNER_JOIN_HELPER = False
+INNER_JOIN_HELPER = True
 # if you do this, you need to use the correct THIS_CLASS_ID 
 # that will call an ID_SEGMENT_DICT to produce the table and folder names 
 
 # if not using helper, it may be helpful to specify a start_id
 START_ID = 0
 
+
+
+'''
+Done Hands full oct 8
+Body Done full oct 7
+Existing obj detection Done Oct 7 (detection continues...)
+'''
 # INNER_JOIN_TABLE = "SegmentHelperObject_67_phone"
 # SSD_PATH = "/Volumes/SSD4_Green/segment_images_detected_63_67"
 # INNER_JOIN_TABLE = "SegmentHelperObject_45_salad"
@@ -75,7 +89,7 @@ START_ID = 0
 # SegmentHelperObject_67_phone 
 # SegmentHelperObject_41_cup_glass (big)
 
-LIMIT= 1000000
+LIMIT= 2000000
 # Initialize the counter
 counter = 2000
 STATS_PRINT_EVERY = 1000
@@ -99,8 +113,8 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # overrides THIS_CLASS_ID
-    # SegmentHelper_name = 'SegmentHelper_TheStore'
-    SegmentHelper_name = "SegmentHelper_T11_Oct20_COCO_Custom"
+    SegmentHelper_name = 'SegmentHelper_TheGym'
+    # SegmentHelper_name = "SegmentBig_isface"
     # SegmentFolder = SSD_PATH
     SegmentFolder = None
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'
@@ -937,9 +951,6 @@ if USE_OBJ:
         print(f"SUBSELECT_ON_CLASS_ID: limiting OBJ query to {INNER_JOIN_HELPER} using INNER JOIN on SegmentHelper")
         distinct_image_ids_query = distinct_image_ids_query.\
         join(SegmentHelper, SegmentHelper.image_id == Detections.image_id)
-    if START_ID > 0: 
-        print(f"starting at {START_ID}")
-        distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.encoding_id >= START_ID)
     if not REPROCESSED_BODY:
         distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.mongo_body_landmarks_norm.is_(None))
     if not SKIP_BODY:
@@ -1067,7 +1078,12 @@ if SKIP_EXISTING:
 
     distinct_image_ids_query = distinct_image_ids_query.except_(normed_image_ids_query)
 
-
+if START_ID > 0: 
+    # append a filter to distinct_image_ids_query 
+    print(f"starting at {START_ID}")
+    # distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.encoding_id >= START_ID)
+    distinct_image_ids_query = distinct_image_ids_query.filter(Encodings.encoding_id >= START_ID)
+ 
 if VERBOSE: 
     # Compile the query with literal values for MySQL Workbench
     compiled_query = distinct_image_ids_query.compile(compile_kwargs={"literal_binds": True})

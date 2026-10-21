@@ -7,7 +7,7 @@ from sqlalchemy.pool import NullPool
 
 # importing project-specific models
 import sys
-sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/facemap/')
+sys.path.insert(1, '/Users/michaelmandiberg/Documents/GitHub/takingstock/')
 from my_declarative_base import SegmentTable, Encodings, Base
 
 # MongoDB setup
@@ -64,6 +64,8 @@ while True:
     if not results:
         print("No more rows to process. Exiting.")
         break
+    else:
+        print("Processing batch of {} rows...".format(len(results)))
 
     for encoding_id, image_id in results:
         # 2. Fetch pickled body_landmarks from Mongo
@@ -82,7 +84,7 @@ while True:
             is_feet = (visible_count >= 1) # if any foot landmark is visible, we consider it as feet
             # if is_feet:
             # is_feet = (visible_count >= (len(foot_lms) / 2))
-            # print(f"Image ID: {image_id}, Visible foot landmarks: {visible_count}, is_feet: {is_feet}")
+            print(f"Image ID: {image_id}, Visible foot landmarks: {visible_count}, is_feet: {is_feet}")
 
         # 5. Update MySQL tables
         # skipping segment table bc doing it directly in encodings
@@ -93,7 +95,7 @@ while True:
             filter(Encodings.image_id == image_id).\
             update({"is_feet": is_feet})
 
-    session.commit()
+    # session.commit()
     last_id = results[-1][0]
     print(f"Processed up to seg_image_id = {last_id}")
 

@@ -89,7 +89,7 @@ VERBOSE = True
 RANDOM = False # selects random image_ids from the DB. not tested. maybe runs very slow. 
 global_counter = 0
 QUERY_LIMIT = 1000
-QUERY_START_COUNTER = 90000000 # only used in write image topics
+QUERY_START_COUNTER = 134898999 # only used in write image topics
 ANGLE = 1 # controls x/y face angle in +/-, set to 9 for building the full model, then indexed
 MIN_TOKEN_LENGTH = 2 # minimum token length for the model
 

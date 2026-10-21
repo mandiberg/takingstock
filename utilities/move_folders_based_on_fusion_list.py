@@ -6,9 +6,9 @@ It moves files with the fusion cluster pairs into a a subfolder in that director
 I believe it is designed to work with make_video MODES 0 and 1:
 It parses clustercc and clusterc_ filenames
 '''
-FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/_BODY_Thoma_sep20/"
-# FOLDER = "//Volumes/LaCie/output_folder/_3800_plus/videos"
-# FOLDER = "/Volumes/LaCie/segment_images_theoffice/output_folder/_Body_thoma_sept20/"
+# FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/_BODY_Thoma_sep20/"
+# FOLDER = "/Volumes/LaCie/output_folder/_ARMS_T15_prints_oct17_round1"
+FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheGym/_ARMS_T15_prints_oct17_round1"
 MOVED_FOLDERS = "moved_folders"
 NEW_FOLDER = os.path.join(FOLDER, MOVED_FOLDERS)
 os.makedirs(NEW_FOLDER, exist_ok=True)
@@ -17,7 +17,27 @@ FUSION_PAIR_DICT_DETECTIONS_TOMOVE = {
     0: [
 
 # exclude
-[103, 1],[105, 1],[14, 1],[172, 1],[181, 1],[183, 1],[188, 1],[190, 1],[191, 1],[193, 1],[197, 1],[214, 1],[249, 1],[252, 1],[263, 1],[270, 1],[271, 1],[283, 1],[295, 1],[296, 1],[32, 1],[328, 1],[341, 1],[370, 1],[378, 1],[4, 1],[41, 1],[42, 76],[420, 1],[433, 1],[436, 1],[436, 15],[44, 1],[447, 1],[467, 1],[54, 1],[547, 1],[567, 1],[606, 1],[624, 1],[647, 1],[666, 1],[673, 1],[674, 1],[682, 1],[694, 1],[695, 1],[702, 1],[713, 1],[715, 1],[723, 1],[725, 1],[91, 1],[94, 1],[99, 1],
+
+
+[156, 1],
+[169, 1],
+[149, 1],
+[51, 1],
+[64, 1],
+
+[461, 9083],
+[490, 9073],
+[51, 9069],
+[555, 9069],
+[677, 9069],
+[699, 9083],
+[92, 9069],
+
+[134, 9073],
+[169, 9073],
+[92, 9073],
+
+
 
     ]
 }
@@ -61,7 +81,7 @@ def move_folder(folderpath, new_folderpath):
     print(f"Moved folder {folderpath} to {new_folderpath}")
 
 def move_file(filename):
-    if filename.startswith(".") or filename.startswith("image_ids.txt") or filename.endswith(".sql"):
+    if filename.startswith(".") or filename.startswith("_") or filename.startswith("image_ids.txt") or filename.endswith(".sql") or filename.endswith(".json"):
         print(f"Skipping file {filename} because it is a hidden file or an output file")
         return
     filepath = os.path.join(FOLDER, filename)
@@ -75,21 +95,12 @@ def move_file(filename):
 
 
 def get_list(folderpath):
-    filelist = os.listdir(folderpath)
-    print(f"checking for {filelist[0]}")
-    if "mp4" in filelist[0] or "wav" in filelist[0]:
-        files_only = True
-    elif "df_sorted" in filelist[0]:
-        files_only = True
-    elif "clustercc" in filelist[0]:
-        files_only = False
-    else:
-        print (f"fileleist {filelist}")
-        raise Exception(f"Unexpected folder contents in {folderpath}, expected either df_sorted or clustercc")
-    return filelist, files_only
+        # folders and files may be mixed (e.g. clustercc folders and merged_cluster jpgs),
+    # so decide per item in main() rather than from the first entry
+    return os.listdir(folderpath)
 
 def main():
-    filelist, files_only = get_list(FOLDER)
+    filelist = get_list(FOLDER)
     for name in filelist:
         print(f"Processing file: {name}")
         if MOVED_FOLDERS in name:
@@ -100,15 +111,13 @@ def main():
         if this_arms_pose is not None and this_signature is not None:
             for dict_arms, dict_sig in FUSION_PAIR_DICT_DETECTIONS_TOMOVE[0]:
                 if dict_arms == this_arms_pose and dict_sig == this_signature:
-                    print(f"FOUND {name} is in cluster {this_arms_pose} and p {this_signature}, files_only is {files_only}")
+                    print(f"FOUND {name} is in cluster {this_arms_pose} and p {this_signature}")
                     if os.path.isdir(folderpath):
                         new_root = os.path.join(NEW_FOLDER, os.path.basename(folderpath))
                         move_folder(folderpath, new_root)
-                        break
-                    elif files_only:
-                        print(f"doing move on df_sorted files in {name}")
-                        # new_root = os.path.join(NEW_FOLDER, os.path.basename(folderpath))
+                    else:
                         move_file(name)
+                    break
 
 
 if __name__ == "__main__":

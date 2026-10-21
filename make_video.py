@@ -57,18 +57,19 @@ else:
 # SegmentHelper_name = None
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
-# SegmentHelper_name = 'SegmentHelper_T45_nature'
+SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T15_muscle'
 # SegmentHelper_name = 'SegmentHelper_T3_player'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-SegmentHelper_name = 'SegmentHelper_TheStore'
+# SegmentHelper_name = 'SegmentHelper_TheStore'
 # SegmentHelper_name = 'SegmentHelper_TheGym'
 # SegmentHelper_name = 'SegmentHelper_TheOffice'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
-IS_SSD = False
-SSD_PATH = "/Volumes/LaCie/segment_images_thegym" # this controls where the source files are located, not cache files
+IS_SSD = True
+SSD_PATH = "/Volumes/LaCie/segment_images" # this controls where the source files are located, not cache files
 # SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 
 # override for cache writes only. this controls where the cached files are written. if not None will override io.ROOT below
@@ -102,7 +103,8 @@ if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
 if CACHE_ROOT_OVERRIDE is not None:
     print("Overriding io.ROOT with CACHE_ROOT_OVERRIDE:", CACHE_ROOT_OVERRIDE)
-    io.ROOT = os.path.join("/Volumes/LaCie/segment_images_thestore", "output_folder")
+    # io.ROOT = os.path.join("/Volumes/LaCie/segment_images_thegym", "output_folder")
+    io.ROOT = CACHE_ROOT_OVERRIDE
 
 print("io.ROOTSSD:", io.ROOTSSD)
 print("io.ROOT:", io.ROOT)
@@ -118,8 +120,8 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheStore/_arms_test" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM and INCLUDE_LEG_POSE_FEATURES in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheStore/_body_test" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_T45_prints_oct17_round1" # go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, FUSION_PAIR_DICT_DETECTIONS_THEGYM, /data manifest and multipliers //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_none" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -133,8 +135,6 @@ MODE1_TYPED_STRICT = False
 # Hard cap for MODE 1 assembly rows per CSV.
 # Set to an int (e.g., 40) to force a max output size; keep as None to disable.
 CYCLE_LIMIT = None
-MODE1_MIN_CLUSTER_ROWS = 50
-MODE1_MAX_ROWS_PER_RUN = 80
 MODE_TYPED_SCHEMA_VERSION = "typed_intermediate_v1"
 def resolve_arms_object_fusion_folder(
     root_data_path,
@@ -220,16 +220,16 @@ MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
-CROP_AFTER_COUNT = 80 # if None, won't crop. else if int, will stop generating output after that row
-CUTOFF_THRESHOLD = 50 # skip any cluster if there are less than this number of rows
+MODE1_MAX_ROWS_PER_CLUSTER = None # if None, no cap; otherwise process at most this many rows per cluster
+MODE1_MIN_CLUSTER_ROWS = 50 # skip any cluster if there are less than this number of rows
 CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
-MULTIPLIER_PADDING = 1 # this is how much extra padding every BODY_3D Lms + OBJECT BBOXs multiplier gets - if FULL_BODY is 2x'd below
+MULTIPLIER_PADDING = 1.25 # this is how much extra padding every BODY_3D Lms + OBJECT BBOXs multiplier gets - if FULL_BODY is 2x'd below
 # percentile is what point you take the upper/lower bounds of the dimensions for multiplier
-# 5 was leaving too many anomalies in there. 
-PERCENTILE = 40
+# lower means more padding. BTW 5 was leaving too many anomalies in there. 
+PERCENTILE = 30
 
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if "paris" in CURRENT_MODE:
@@ -337,10 +337,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    FULL_BODY = False
+    FULL_BODY = True # FULL_BODY_SWITCH
     if FULL_BODY: 
         matrix_family = "BodyPoses3D" 
-        MULTIPLIER_PADDING = MULTIPLIER_PADDING+.5 # if body, double the padding
+        MULTIPLIER_PADDING = MULTIPLIER_PADDING+.5 # if body, add to the padding
     else: 
         matrix_family = "ArmsPoses3D"
 
@@ -348,7 +348,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
 
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEGYM"
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
@@ -453,12 +453,12 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             print(f"in first condition for INSTALLATION_VIDEO: {CLUSTER_TYPE}")
             # For production, GENERATE_FUSION_PAIRS = False
             # for determining the set of pair, set to True
-            GENERATE_FUSION_PAIRS = True 
+            GENERATE_FUSION_PAIRS = False 
 
             # use this to turn on multiplier CSV creation/augmentation
-            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             RECALCULATE_CANONICALS = False # When this is True, and FORCE_CANONICAL_MULT_CREATION is true it ignores existing canonicals and recalcs and overwrites them
-            USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
+            USE_BIIIIIG_FULL_BODY_MULTIPLIER = True # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
             # BIIIIIG_FULL_BODY_MULTIPLIER = [8, 11, 14, 11] # for mural prints
             BIIIIIG_FULL_BODY_MULTIPLIER = [4, 6, 12, 6] # for life-sized prints
 
@@ -4593,7 +4593,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
     csv_folder = cfg["CSV_FOLDER"]
     canonical_registry = cfg.get("canonical_registry", {})
     mode1_enable_db_dedupe = cfg.get("mode1_enable_db_dedupe", False)
-    max_rows_remaining = cfg.get("max_rows_remaining")
+    max_rows_per_cluster = cfg.get("max_rows_per_cluster")
 
     timing: dict = {}
     file_start = time.perf_counter()
@@ -4682,14 +4682,14 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
                 df_sorted,
                 csv_file,
                 num_workers=12,
-                max_rows=max_rows_remaining,
+                max_rows=max_rows_per_cluster,
             )
             rows_processed = int(assembly_result.get("rows_processed", 0))
         else:
             rows_processed = linear_test_df(
                 df_sorted,
                 counter_state=csv_counter_state,
-                max_rows=max_rows_remaining,
+                max_rows=max_rows_per_cluster,
             )
         timing["assembly"] = timing.get("assembly", 0.0) + (time.perf_counter() - assembly_start)
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
@@ -5603,6 +5603,7 @@ def main():
                 else:
                     print(f"Not enough valid image dimensions ({n_ok}) to compute dynamic multiplier; using default {sort.image_edge_multiplier}")
             else:
+                print(f"DYN_BBOX_FROM_IMAGE_DIMS disabled: computing multiplier from body landmarks")
                 sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0, PERCENTILE)
 
         if canonical_multiplier is None and not use_pose_crop:
@@ -6230,19 +6231,19 @@ def main():
                 eligible_csv_files.append(csv_file)
             csv_files_to_process = eligible_csv_files
 
-        max_rows_per_run = MODE1_MAX_ROWS_PER_RUN
-        if max_rows_per_run is not None:
+        max_rows_per_cluster = MODE1_MAX_ROWS_PER_CLUSTER
+        if max_rows_per_cluster is not None:
             try:
-                max_rows_per_run = max(0, int(max_rows_per_run))
+                max_rows_per_cluster = max(0, int(max_rows_per_cluster))
             except (TypeError, ValueError):
                 print(
-                    f"[MODE1 LIMIT] invalid MODE1_MAX_ROWS_PER_RUN={MODE1_MAX_ROWS_PER_RUN}; "
+                    f"[MODE1 LIMIT] invalid MODE1_MAX_ROWS_PER_CLUSTER={MODE1_MAX_ROWS_PER_CLUSTER}; "
                     "disabling run-wide limit"
                 )
-                max_rows_per_run = None
-        mode1_rows_processed = 0
+                max_rows_per_cluster = None
+        mode1_shared_cfg["max_rows_per_cluster"] = max_rows_per_cluster
 
-        if PARALLEL_WORKERS > 1 and max_rows_per_run is None:
+        if PARALLEL_WORKERS > 1:
             import multiprocessing as _mp
             worker_cfg = dict(mode1_shared_cfg)
             mode1_processed_files += len(csv_files_to_process)
@@ -6270,15 +6271,6 @@ def main():
                         )
         else:
             for csv_file in csv_files_to_process:
-                if max_rows_per_run is not None:
-                    remaining_rows = max_rows_per_run - mode1_rows_processed
-                    if remaining_rows <= 0:
-                        print(
-                            f"[MODE1 LIMIT] reached run-wide row limit of {max_rows_per_run}; "
-                            "stopping CSV processing"
-                        )
-                        break
-                    mode1_shared_cfg["max_rows_remaining"] = remaining_rows
                 print("csv_file", csv_file)
                 mode1_processed_files += 1
                 result = _mode1_process_one_csv_shared(
@@ -6293,7 +6285,6 @@ def main():
                     result.get("csv_file"),
                 )
                 mode1_shared_cfg["canonical_registry"] = canonical_multiplier_registry
-                mode1_rows_processed += int(result.get("rows_processed", 0))
                 if not result.get("success"):
                     print(
                         f"[MODE1 SERIAL] error in {result.get('csv_file')}: "

@@ -1,0 +1,12 @@
+name: gensim311
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - sqlalchemy
+  - numpy
+  - pandas
+  - gensim
+  - nltk
+  - pymysql
+prefix: /Users/michaelmandiberg/opt/miniconda3/envs/gensim311

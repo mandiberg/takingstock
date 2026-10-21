@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 3
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
@@ -28,12 +28,12 @@ SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
-# ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/'
+# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-# FOLDER_NAME = "T37_final_looping_video_source_files"
-FOLDER_NAME = "output_folder/_BODY_T45_p1_sept10"
+# FOLDER_NAME = "GYM_build_life_size_prints"
+FOLDER_NAME = "output_folder/_BODY_T45_prints_oct17_round2"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -42,10 +42,10 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 12  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 10  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = None
+CROP_AFTER_COUNT = 80
 
 # minimum-image cutoff. Set to None or 0 to disable entirely.
 # This applies to the actual mp4 build, not the GIF preview export path.
@@ -178,21 +178,23 @@ BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
 USE_CURRENT_DIMS = False # don't do any scaling
 LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
-FULLBODY = False # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
+FULLBODY = True # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = [20688,20648]
 FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
-# VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 # VID_DIMS_TEST = [1785,1785]
-VID_DIMS_TEST = [1000, 1000] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+# VID_DIMS_TEST = [1000, 1000] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
 ############################
 USE_CANONICAL_RATIOS = True
+# override, as LOWEST_DIMS must be true to USE_CANONICAL_RATIOS
+if USE_CANONICAL_RATIOS: LOWEST_DIMS = True 
 
 # to do scale aware video selection, you need to
 # 1. in merge, USE_CANONICAL_RATIOS must be true
@@ -270,11 +272,15 @@ RATIOS_DICT = {
         {1.750: [3084, 1785]}
     ],
 
-    2160 : [{0.665 : [1436, 2160]}, 
+    2160 : [{0.500 : [1080, 2160]}, {0.563 : [1216, 2160]},
+        {0.665 : [1436, 2160]}, 
 {0.750 : [1620,2160]}, {0.798 : [1724,2160]}, 
 {0.856 : [1848, 2160]}, {1.000 : [2160, 2160]}, 
 {1.169 : [2526,2160]}, {1.253 : [2707,2160]}, 
-{1.337 : [2888,2160]}, {1.504: [3249 ,2160]}]
+{1.337 : [2888,2160]}, {1.504: [3249 ,2160]},
+{1.665: [3590, 2160]}
+    ]
+    
 }
 
 LIMIT_DICT = {
@@ -326,6 +332,8 @@ OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
     "ObjectSignatures_ImagesObjectSignatures_202609091654.csv",
 )
 
+# print out current settings:
+print(f"SCALE_IMGS {SCALE_IMGS}, USE_CANONICAL_RATIOS {USE_CANONICAL_RATIOS}, GIGA_DIMS {GIGA_DIMS}, FULLBODY {FULLBODY}, ALREADY_CROPPED {ALREADY_CROPPED}, USE_CURRENT_DIMS {USE_CURRENT_DIMS}, LOWEST_DIMS {LOWEST_DIMS}")
 
 def smooth_merge_transition(image1, image2, blend_steps):
     transition_images = []
@@ -662,7 +670,7 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
         loaded = True
     else:
         loaded = False
-    # print("loaded", loaded)
+    print(f"[iterate_image_list] loaded {loaded} and USE_CANONICAL_RATIOS {USE_CANONICAL_RATIOS} ")
     # Iterate through the image files and merge them in pairs
     for i in range(0, len(image_files), 2):
         img1 = load_image(image_files[i])
