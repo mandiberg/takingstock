@@ -119,8 +119,8 @@ class SortPose:
             "hand_signal": 2.0,
             "bbox": 1.0,
             # body3D/ArmsPoses3D hand blocks (only used when ARM_HAND_BLOCKS is on)
-            "hand_position": 1.0,
-            "hand_gesture": 30.0, # world landmarks are ~0.03-0.06 vs ~1-3 for positions, so bump up
+            "hand_position": 0.1,
+            "hand_gesture": 300.0, # world landmarks are ~0.03-0.06 vs ~1-3 for positions, so bump up
         }
         self.ARM_HAND_BLOCKS = False # set from make_video; last 2*ARM_HAND_BLOCK_DIMS dims of body vectors are hand_position + hand_gesture
         self.ARM_HAND_BLOCK_DIMS = 126 # 2 hands * 21 points * 3 dims

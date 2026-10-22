@@ -703,6 +703,8 @@ DROP_LOW_VIS = False
 # body3D/ArmsPoses3D only: BodyPoses3D cluster_ids whose sort vector gets hand position + hand gesture (world) landmarks.
 # All other clusters get zeros in those slots, so vector length is the same for every cluster.
 # Set to [] to disable and leave the body vector untouched.
+# ADD_ARM_POSITION_AND_GESTURE = None
+# ADD_ARM_POSITION_AND_GESTURE = [[718,1], [70, 1], [708, 15], [678, 15],]
 ADD_ARM_POSITION_AND_GESTURE = [25, 40, 48, 68, 70, 71, 79, 87, 93, 109, 111, 112, 122, 133, 156, 158, 177, 184, 220, 256, 266, 287, 294, 299, 301, 308, 317, 361, 386, 398, 408, 431, 438, 442, 460, 462, 466, 495, 502, 508, 530, 533, 537, 549, 551, 552, 557, 559, 580, 581, 584, 585, 601, 620, 623, 628, 642, 645, 646, 654, 655, 658, 660, 663, 678, 685, 708, 717, 718, 731, 734, 737, 741, 742, 754]
 # True drops images with no hand landmarks (both hands empty) from arm clusters; False keeps them zero-filled
 DROP_IMAGES_WITHOUT_HANDS = False
@@ -2043,6 +2045,7 @@ def tsp_sort(df_enc):
     return df_sorted
 
 def add_arm_hand_blocks(df_segment, add_arms):
+    print(f"[arm hands] add_arm_hand_blocks: {len(df_segment)} rows, add_arms={add_arms}")
     """
     Append hand position (norm) and hand gesture (world) blocks to body_landmarks_array so every
     vector is body + 126 + 126 long. Non-arm clusters get zeros in both blocks.
@@ -2088,6 +2091,10 @@ def add_arm_hand_blocks(df_segment, add_arms):
             print(f"[arm hands] {name}: all zeros")
             continue
         print(f"[arm hands] {name}: nonzero rows {len(nz)}/{len(block)} min {nz.min():.4f} max {nz.max():.4f} mean {nz.mean():.4f} std {nz.std():.4f} | mean |x| weighted {np.abs(wblocks[name][np.any(block != 0, axis=1)]).mean():.4f}")
+        # compare blocks to wblocks 
+        wnz = wblocks[name][np.any(block != 0, axis=1)]
+        print(f"[arm hands] {name}: nonzero rows wblocks {len(wnz)}/{len(block)} min {wnz.min():.4f} max {wnz.max():.4f} mean {wnz.mean():.4f} std {wnz.std():.4f} | mean |x| weighted {np.abs(wnz).mean():.4f}")
+        # compare blocks to wblocks 
     return df_segment
 
 def prep_encodings_NN(df_segment, effective_sort_type=None):
@@ -2230,7 +2237,7 @@ def prep_encodings_NN(df_segment, effective_sort_type=None):
             #     )            
             #     # print("body_landmarks_array after adding head pose", df_segment["body_landmarks_array"])
         
-    if _sort_type in ("body3D", "ArmsPoses3D") and sort.ARM_HAND_BLOCKS and "body_landmarks_array" in df_segment.columns:
+    if _sort_type in ("body3D", "ArmsPoses3D", "object_fusion") and sort.ARM_HAND_BLOCKS and "body_landmarks_array" in df_segment.columns:
         df_segment = add_arm_hand_blocks(df_segment, sort.counter_dict.get("add_arms", False))
 
     if USE_HEAD_POSE:
@@ -3850,9 +3857,12 @@ def make_hsv_cycle_meta(this_cluster=None, this_topic=None, background_hsv=None,
 
 
 def is_arm_cluster(cluster_no):
-    """True if this run's BodyPoses3D cluster_id is in ADD_ARM_POSITION_AND_GESTURE."""
+    # print(f"[is_arm_cluster] checking cluster_no={cluster_no} for ADD_ARM_POSITION_AND_GESTURE {ADD_ARM_POSITION_AND_GESTURE}")
+    # """True if this run's BodyPoses3D cluster_id is in ADD_ARM_POSITION_AND_GESTURE."""
     if isinstance(cluster_no, (list, tuple)):
         cluster_no = cluster_no[0] if len(cluster_no) else None
+    if not ADD_ARM_POSITION_AND_GESTURE:
+        return False
     try:
         return int(cluster_no) in ADD_ARM_POSITION_AND_GESTURE
     except (TypeError, ValueError):
@@ -3876,7 +3886,7 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_meta
     print("mkdir", mkdir, "root", io.ROOT)
     sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id, hsv_cluster=hsv_meta, pose_no=pose_no, mkdir=mkdir)
     sort.counter_dict["add_arms"] = is_arm_cluster(cluster_no)
-    if sort.counter_dict["add_arms"]: print(f"set_my_counter_dict: cluster_no {cluster_no} is in ADD_ARM_POSITION_AND_GESTURE")
+    # if sort.counter_dict["add_arms"]: print(f"set_my_counter_dict: cluster_no {cluster_no} is in ADD_ARM_POSITION_AND_GESTURE")
 
     if counter_state is not None:
         counter_state.clear()
