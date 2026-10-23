@@ -20,7 +20,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 3
+MODE_CHOICE = 1
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
@@ -28,12 +28,12 @@ SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
-# ROOT_FOLDER_PATH = '/Volumes/OWC52/_finished_work.mirrorRAID18/_FINISHED_WORK_THEOFFICE/'
+# ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-# FOLDER_NAME = "T37_final_looping_video_source_files"
-FOLDER_NAME = "output_folder/_BODY_c157v3_2000s_preLAX"
+# FOLDER_NAME = "GYM_build_life_size_prints"
+FOLDER_NAME = "output_folder/_BODY_T45_prints_oct17_round2"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -42,10 +42,17 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 8  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 10  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = None
+CROP_AFTER_COUNT = 80
+
+# minimum-image cutoff. Set to None or 0 to disable entirely.
+# This applies to the actual mp4 build, not the GIF preview export path.
+# Video-only, unless you turn on USE_THRESHOLD_FOR_IMAGES
+CUTOFF_THRESHOLD = 50
+USE_THRESHOLD_FOR_IMAGES = True
+
 
 # if you borked the installation file, turn this on to JUST rebuilt it
 DO_INSTALLATION_ONLY = False
@@ -171,7 +178,7 @@ BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
 USE_CURRENT_DIMS = False # don't do any scaling
 LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
-FULLBODY = False # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
+FULLBODY = True # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
 SORT_ORDER = "Chronological"
 DO_RATIOS = False
 GIGA_DIMS = [20688,20648]
@@ -179,40 +186,108 @@ FULLBODY_DIMS = [32000,32000]
 TEST_DIMS = [4000,4000] 
 REG_DIMS = [3448,3448]
 VID_DIMS_TEST = [2160,2160] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
-# VID_DIMS_TEST = [1746,1746]
-# VID_DIMS_TEST = [1080, 1080] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
+# VID_DIMS_TEST = [1785,1785]
+# VID_DIMS_TEST = [1000, 1000] # this is the target dimension for BSC videos. it is also the key to the ratio dict if USE_CANONICAL_RATIOS is True
 SKIP_PREFIX = "_x"
 FORCE_LS = True
 
 ############################
 USE_CANONICAL_RATIOS = True
+# override, as LOWEST_DIMS must be true to USE_CANONICAL_RATIOS
+if USE_CANONICAL_RATIOS: LOWEST_DIMS = True 
+
+# to do scale aware video selection, you need to
+# 1. in merge, USE_CANONICAL_RATIOS must be true
+# 2. must run merge x number of times, for each size you want to have videos at
+# 3. all output files should be registered in the same installation.csv and have the size in the filename
+# that is all you need to do in takingstock
+# 
+# in taking-stock-install you need to set scale select to true
+ 
 ############################
 
 ADD_TO_EXISTING_INSTALLATION_CSV = True  # if True, append new rows to existing installation.csv instead of overwriting
 
 RATIOS_DICT = {
-    1080 : [ {0.665 : [718, 1080]}, 
+    720 : [ {0.500 : [360, 720]}, {0.563 : [408, 720]}, 
+{0.600 : [432, 720]}, {0.665 : [480, 720]}, 
+{0.750 : [540, 720]}, {0.798 : [576, 720]}, 
+{0.856 : [612, 720]}, {1.000 : [720, 720]}, 
+{1.169 : [840, 720]}, {1.253 : [900, 720]}, 
+{1.337 : [960, 720]}, {1.504: [1080 ,720]},
+{1.665: [1200, 720]}, {1.750 : [1260, 720]}, 
+    ],
+
+    1000 : [
+        {0.333 : [333, 1000]},
+        {0.400 : [400, 1000]},
+        {0.500 : [500, 1000]},
+        {0.563 : [563, 1000]},
+        {0.600 : [600, 1000]},
+        {0.665 : [665, 1000]},
+        {0.750 : [750, 1000]},
+        {0.798 : [798, 1000]},
+        {0.856 : [856, 1000]},
+        {1.000 : [1000, 1000]},
+        {1.169 : [1169, 1000]},
+        {1.253 : [1253, 1000]},
+        {1.337 : [1337, 1000]},
+        {1.504: [1504, 1000]},
+        {1.665: [1665, 1000]},
+        {1.750: [1750, 1000]},
+        {1.825: [1825, 1000]},
+        {1.900: [1900, 1000]},
+        {2.000: [2000, 1000]},
+        {2.100: [2100, 1000]},
+        {2.250: [2250, 1000]},
+        {2.375: [2375, 1000]},
+        {2.500: [2500, 1000]},
+        {2.750: [2750, 1000]},
+        {3.000: [3000, 1000]},
+    ],
+
+    1080 : [ {0.500 : [540, 1080]}, {0.563 : [612, 1080]}, 
+{0.600 : [648, 1080]}, {0.665 : [718, 1080]}, 
 {0.750 : [810,1080]}, {0.798 : [862,1080]}, 
 {0.856 : [924, 1080]}, {1.000 : [1080, 1080]}, 
 {1.169 : [1263, 1080]}, {1.253 : [1354, 1080]}, 
-{1.337 : [1444, 1080]}, {1.504: [1625 ,1080]}], 
+{1.337 : [1444, 1080]}, {1.504: [1625 ,1080]},
+{1.665: [1725, 1080]}, {1.750: [1890, 1080]},
+], 
 
-    1712 : [ {0.665 : [1129, 1712]}, 
-{0.750 : [1284,1712]}, {0.798 : [1366,1712]}, 
-{0.856 : [1465, 1712]}, {1.000 : [1712, 1712]}, 
-{1.169 : [2001,1712]}, {1.253 : [2145,1712]}, 
-{1.337 : [2288,1712]}, {1.504: [2574,1712]}],
+    1785 : [
+        {0.500 : [892, 1785]}, 
+        {0.563 : [1071, 1785]}, 
+        {0.600 : [1071, 1785]},
+        {0.665 : [1284, 1785]}, 
+        {0.750 : [1485, 1785]}, 
+        {0.798 : [1584, 1785]}, 
+        {0.856 : [1692, 1785]}, 
+        {1.000 : [1785, 1785]}, 
+        {1.169 : [2083, 1785]}, 
+        {1.253 : [2234, 1785]}, 
+        {1.337 : [2394, 1785]}, 
+        {1.504: [2693, 1785]}, 
+        {1.665: [2888, 1785]},
+        {1.750: [3084, 1785]}
+    ],
 
-    2160 : [{0.665 : [1436, 2160]}, 
+    2160 : [{0.500 : [1080, 2160]}, {0.563 : [1216, 2160]},
+        {0.665 : [1436, 2160]}, 
 {0.750 : [1620,2160]}, {0.798 : [1724,2160]}, 
 {0.856 : [1848, 2160]}, {1.000 : [2160, 2160]}, 
 {1.169 : [2526,2160]}, {1.253 : [2707,2160]}, 
-{1.337 : [2888,2160]}, {1.504: [3249 ,2160]}]
+{1.337 : [2888,2160]}, {1.504: [3249 ,2160]},
+{1.665: [3590, 2160]}
+    ]
+    
 }
 
 LIMIT_DICT = {
+    720: [1280, 720],
+    1000: [3840, 1000],
     1080: [1920, 1080],
-    1712: [3043, 1712],
+    1785: [3840, 1785],
     2160: [3840, 2160]
 }
 
@@ -254,9 +329,11 @@ OBJECT_SIGNATURE_EXPORT_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "utilities",
     "data",
-    "ImagesObjectSignatures_ObjectSignatures_202604272237.csv",
+    "ObjectSignatures_ImagesObjectSignatures_202609091654.csv",
 )
 
+# print out current settings:
+print(f"SCALE_IMGS {SCALE_IMGS}, USE_CANONICAL_RATIOS {USE_CANONICAL_RATIOS}, GIGA_DIMS {GIGA_DIMS}, FULLBODY {FULLBODY}, ALREADY_CROPPED {ALREADY_CROPPED}, USE_CURRENT_DIMS {USE_CURRENT_DIMS}, LOWEST_DIMS {LOWEST_DIMS}")
 
 def smooth_merge_transition(image1, image2, blend_steps):
     transition_images = []
@@ -593,7 +670,7 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
         loaded = True
     else:
         loaded = False
-    # print("loaded", loaded)
+    print(f"[iterate_image_list] loaded {loaded} and USE_CANONICAL_RATIOS {USE_CANONICAL_RATIOS} ")
     # Iterate through the image files and merge them in pairs
     for i in range(0, len(image_files), 2):
         img1 = load_image(image_files[i])
@@ -640,6 +717,10 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
     print("merging images, this many images_to_build", len(images_to_build))
     if len(images_to_build) % 2 != 0:
         print("odd number of images, skipping last image")
+    if CUTOFF_THRESHOLD not in (None, 0, False) and len(images_to_build) < int(CUTOFF_THRESHOLD) and USE_THRESHOLD_FOR_IMAGES:
+        print(f"still cutoff threshold enabled: len(img_array)={len(images_to_build)} < CUTOFF_THRESHOLD={CUTOFF_THRESHOLD}; skipping this folder")
+        return
+    
     cluster_no = handpose_no = background_hsv_no = object_hsv_no = topic_no = None
     successes = 0
     if len(images_to_build) > 1:
@@ -1986,6 +2067,9 @@ def write_video(img_array, subfolder_path=None):
     print("len img_array before cropping", len(img_array))
     if len(img_array) == 0:
         print("no jpg images found, skipping this folder")
+        return
+    elif CUTOFF_THRESHOLD not in (None, 0, False) and len(img_array) < int(CUTOFF_THRESHOLD):
+        print(f"video cutoff threshold enabled: len(img_array)={len(img_array)} < CUTOFF_THRESHOLD={CUTOFF_THRESHOLD}; skipping this folder")
         return
     elif SMOOTH_MERGE and OSCILATING_MERGE and len(img_array) < max(2, START_MERGE + 1):
         print(f"not enough images for smooth oscillating mode (need at least {max(2, START_MERGE + 1)}), skipping this folder")

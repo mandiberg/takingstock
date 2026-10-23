@@ -58,16 +58,24 @@ else:
 SegmentTable_name = 'SegmentBig_isface'
 # SegmentTable_name = 'SegmentBig_isnotface'
 # SegmentHelper_name = 'SegmentHelper_T45_nature'
+# SegmentHelper_name = 'SegmentHelper_T15_muscle'
+# SegmentHelper_name = 'SegmentHelper_T3_player'
 # SegmentHelper_name = 'SegmentHelper_T0_sport'
-SegmentHelper_name = 'SegmentHelper_TheGym'
+# SegmentHelper_name = 'SegmentHelper_TheStore'
+# SegmentHelper_name = 'SegmentHelper_TheGym'
+SegmentHelper_name = 'SegmentHelper_TheOffice'
 # SegmentHelper_name = 'None' # set below for heft keywords
 # SegmentHelper_name = None
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-# SSD_PATH = "/Volumes/LaCie/segment_images"
-SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+SSD_PATH = "/Volumes/LaCie/segment_images" # this controls where the source files are located, not cache files
+# SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
+
+# override for cache writes only. this controls where the cached files are written. if not None will override io.ROOT below
+CACHE_ROOT_OVERRIDE = "/Volumes/LaCie/output_folder/"  # e.g. None or "/Volumes/LaCie/segment_images_thegym"
+
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 # DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
@@ -93,8 +101,13 @@ if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
-print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
-print("Set io.ROOT to ROOTSSD:", io.ROOT)
+if CACHE_ROOT_OVERRIDE is not None:
+    print("Overriding io.ROOT with CACHE_ROOT_OVERRIDE:", CACHE_ROOT_OVERRIDE)
+    # io.ROOT = os.path.join("/Volumes/LaCie/segment_images_thegym", "output_folder")
+    io.ROOT = CACHE_ROOT_OVERRIDE
+
+print("io.ROOTSSD:", io.ROOTSSD)
+print("io.ROOT:", io.ROOT)
 
 CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden below for heft keywords
 
@@ -107,11 +120,11 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheGym/_ARMS_c157v3_2000s_preLAX_legpose_p1_legvariants" # go check FULL_BODY and FUSION_PAIR_DICT_DETECTIONS_THEGYM and INCLUDE_LEG_POSE_FEATURES in constants //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_c157v3_2000s_preLAX" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_handgesture_test_oct21" # go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, FUSION_PAIR_DICT_DETECTIONS_THEGYM, /data manifest,  multipliers, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_none" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
-MAX_ROWS_PER_OUTPUT_CSV = 600 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
+MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
 ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
@@ -190,7 +203,7 @@ OBJECT_COLLAPSE_MIN = 1000       # minimum topic-count for a signature bin to be
 MULTIPOLICY = False
 
 # CONTROL LEG STUFF FOR ARMS CLUSTERS
-INCLUDE_LEG_POSE_FEATURES = True  # join LocationHandsFeet for leg-shape cluster separability testing
+INCLUDE_LEG_POSE_FEATURES = False  # join LocationHandsFeet for leg-shape cluster separability testing
 LEG_POSE_FLOOR_PCT = 5.0             # minimum visible-leg percentage required before split test
 LEG_POSE_MIN_BUCKET_SIZE = 20        # minimum rows required on each side of the candidate valley
 LEG_POSE_MIN_GAP_RATIO = 0.35        # valley-to-peak ratio for a real split; not a literal empty-gap width
@@ -207,14 +220,16 @@ MODE_CHOICE = 6
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
+MODE1_MAX_ROWS_PER_CLUSTER = None # if None, no cap; otherwise process at most this many rows per cluster
+MODE1_MIN_CLUSTER_ROWS = 50 # skip any cluster if there are less than this number of rows
 CROP_MULTIPLIER = 5
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
-MULTIPLIER_PADDING = 2 # this is how much extra padding every multiplier gets
+MULTIPLIER_PADDING = 1.25 # this is how much extra padding every BODY_3D Lms + OBJECT BBOXs multiplier gets - if FULL_BODY is 2x'd below
 # percentile is what point you take the upper/lower bounds of the dimensions for multiplier
-# 5 was leaving too many anomalies in there. 
-PERCENTILE = 40
+# lower means more padding. BTW 5 was leaving too many anomalies in there. 
+PERCENTILE = 30
 
 N_TOPICS = 64 # changing this to 14 triggers the affect topic fusion, 100 is keywords. 64 is default
 if "paris" in CURRENT_MODE:
@@ -322,15 +337,18 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    FULL_BODY = False
-    if FULL_BODY: matrix_family = "BodyPoses3D" 
-    else: matrix_family = "ArmsPoses3D"
+    FULL_BODY = True # FULL_BODY_SWITCH
+    if FULL_BODY: 
+        matrix_family = "BodyPoses3D" 
+        MULTIPLIER_PADDING = MULTIPLIER_PADDING+.5 # if body, add to the padding
+    else: 
+        matrix_family = "ArmsPoses3D"
 
     # turning off face pair testing, as it was misbehaving
     TRUST_FACE_PAIR_CACHE = False # if True it will accept what is in the DB. it was acting funny, so turning off
     SKIP_FACE_PAIR_TESTING = True  # set True to skip face pair testing entirely (use with caution, may lead to poor sorting results)
 
-    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEGYM"
+    FUSION_PAIR_DICT_NAME = "FUSION_PAIR_DICT_DETECTIONS_THEOFFICE"
 
     # # cludgy hack to get dynamic cropping for testing mar 2026    
     AUTO_EDGE_CROP = True
@@ -439,8 +457,10 @@ elif CURRENT_MODE == 'heft_torso_keywords':
 
             # use this to turn on multiplier CSV creation/augmentation
             FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            RECALCULATE_CANONICALS = False # When this is True, and FORCE_CANONICAL_MULT_CREATION is true it ignores existing canonicals and recalcs and overwrites them
             USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
-
+            BIIIIIG_FULL_BODY_MULTIPLIER = [8, 11, 14, 11] # for mural prints
+            # BIIIIIG_FULL_BODY_MULTIPLIER = [4, 6, 12, 6] # for life-sized prints
 
             # # temp hack for T45 Nature
             # USE_POSE_CROP_DICT = True # override canonical multipliers for production
@@ -679,6 +699,13 @@ else:
     CLUSTER2 = None
 print(f"CLUSTER_TYPE {CLUSTER_TYPE}, CLUSTER1 {CLUSTER1}, CLUSTER2 {CLUSTER2}")
 DROP_LOW_VIS = False
+
+# body3D/ArmsPoses3D only: BodyPoses3D cluster_ids whose sort vector gets hand position + hand gesture (world) landmarks.
+# All other clusters get zeros in those slots, so vector length is the same for every cluster.
+# Set to [] to disable and leave the body vector untouched.
+ADD_ARM_POSITION_AND_GESTURE = [25, 40, 48, 68, 70, 71, 79, 87, 93, 109, 111, 112, 122, 133, 156, 158, 177, 184, 220, 256, 266, 287, 294, 299, 301, 308, 317, 361, 386, 398, 408, 431, 438, 442, 460, 462, 466, 495, 502, 508, 530, 533, 537, 549, 551, 552, 557, 559, 580, 581, 584, 585, 601, 620, 623, 628, 642, 645, 646, 654, 655, 658, 660, 663, 678, 685, 708, 717, 718, 731, 734, 737, 741, 742, 754]
+# True drops images with no hand landmarks (both hands empty) from arm clusters; False keeps them zero-filled
+DROP_IMAGES_WITHOUT_HANDS = False
 
 # cut the kids
 NO_KIDS = True
@@ -1073,7 +1100,9 @@ cfg = {
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
-if USE_BIIIIIG_FULL_BODY_MULTIPLIER: sort.image_edge_multiplier = [8, 11, 14, 11]  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
+if USE_BIIIIIG_FULL_BODY_MULTIPLIER: 
+    print("MAKING PRINTS: USE_BIIIIIG_FULL_BODY_MULTIPLIER is True, setting image_edge_multiplier to [8, 11, 14, 11]")
+    sort.image_edge_multiplier = BIIIIIG_FULL_BODY_MULTIPLIER  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
 
 # Keep EXPAND background fill consistent with INPAINT_COLOR.
 if INPAINT_COLOR == "black":
@@ -1086,6 +1115,7 @@ elif INPAINT_COLOR == "white":
 # sort.MAXD = .8
 sort.MIND = sort.MIND*2
 sort.MAXD = sort.MAXD*30
+sort.ARM_HAND_BLOCKS = bool(ADD_ARM_POSITION_AND_GESTURE)
 
 if USE_NOSEBRIDGE: sort.ORIGIN = 6
 
@@ -2012,6 +2042,54 @@ def tsp_sort(df_enc):
     df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
     return df_sorted
 
+def add_arm_hand_blocks(df_segment, add_arms):
+    """
+    Append hand position (norm) and hand gesture (world) blocks to body_landmarks_array so every
+    vector is body + 126 + 126 long. Non-arm clusters get zeros in both blocks.
+    Idempotent: always rebuilds from body_landmarks_array_base.
+    """
+    n = sort.ARM_HAND_BLOCK_DIMS
+    zeros = [0.0] * n
+    if "body_landmarks_array_base" not in df_segment.columns:
+        df_segment["body_landmarks_array_base"] = df_segment["body_landmarks_array"]
+
+    def as_block(value):
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) == n:
+            return [float(x) for x in value]
+        return zeros
+
+    if add_arms:
+        pos = df_segment["hand_landmarks"].apply(as_block) if "hand_landmarks" in df_segment.columns else pd.Series([zeros] * len(df_segment), index=df_segment.index)
+        ges = df_segment["hand_gesture_array"].apply(as_block) if "hand_gesture_array" in df_segment.columns else pd.Series([zeros] * len(df_segment), index=df_segment.index)
+        no_hands = pos.apply(lambda v: not any(v)) & ges.apply(lambda v: not any(v))
+        print(f"[arm hands] cluster in ADD_ARM_POSITION_AND_GESTURE: {len(df_segment)} rows, {int(no_hands.sum())} without any hand lms ({100*no_hands.mean():.1f}%)")
+        if DROP_IMAGES_WITHOUT_HANDS and no_hands.any():
+            keep = ~no_hands
+            df_segment, pos, ges = df_segment[keep].copy(), pos[keep], ges[keep]
+            print(f"[arm hands] DROP_IMAGES_WITHOUT_HANDS: dropped {int(no_hands.sum())}, {len(df_segment)} rows left")
+    else:
+        pos = pd.Series([zeros] * len(df_segment), index=df_segment.index)
+        ges = pd.Series([zeros] * len(df_segment), index=df_segment.index)
+
+    if df_segment.empty:
+        return df_segment
+
+    df_segment["body_landmarks_array"] = [list(b) + p + g for b, p, g in zip(df_segment["body_landmarks_array_base"], pos, ges)]
+
+    # report value ranges going into the KNN, before and after weighting
+    mat = np.asarray(df_segment["body_landmarks_array"].tolist(), dtype=float)
+    blocks = {"body": mat[:, :-2 * n], "hand_position": mat[:, -2 * n:-n], "hand_gesture": mat[:, -n:]}
+    weighted = sort.apply_sort_feature_weights_array(mat, sort_type=SORT_TYPE)
+    wblocks = {"body": weighted[:, :-2 * n], "hand_position": weighted[:, -2 * n:-n], "hand_gesture": weighted[:, -n:]}
+    print(f"[arm hands] vector len {mat.shape[1]}, add_arms={add_arms}, weights={ {k: sort.SORT_VECTOR_WEIGHTS[k] for k in ('hand_position', 'hand_gesture')} }")
+    for name, block in blocks.items():
+        nz = block[np.any(block != 0, axis=1)]
+        if len(nz) == 0:
+            print(f"[arm hands] {name}: all zeros")
+            continue
+        print(f"[arm hands] {name}: nonzero rows {len(nz)}/{len(block)} min {nz.min():.4f} max {nz.max():.4f} mean {nz.mean():.4f} std {nz.std():.4f} | mean |x| weighted {np.abs(wblocks[name][np.any(block != 0, axis=1)]).mean():.4f}")
+    return df_segment
+
 def prep_encodings_NN(df_segment, effective_sort_type=None):
     _sort_type = effective_sort_type if effective_sort_type is not None else SORT_TYPE
     def create_hsv_list(row):
@@ -2152,6 +2230,9 @@ def prep_encodings_NN(df_segment, effective_sort_type=None):
             #     )            
             #     # print("body_landmarks_array after adding head pose", df_segment["body_landmarks_array"])
         
+    if _sort_type in ("body3D", "ArmsPoses3D") and sort.ARM_HAND_BLOCKS and "body_landmarks_array" in df_segment.columns:
+        df_segment = add_arm_hand_blocks(df_segment, sort.counter_dict.get("add_arms", False))
+
     if USE_HEAD_POSE:
         pass
 
@@ -2398,6 +2479,19 @@ def format_multiplier_for_cache_path(multiplier_values, places=4):
     return '_'.join(format_one(value) for value in multiplier_values)
 
 
+
+
+def get_cache_root_for_base_folder(base_folder):
+    """Return the root for cache files, optionally redirecting to a dedicated SSD cache area."""
+    print(f"[get_cache_root_for_base_folder] base_folder: {base_folder}, CACHE_ROOT_OVERRIDE: {CACHE_ROOT_OVERRIDE}")
+    if not base_folder:
+        return None
+    if CACHE_ROOT_OVERRIDE:
+        source_leaf = os.path.basename(base_folder)
+        return os.path.join(CACHE_ROOT_OVERRIDE, source_leaf)
+    return os.path.dirname(base_folder)
+
+
 def resolve_row_io_paths(row):
     """Resolve source and cache paths for a row without mutating shared state."""
     def get_row_source_path_value(row_obj):
@@ -2440,13 +2534,15 @@ def resolve_row_io_paths(row):
         base_folder = source_folder
     else:
         base_folder = None
-
+    print(f"[resolve_row_io_paths] source_path: {source_path}, source_folder: {source_folder}, source_image_name: {source_image_name}, base_folder: {base_folder}")
     cropped_cache_file = None
     inpaint_cache_file = None
     aspect_ratio = format_multiplier_for_cache_path(sort.image_edge_multiplier)
     if base_folder and source_image_name:
-        folder_root = os.path.dirname(base_folder)
+        folder_root = get_cache_root_for_base_folder(base_folder)
         folder_name = os.path.basename(base_folder)
+        if folder_root is None:
+            folder_root = os.path.dirname(base_folder)
         if INPAINT_COLOR:
             cropped_cache_file = os.path.join(folder_root, folder_name + "_cropped_" + INPAINT_COLOR + "_" + aspect_ratio, source_image_name)
             inpaint_cache_file = os.path.join(folder_root, folder_name + "_inpaint_" + INPAINT_COLOR + "_" + aspect_ratio, source_image_name)
@@ -2539,7 +2635,7 @@ def prepare_crop_context(img, row):
     return context
 
 
-def linear_test_df(df_sorted, itter=None, counter_state=None):
+def linear_test_df(df_sorted, itter=None, counter_state=None, max_rows=None):
 
     if counter_state is not None:
         # Transitional hook: allow callers to pass explicit state while legacy
@@ -2571,6 +2667,10 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
         assembly_stats[stage] = assembly_stats.get(stage, 0.0) + float(elapsed)
 
     sort.reset_face_pair_stats()
+
+    if max_rows is not None and int(max_rows) <= 0:
+        print("[MODE1 LIMIT] run-wide row limit reached; skipping assembly")
+        return 0
 
     def resolve_source_image_path(row):
         return resolve_row_io_paths(row)["source_path"]
@@ -2918,7 +3018,11 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
     metas_list = []
     description = None
     cropped_image = np.array([-10])
+    rows_processed = 0
     for index, row in df_sorted.iterrows():
+        if max_rows is not None and rows_processed >= int(max_rows):
+            break
+        rows_processed += 1
         print('-- linear_test_df [-] in loop, index is', str(index))
         if sort.VERBOSE: print("row", row)
         sort.this_nose_bridge_dist = None
@@ -3215,7 +3319,7 @@ def linear_test_df(df_sorted, itter=None, counter_state=None):
     record_mode1_assembly_timing("assembly_output_write", assembly_stats["output_write"])
     record_mode1_assembly_timing("assembly_metas_write", assembly_stats["metas_write"])
     sort.print_face_pair_stats("linear_test_df cycle")
-    return
+    return rows_processed
 
 
 def process_row_for_cache_only(row):
@@ -3289,7 +3393,7 @@ def process_row_for_cache_only(row):
         return {"cache_file": None, "status": "failed", "cropped_image": None, "skip_reason": "exception"}
 
 
-def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
+def process_csv_cache_only(df_sorted, csv_path, num_workers=4, max_rows=None):
     """Thread pool orchestrator for MAKE_CACHE_MODE: parallel per-row cache generation."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -3315,6 +3419,8 @@ def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
     total = 0
     log_every = 200
     rows = [row for _, row in df_sorted.iterrows()]
+    if max_rows is not None:
+        rows = rows[:max(0, int(max_rows))]
     print(f"[cache_mode] processing {len(rows)} rows from {csv_path} with {num_workers} workers")
     with ThreadPoolExecutor(max_workers=num_workers) as executor:
         futures = {executor.submit(process_row_for_cache_only, row): i for i, row in enumerate(rows)}
@@ -3342,7 +3448,13 @@ def process_csv_cache_only(df_sorted, csv_path, num_workers=4):
                     f"rss_mb={rss_display} maxrss_mb={peak_rss_mb:.1f}"
                 )
     print(f"[cache_mode] done: generated={generated} skipped={skipped} failed={failed} total={total}")
-    return {"generated": generated, "skipped": skipped, "failed": failed, "total": total}
+    return {
+        "generated": generated,
+        "skipped": skipped,
+        "failed": failed,
+        "total": total,
+        "rows_processed": len(rows),
+    }
 
 
 
@@ -3737,6 +3849,15 @@ def make_hsv_cycle_meta(this_cluster=None, this_topic=None, background_hsv=None,
     }
 
 
+def is_arm_cluster(cluster_no):
+    """True if this run's BodyPoses3D cluster_id is in ADD_ARM_POSITION_AND_GESTURE."""
+    if isinstance(cluster_no, (list, tuple)):
+        cluster_no = cluster_no[0] if len(cluster_no) else None
+    try:
+        return int(cluster_no) in ADD_ARM_POSITION_AND_GESTURE
+    except (TypeError, ValueError):
+        return False
+
 def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_meta=None, start_img_name=None, start_site_image_id=None, counter_state=None):
     ### Set counter_dict ###
     print(
@@ -3754,6 +3875,8 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_meta
     else: mkdir = True
     print("mkdir", mkdir, "root", io.ROOT)
     sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id, hsv_cluster=hsv_meta, pose_no=pose_no, mkdir=mkdir)
+    sort.counter_dict["add_arms"] = is_arm_cluster(cluster_no)
+    if sort.counter_dict["add_arms"]: print(f"set_my_counter_dict: cluster_no {cluster_no} is in ADD_ARM_POSITION_AND_GESTURE")
 
     if counter_state is not None:
         counter_state.clear()
@@ -4109,11 +4232,13 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     print(f"[mode1 bbox-aware] obj_left_extent_samples: {obj_left_extent_samples}")
     
     # Use a high percentile so large held objects (bike/barbell) influence framing.
-    obj_multiplier = [
-        max(abs(float(np.percentile(obj_top_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[0])),
-        max(abs(float(np.percentile(obj_right_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[1])),
-        max(abs(float(np.percentile(obj_bottom_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[2])),
-        max(abs(float(np.percentile(obj_left_extent_samples, PERCENTILE))), float(sort.MIN_DYN_BBOX_DIM[3])),
+    # Raw values only here; padding and the MIN_DYN_BBOX_DIM floor are applied below,
+    # in the same pad -> round -> floor order the body branch uses.
+    obj_multiplier_raw = [
+        abs(float(np.percentile(obj_top_extent_samples, PERCENTILE))),
+        abs(float(np.percentile(obj_right_extent_samples, PERCENTILE))),
+        abs(float(np.percentile(obj_bottom_extent_samples, PERCENTILE))),
+        abs(float(np.percentile(obj_left_extent_samples, PERCENTILE))),
     ]
 
     # body_multiplier is the amount that the image needs to be extended
@@ -4127,13 +4252,13 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     # when the left is negative, it means the object is to the left of the nose, and we need to extend
     # when the left is positive, it mean we don't extend to the right
 
-    
-
+    # Pad+round the raw object extent first, then floor by MIN_DYN_BBOX_DIM, mirroring
+    # calc_dynamic_multiplier_from_min_max_body_landmarks's pad -> round -> floor order.
     merged_multiplier = [
-    # round multiplier to confirm with merge_step using this pattern:
-    #  top_extent = max(self.round_up_step((top_raw + padding), self.ROUND_STEP), self.MIN_DYN_BBOX_DIM[0])
-        # already padded the body multiplier, but need to pad the obj now
-        max(sort.round_up_step(float(body_multiplier[i]), padding = 0), sort.round_up_step(float(obj_multiplier[i]), padding = padding))
+        max(
+            sort.round_up_step(float(body_multiplier[i]), padding=0),
+            max(abs(sort.round_up_step(float(obj_multiplier_raw[i]), padding=padding)), float(sort.MIN_DYN_BBOX_DIM[i])),
+        )
         for i in range(4)
     ]
 
@@ -4142,7 +4267,7 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     print(
         "[mode1 bbox-aware] merged dynamic multiplier "
         f"rows_with_object_bboxes={rows_with_object_bboxes} "
-        f"body={body_multiplier} obj={obj_multiplier} merged={merged_multiplier}"
+        f"body={body_multiplier} obj_raw={obj_multiplier_raw} merged={merged_multiplier}"
     )
     return merged_multiplier
 
@@ -4169,6 +4294,17 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, l
     learned_record = None
     variant_registry_miss = False
     exact_variant_key = None
+    if USE_BIIIIIG_FULL_BODY_MULTIPLIER:
+        # override takes priority over canonical registry/pose crop dict lookups
+        sort.image_edge_multiplier = BIIIIIG_FULL_BODY_MULTIPLIER
+        print(
+            "[MODE1 MULTIPLIER TRACE] USE_BIIIIIG_FULL_BODY_MULTIPLIER override "
+            f"arms={cluster_no} object_signature={pose_no} leg_variant={normalized_leg_variant} "
+            f"sort.image_edge_multiplier={sort.image_edge_multiplier}"
+        )
+        sort.face_height_output = face_height_output
+        sort.set_output_dims()
+        return learned_record
     if not use_pose_crop:
         if cluster_no is not None and pose_no is not None:
             if normalized_leg_variant is not None:
@@ -4231,7 +4367,7 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, l
         crop_dict_index = CLUSTER_CROP_DICT.get(CLUSTER1, {}).get(cluster_no, None)
         if crop_dict_index is not None:
             sort.image_edge_multiplier = resolve_multiplier(crop_dict_index)
-    elif image_edge_multiplier is None or variant_registry_miss:
+    elif image_edge_multiplier is None or variant_registry_miss or RECALCULATE_CANONICALS:
         # Dynamic fallback with object-bbox awareness. Missing leg-pose keys in
         # MODE 1 should still trigger a fresh estimate and a registry write for
         # the variant-specific multiplier set.
@@ -4527,6 +4663,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
     csv_folder = cfg["CSV_FOLDER"]
     canonical_registry = cfg.get("canonical_registry", {})
     mode1_enable_db_dedupe = cfg.get("mode1_enable_db_dedupe", False)
+    max_rows_per_cluster = cfg.get("max_rows_per_cluster")
 
     timing: dict = {}
     file_start = time.perf_counter()
@@ -4611,9 +4748,19 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
 
         assembly_start = time.perf_counter()
         if MAKE_CACHE_MODE:
-            process_csv_cache_only(df_sorted, csv_file, num_workers=12)
+            assembly_result = process_csv_cache_only(
+                df_sorted,
+                csv_file,
+                num_workers=12,
+                max_rows=max_rows_per_cluster,
+            )
+            rows_processed = int(assembly_result.get("rows_processed", 0))
         else:
-            linear_test_df(df_sorted, counter_state=csv_counter_state)
+            rows_processed = linear_test_df(
+                df_sorted,
+                counter_state=csv_counter_state,
+                max_rows=max_rows_per_cluster,
+            )
         timing["assembly"] = timing.get("assembly", 0.0) + (time.perf_counter() - assembly_start)
         timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
         return {
@@ -4621,6 +4768,7 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
             "success": True,
             "early_return": None,
             "error": None,
+            "rows_processed": rows_processed,
             "timing": timing,
             "learned_multipliers": learned_multipliers,
         }
@@ -5525,6 +5673,7 @@ def main():
                 else:
                     print(f"Not enough valid image dimensions ({n_ok}) to compute dynamic multiplier; using default {sort.image_edge_multiplier}")
             else:
+                print(f"DYN_BBOX_FROM_IMAGE_DIMS disabled: computing multiplier from body landmarks")
                 sort.image_edge_multiplier = sort.calc_dynamic_multiplier_from_min_max_body_landmarks(df_segment, 0, PERCENTILE)
 
         if canonical_multiplier is None and not use_pose_crop:
@@ -5768,6 +5917,8 @@ def main():
             # if VERBOSE: print("about to split_landmarks_to_columns_or_list,", df.iloc[0])
             # df = sort.split_landmarks_to_columns_or_list(df, left_col="left_hand_world_landmarks", right_col="right_hand_world_landmarks", structure="list")
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="list")
+            # gesture = mediapipe world landmarks (3D, wrist-relative), kept in its own column
+            df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list", dest_col="hand_gesture_array")
             df = sort.split_landmarks_to_columns_or_list(df, first_col="body_landmarks_3D", second_col=None, structure="list")
             # if VERBOSE: print("after split_landmarks_to_columns_or_list, ", df.iloc[0])
             if VERBOSE: print("df len after unpickling and split columns,", len(df))
@@ -6133,6 +6284,36 @@ def main():
             f for f in files_in_folder
             if f.endswith(".csv") and f.startswith("df_sorted_")
         ]
+
+        if MODE1_MIN_CLUSTER_ROWS is not None:
+            eligible_csv_files = []
+            for csv_file in csv_files_to_process:
+                segment_count, *_ = _mode1_find_parts(csv_file.replace(".csv", "").split("_"))
+                try:
+                    cluster_rows = int(segment_count)
+                except (TypeError, ValueError):
+                    print(f"[MODE1 LIMIT] cannot read cluster row count from {csv_file}; skipping")
+                    continue
+                if cluster_rows <= int(MODE1_MIN_CLUSTER_ROWS):
+                    print(
+                        f"[MODE1 LIMIT] skipping {csv_file}: cluster_rows={cluster_rows} "
+                        f"must be > {MODE1_MIN_CLUSTER_ROWS}"
+                    )
+                    continue
+                eligible_csv_files.append(csv_file)
+            csv_files_to_process = eligible_csv_files
+
+        max_rows_per_cluster = MODE1_MAX_ROWS_PER_CLUSTER
+        if max_rows_per_cluster is not None:
+            try:
+                max_rows_per_cluster = max(0, int(max_rows_per_cluster))
+            except (TypeError, ValueError):
+                print(
+                    f"[MODE1 LIMIT] invalid MODE1_MAX_ROWS_PER_CLUSTER={MODE1_MAX_ROWS_PER_CLUSTER}; "
+                    "disabling run-wide limit"
+                )
+                max_rows_per_cluster = None
+        mode1_shared_cfg["max_rows_per_cluster"] = max_rows_per_cluster
 
         if PARALLEL_WORKERS > 1:
             import multiprocessing as _mp

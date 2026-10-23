@@ -44,13 +44,13 @@ EXPAND = False
 ONE_SHOT = False # take all files, based off the very first sort order.
 JUMP_SHOT = False # jump to random file if can't find a run
 
-LIMIT = 9000000
+LIMIT = 10000000
 BATCH_LIMIT = 10000
 
 # number of clusters produced. run GET_OPTIMAL_CLUSTERS and add that number here
 # 32 for hand positions
 # 128 for hand gestures
-N_CLUSTERS = 384 # for testing, was 768  # test run at 4M; scale to ~1536-2048 for 38M production run
+N_CLUSTERS = 768 # for testing, was 768  # test run at 4M; scale to ~1536-2048 for 38M production run
 N_META_CLUSTERS = 256
 
 # Reproducibility seed for this run (NumPy + Python random).
@@ -173,12 +173,12 @@ SegmentTable_name = 'SegmentBig_isface'
 
 # if doing MODE == 2, use SegmentHelper_name to subselect SQL query
 # unless you know what you are doing, leave this as None
-# SegmentHelper_name = None
+SegmentHelper_name = "SegmentHelper_TheGym"
 # if cl.CLUSTER_TYPE == "ArmsPoses3D":
 # SegmentHelper_name = 'SegmentBig_isface'
 # SegmentHelper_name = 'Detections' # if CLUSTER_TYPE = "ObjectFusion", it automatically joins to Detections
 # SegmentHelper_name = 'SegmentHelper_june2025_nmlGPU300k'
-SegmentHelper_name = 'SegmentHelper_TheGym_object_fix151_20260821'
+# SegmentHelper_name = 'SegmentHelper_TheOffice'
 # SegmentHelper_name = 'SegmentHelper_may26_deleteme_missingArms3D' # this is a temporary helper table that is just a subset of the full SegmentHelperMar23_headon, which is too large to join to for clustering, but has the same structure and can be used for testing and for MODE 2 cluster assignment based on the subset of data it contains. It is missing the ArmsPoses3D data, so it is only useful for testing BodyPoses3D and ObjectFusion clustering and assignment, not ArmsPoses3D clustering and assignment, but it is useful for testing the overall pipeline with a smaller dataset. It has 1.1M rows, which is still large but more manageable than the full 3.8M rows in SegmentHelperMar23_headon.
 FORCE_HAND_LANDMARKS = False # when doing ArmsPoses3D, default is True, so mongo_hand_landmarks = 1
 
@@ -326,12 +326,14 @@ if USE_SEGMENT is True and (cl.CLUSTER_TYPE != "Clusters"):
             #     WHERE += " AND NOT EXISTS (SELECT 1 FROM ImagesDetections idt WHERE idt.image_id = s.image_id) "
 
     elif MODE in (1,2):
-        if DO_SIGNATURES and cl.CLUSTER_TYPE == "ObjectFusion":
-            FROM += f" LEFT JOIN ImagesObjectSignatures ic ON s.image_id = ic.image_id"
-        else: 
-            FROM += f" LEFT JOIN Images{table_cluster_type} ic ON s.image_id = ic.image_id"
         if MODE == 1: 
-            WHERE += " AND ic.cluster_id IS NULL "
+            if DO_SIGNATURES and cl.CLUSTER_TYPE == "ObjectFusion":
+                WHERE += f" AND NOT (EXISTS (SELECT 1 FROM ImagesObjectSignatures tct WHERE s.image_id = tct.image_id)) "
+                # FROM += f" LEFT JOIN ImagesObjectSignatures ic ON s.image_id = ic.image_id"
+            else: 
+                # FROM += f" LEFT JOIN Images{table_cluster_type} ic ON s.image_id = ic.image_id"
+                WHERE += f" AND NOT (EXISTS (SELECT 1 FROM Images{table_cluster_type} tct WHERE s.image_id = tct.image_id)) "
+            # WHERE += " AND ic.cluster_id IS NULL "
             if SegmentHelper_name:
                 FROM += f" INNER JOIN {SegmentHelper_name} h ON h.image_id = s.image_id " 
                 # WHERE += " AND h.is_body = 1"

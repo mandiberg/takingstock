@@ -1107,7 +1107,8 @@ class ToolsClustering:
             return
 
     def get_cluster_medians(self, session, Clusters, USE_SUBSET_MEDIANS=False, SUBSET_LANDMARKS=None):
-        print("getting cluster medians")
+        print("getting cluster medians for cluster type: ",self.CLUSTER_TYPE)
+        if self.CLUSTER_TYPE == "ObjectFusion": print(f"IGNORE THIS, because it is not pulling ObjectSignatures")
         # Create a SQLAlchemy select statement
         select_query = select(Clusters.cluster_id, Clusters.cluster_median)
 

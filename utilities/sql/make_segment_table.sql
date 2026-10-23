@@ -1,5 +1,6 @@
 
 USE stock;
+SET GLOBAL innodb_buffer_pool_size=8053063680;
 
 ALTER TABLE ImagesDetections
 ADD COLUMN last_reprocessed_detection_id BIGINT NULL;
@@ -12,7 +13,7 @@ DROP TABLE SegmentHelperObject_book ;
 DELETE FROM SegmentHelper_sept2025_heft_keywords;
 
 -- create helper segment table
-CREATE TABLE SegmentHelper_temp_normthis (
+CREATE TABLE SegmentHelper_TheStore (
     seg_image_id int NOT NULL AUTO_INCREMENT PRIMARY KEY,
     image_id INTEGER,
     FOREIGN KEY (image_id) REFERENCES Images(image_id)
@@ -103,17 +104,24 @@ FROM ObjectSignatures os
 WHERE os.cluster_id = 4216
 ;
 
+-- segment the segment table based on TOPICS and add to helpersegment
+INSERT INTO SegmentHelper_TheStore (image_id)
+SELECT DISTINCT image_id
+FROM SegmentHelper_T59_christmas
+;
+
+
 
 -- segment the segment table based on TOPICS and add to helpersegment
-INSERT INTO SegmentHelperMay22_anger (image_id)
+INSERT INTO SegmentHelper_T43_shop (image_id)
 SELECT DISTINCT so.image_id
-FROM SegmentOct20 so 
-LEFT JOIN SegmentHelperMay22_anger sh ON so.image_id = sh.image_id
+FROM SegmentBig_isface so 
+LEFT JOIN SegmentHelper_T59_christmas sh ON so.image_id = sh.image_id
 LEFT JOIN ImagesTopics it ON it.image_id = so.image_id 
 WHERE 
-	it.topic_id  IN (22)
+	it.topic_id  IN (43)
     AND sh.image_id IS NULL
-LIMIT 400000; -- Adjust the batch size as needed
+LIMIT 1000000; -- Adjust the batch size as needed
 
 -- count how many will be in this topics helper table
 SELECT count( seg1.image_id) 
