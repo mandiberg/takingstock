@@ -98,7 +98,7 @@ yolo = YOLOTools(DEBUGGING=True, VERBOSE=VERBOSE)
 MODES = {1:"custom45", 2: "thegym", 3: "something_new"}
 # custom 45 is the main custom model. COCO is turned on for that. it skips existing detections/placements
 # thegym is just the yoga/balls/weights. COCO is off, and it reruns EVERYTHING including nodetections
-MODE_CHOICE = 2
+MODE_CHOICE = 1
 MODE_NAME = MODES[MODE_CHOICE]
 
 # first gym detection: 221696705

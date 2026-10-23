@@ -5,7 +5,7 @@ This script is for moving composite files into folders
 It looks in a folder, and moves files into folders with matching cluster. 
 '''
 
-FOLDER = "/Volumes/LaCie/output_folder/_hsv_bg_2tier_trim1"
+FOLDER = "/Volumes/LaCie/output_folder/_BODY_T0_prints_oct17_round2"
 
 
 def extract_fustion_cluster(name):

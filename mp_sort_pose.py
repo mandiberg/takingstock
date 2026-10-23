@@ -118,7 +118,12 @@ class SortPose:
             "head_pose": 1.0,
             "hand_signal": 2.0,
             "bbox": 1.0,
+            # body3D/ArmsPoses3D hand blocks (only used when ARM_HAND_BLOCKS is on)
+            "hand_position": 1.0,
+            "hand_gesture": 30.0, # world landmarks are ~0.03-0.06 vs ~1-3 for positions, so bump up
         }
+        self.ARM_HAND_BLOCKS = False # set from make_video; last 2*ARM_HAND_BLOCK_DIMS dims of body vectors are hand_position + hand_gesture
+        self.ARM_HAND_BLOCK_DIMS = 126 # 2 hands * 21 points * 3 dims
 
         #maximum allowable distance between encodings (this accounts for dHSV)
         self.MAXFACEDIST = .8
@@ -530,6 +535,16 @@ class SortPose:
         Legacy: [pitch, yaw, roll, left_hand(x,y), right_hand(x,y), slot_bboxes...]
         Current: [pitch, yaw, roll, mouth_gap, left_hand(x,y), right_hand(x,y), slot_bboxes...]
         """
+        if sort_type in ("body3D", "ArmsPoses3D"):
+            n = self.ARM_HAND_BLOCK_DIMS
+            if not self.ARM_HAND_BLOCKS or vector_len <= 2 * n:
+                return None
+            return {
+                "body": slice(0, vector_len - 2 * n),
+                "hand_position": slice(vector_len - 2 * n, vector_len - n),
+                "hand_gesture": slice(vector_len - n, vector_len),
+            }
+
         if sort_type not in ("object_fusion", "obj_bbox"):
             return None
 
@@ -2506,9 +2521,10 @@ class SortPose:
         
         return error
 
-    def split_landmarks_to_columns_or_list(self, df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols"):
+    def split_landmarks_to_columns_or_list(self, df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="cols", dest_col=None):
         # converts world landmarks for hand and body to list for knn. 
         # legacy code to convert hands to cols. not sure if it is used anymore.
+        # dest_col overrides the output column (e.g. "hand_gesture_array" for world landmarks)
         if "left_hand" in first_col and "right_hand" in second_col:
             destination_col = "hand_landmarks"
         elif first_col=="body_landmarks_3D" and second_col is None:
@@ -2550,7 +2566,7 @@ class SortPose:
                 landmarks_list = first_landmarks + second_landmarks
             else:
                 landmarks_list = first_landmarks
-            df[destination_col] = landmarks_list
+            df[dest_col or destination_col] = landmarks_list
         
         return df
 
@@ -4556,7 +4572,8 @@ class SortPose:
                 # print("dist_enc1 values:", df_dist_noflash['dist_enc1'].values)
                 # replacing dist_HSV with dist_enc1 here, Sept 27
                 df_shuffled = mask_df(df_dist_noflash, output_cols, self.MAXD, "lessthan")
-                if self.VERBOSE: print("df_shuffled if not self.ONE_SHOT",df_shuffled)
+                if len(df_shuffled) < len(df_dist_noflash):
+                    print(f"[MAXD] {len(df_dist_noflash) - len(df_shuffled)} rows beyond MAXD {self.MAXD}, {len(df_shuffled)} rows left (min dist {df_dist_noflash[output_cols].min():.4f})")
 
                 if df_shuffled.empty:
                     if self.VERBOSE: print("No rows in the DataFrame met the filtering criteria, returning empty df and the untouched df_sorted.")
@@ -4585,6 +4602,8 @@ class SortPose:
                 # runmask is only relevant if not ONE_SHOT
                 try: runmask = df_shuffled['sum_dist'] < self.MIND
                 except: runmask = None
+                if runmask is not None:
+                    print(f"[MIND] {int(runmask.sum())} of {len(df_shuffled)} rows within MIND {self.MIND}")
                 if self.VERBOSE: print("runmask", runmask)
             else:
                 # if ONE_SHOT, skip the mask, and keep all data
