@@ -120,7 +120,7 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_ARMS_handgesture_selecttest_oct25" # go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, FUSION_PAIR_DICT_DETECTIONS_THEGYM, /data manifest,  multipliers, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_ARMS_handgesture_selecttest_oct25_partition_pos1.0gesture3.0weight" # go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, FUSION_PAIR_DICT_DETECTIONS_THEGYM, /data manifest,  multipliers, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_none" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
@@ -715,6 +715,10 @@ else:
 
 # True drops images with no hand landmarks (both hands empty) from arm clusters; False keeps them zero-filled
 DROP_IMAGES_WITHOUT_HANDS = True
+
+# Total influence of each feature group in the arm-cluster KMeans partition.
+# Each group is standardized, then scaled by weight/sqrt(n_dims) so group size doesn't skew the balance.
+PARTITION_GROUP_WEIGHTS = {"head_pose": 1.0, "hand_position": 1.0, "hand_gesture": 3.0}
 
 # cut the kids
 NO_KIDS = True
@@ -2051,6 +2055,142 @@ def tsp_sort(df_enc):
     # Then map back 
     df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
     return df_sorted
+
+def _coerce_landmark_xyz(landmark):
+    if landmark is None:
+        return None
+    if isinstance(landmark, dict):
+        x = landmark.get('x')
+        y = landmark.get('y')
+        z = landmark.get('z', 0.0)
+        if x is not None and y is not None:
+            return [float(x), float(y), float(z)]
+        return None
+    if hasattr(landmark, 'x') and hasattr(landmark, 'y'):
+        z = getattr(landmark, 'z', 0.0)
+        return [float(landmark.x), float(landmark.y), float(z)]
+    if isinstance(landmark, (list, tuple, np.ndarray)):
+        if len(landmark) >= 3:
+            return [float(landmark[0]), float(landmark[1]), float(landmark[2])]
+    return None
+
+
+def _normalize_world_landmarks(world_landmarks):
+    if world_landmarks is None:
+        return []
+    if isinstance(world_landmarks, (list, tuple, np.ndarray)) and len(world_landmarks) > 0:
+        if isinstance(world_landmarks[0], (list, tuple, np.ndarray)) and len(world_landmarks[0]) >= 3:
+            pts = [_coerce_landmark_xyz(lm) for lm in world_landmarks]
+            pts = [pt for pt in pts if pt is not None]
+            return pts
+        if hasattr(world_landmarks[0], 'x') and hasattr(world_landmarks[0], 'y'):
+            pts = [_coerce_landmark_xyz(lm) for lm in world_landmarks]
+            pts = [pt for pt in pts if pt is not None]
+            return pts
+        if len(world_landmarks) >= 21 and all(isinstance(v, (int, float, np.floating)) for v in world_landmarks[:21]):
+            normal = []
+            for i in range(0, min(len(world_landmarks), 63), 3):
+                if i + 2 < len(world_landmarks):
+                    normal.append([float(world_landmarks[i]), float(world_landmarks[i + 1]), float(world_landmarks[i + 2])])
+            return normal
+    return []
+
+
+def _compact_gesture_block_for_hand(world_landmarks):
+    pts = _normalize_world_landmarks(world_landmarks)
+    if len(pts) < 21:
+        return [0.0] * 15
+
+    wrist = pts[0]
+    palm_center = [
+        (pts[5][0] + pts[9][0] + pts[13][0] + pts[17][0]) / 4.0,
+        (pts[5][1] + pts[9][1] + pts[13][1] + pts[17][1]) / 4.0,
+        (pts[5][2] + pts[9][2] + pts[13][2] + pts[17][2]) / 4.0,
+    ]
+    thumb_tip = pts[4]
+    index_tip = pts[8]
+    middle_tip = pts[12]
+
+    feature_vectors = [
+        [palm_center[i] - wrist[i] for i in range(3)],
+        [palm_center[i] - thumb_tip[i] for i in range(3)],
+        [palm_center[i] - index_tip[i] for i in range(3)],
+        [palm_center[i] - middle_tip[i] for i in range(3)],
+        [wrist[i] - palm_center[i] for i in range(3)],
+    ]
+    flat = [coord for vec in feature_vectors for coord in vec]
+    if not any(abs(v) > 1e-9 for v in flat):
+        return [0.0] * 15
+    return flat
+
+
+def _compact_gesture_array_from_world_landmarks(left_world_landmarks, right_world_landmarks):
+    left_block = _compact_gesture_block_for_hand(left_world_landmarks)
+    right_block = _compact_gesture_block_for_hand(right_world_landmarks)
+    compact = left_block + right_block
+    if len(compact) < sort.ARM_HAND_BLOCK_DIMS:
+        compact.extend([0.0] * (sort.ARM_HAND_BLOCK_DIMS - len(compact)))
+    return compact[:sort.ARM_HAND_BLOCK_DIMS]
+
+
+def build_basic_partition_features(df_segment):
+    """Numeric, standardized features for the default (non-arm) partition.
+
+    pointer knuckles are [x, y, z] lists, which kmeans_cluster silently drops as non-numeric,
+    so expand them to x/y columns (off-screen default [0, 8] when missing).
+    """
+    from sklearn.preprocessing import StandardScaler
+
+    def knuckle_xy(value):
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) >= 2:
+            return [float(value[0]), float(value[1])]
+        return [0.0, 8.0]
+
+    head = df_segment[["pitch", "yaw", "roll", "is_feet"]].astype(float).to_numpy()
+    pos = np.array([
+        knuckle_xy(l) + knuckle_xy(r)
+        for l, r in zip(df_segment["left_pointer_knuckle_norm"], df_segment["right_pointer_knuckle_norm"])
+    ])
+    arr = np.nan_to_num(np.hstack([head, pos]))
+    columns = ["pitch", "yaw", "roll", "is_feet", "left_knuckle_x", "left_knuckle_y", "right_knuckle_x", "right_knuckle_y"]
+    return pd.DataFrame(StandardScaler().fit_transform(arr), columns=columns, index=df_segment.index)
+
+
+def build_arm_partition_features(df_segment):
+    """Numeric, standardized, group-weighted feature frame for partitioning ADD_ARM_POSITION_AND_GESTURE clusters.
+
+    head_pose: pitch, yaw, roll, is_feet
+    hand_position: left/right pointer knuckle x,y
+    hand_gesture: compact world-landmark vectors per hand (palm->wrist, palm->thumb/index/middle tips)
+    """
+    from sklearn.preprocessing import StandardScaler
+
+    def knuckle_xy(value):
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) >= 2:
+            return [float(value[0]), float(value[1])]
+        return [0.0, 8.0]  # same off-screen default as prep_knuckle_landmarks
+
+    def gesture_vec(value):
+        # compact layout is 15 dims per hand; the 5th vector (wrist - palm) just negates the 1st, so drop it
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) >= 30:
+            return [float(v) for v in list(value[0:12]) + list(value[15:27])]
+        return [0.0] * 24
+
+    head = df_segment[["pitch", "yaw", "roll", "is_feet"]].astype(float).to_numpy()
+    pos = np.array([
+        knuckle_xy(l) + knuckle_xy(r)
+        for l, r in zip(df_segment["left_pointer_knuckle_norm"], df_segment["right_pointer_knuckle_norm"])
+    ])
+    ges = np.array([gesture_vec(v) for v in df_segment["hand_gesture_array"]])
+
+    columns, blocks = [], []
+    for name, arr in (("head_pose", head), ("hand_position", pos), ("hand_gesture", ges)):
+        arr = np.nan_to_num(arr.astype(float))
+        scaled = StandardScaler().fit_transform(arr) * (PARTITION_GROUP_WEIGHTS[name] / np.sqrt(arr.shape[1]))
+        blocks.append(scaled)
+        columns += [f"{name}_{i}" for i in range(arr.shape[1])]
+    return pd.DataFrame(np.hstack(blocks), columns=columns, index=df_segment.index)
+
 
 def add_arm_hand_blocks(df_segment, add_arms, sort_type=None, is_multislot_obj_bbox_mode=False):
     """
@@ -5725,13 +5865,12 @@ def main():
             return 1
         return max(1, int(math.ceil(float(row_count) / float(max_rows_per_csv)))-DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT)
 
-    def partition_segment_with_kmeans(df_segment, max_rows_per_csv):
+    def partition_segment_with_kmeans(df_segment, max_rows_per_csv, use_arm_gesture=False):
         row_count = len(df_segment.index)
         if row_count <= max_rows_per_csv:
             return [df_segment]
 
         # chop the df down to the key dimensions to send that in to kmeans for partitioning
-        cols_to_cluster = ["pitch", "yaw", "roll", "left_pointer_knuckle_norm", "right_pointer_knuckle_norm", "is_feet"]
         # print(f"first row of df_segment:", df_segment.iloc[0]['body_landmarks_array'])
         # create an is_feet bool column and set it to True if any of the feet lms [27-32] have a visibility greater than .5
         feet_vis_items = [(i*4+3) for i in range(27, 33)]
@@ -5749,9 +5888,18 @@ def main():
             f"and max_rows_per_csv={max_rows_per_csv}"
         )
 
-        # only send in the cols_to_cluster
+        if use_arm_gesture and "hand_gesture_array" in df_segment.columns:
+            # already standardized + group weighted, so bypass any cluster-type feature prep
+            kmeans_input = build_arm_partition_features(df_segment)
+            prepare_fn = lambda d, fit_scaler=False: d
+            print(f"[partition] arm cluster: partitioning on head pose + hand position + hand gesture ({kmeans_input.shape[1]} dims)")
+        else:
+            kmeans_input = build_basic_partition_features(df_segment)
+            prepare_fn = lambda d, fit_scaler=False: d
+
         labels = cl.kmeans_cluster(
-            df_segment[cols_to_cluster],
+            kmeans_input,
+            prepare_fn=prepare_fn,
             n_clusters=n_clusters,
             fit_scaler=True,
             random_state=42,
@@ -5955,6 +6103,15 @@ def main():
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="list")
             # gesture = mediapipe world landmarks (3D, wrist-relative), kept in its own column
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list", dest_col="hand_gesture_array")
+            add_arms_for_cluster = getattr(sort, "counter_dict", {}).get("add_arms", is_arm_cluster(cluster_no))
+            if add_arms_for_cluster:
+                df["hand_gesture_array"] = df.apply(
+                    lambda row: _compact_gesture_array_from_world_landmarks(
+                        row.get("left_hand_world_landmarks"),
+                        row.get("right_hand_world_landmarks"),
+                    ),
+                    axis=1,
+                )
             df = sort.split_landmarks_to_columns_or_list(df, first_col="body_landmarks_3D", second_col=None, structure="list")
             # if VERBOSE: print("after split_landmarks_to_columns_or_list, ", df.iloc[0])
             if VERBOSE: print("df len after unpickling and split columns,", len(df))
@@ -6079,7 +6236,9 @@ def main():
                         "partitioning before process_linear"
                     )
                     partition_start = time.perf_counter()
-                    partition_groups = partition_segment_with_kmeans(df_segment, MAX_ROWS_PER_OUTPUT_CSV)
+                    partition_groups = partition_segment_with_kmeans(
+                        df_segment, MAX_ROWS_PER_OUTPUT_CSV, use_arm_gesture=is_arm_cluster(cluster_no)
+                    )
                     add_mode0_timing("partition", time.perf_counter() - partition_start)
                     partition_units = [(None, group_df) for group_df in partition_groups]
 
