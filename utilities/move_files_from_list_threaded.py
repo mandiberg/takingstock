@@ -36,7 +36,7 @@ sys.path.insert(1, ROOT_GITHUB)
 # import file
 
 from mp_db_io import DataIO
-IS_SSD =False  # if True it will use the SSD path, if False it will use the RAID path
+IS_SSD = True  # if True it will use the SSD path, if False it will use the RAID path
 
 # Define the path to the CSV file
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
@@ -44,7 +44,7 @@ IS_SSD =False  # if True it will use the SSD path, if False it will use the RAID
 VERBOSE = False
 # set origin before constructing io
 # ORIGIN_SSD = "/Volumes/OWC52/segment_images_32_sportsball"
-ORIGIN_SSD = "/Volumes/LaCie/segment_images_thegym"
+ORIGIN_SSD = "/Volumes/LaCie/stub_set/segment_images"
 # ORIGIN_SSD = "/Volumes/RAID18/is_not_face18"
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
 if not IS_SSD: ORIGIN_SSD = None
@@ -52,7 +52,7 @@ io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
 CSV_FOLDER = "/Users/michaelmandiberg/Documents/takingstock_production/moving_objects_to_SSDs/move_this" # for testing
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheGym/_BODY_T45_oct14" # for testing
+CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/_ARMS_handgesture_test_oct24"
 USE_DF_SORTED = True  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
@@ -69,8 +69,8 @@ ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segme
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
 # DEST = "/Volumes/OWC5/segment_images_newbigx"  # for testing
-# DEST = "/Volumes/OWC52/segment_images_TheGym_object_fix_32_37_86"  # for testing
-DEST = "/Volumes/LaCie/segment_images"  # 250k for headphones
+DEST = "/Volumes/LaCie/segment_images"  # for testing
+# DEST = "/Volumes/LaCie/segment_images"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
     # to run a smaller test, put a few files in the test folder

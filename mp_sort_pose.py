@@ -119,8 +119,8 @@ class SortPose:
             "hand_signal": 2.0,
             "bbox": 1.0,
             # body3D/ArmsPoses3D hand blocks (only used when ARM_HAND_BLOCKS is on)
-            "hand_position": 0.1,
-            "hand_gesture": 300.0, # world landmarks are ~0.03-0.06 vs ~1-3 for positions, so bump up
+            "hand_position": 0.001,
+            "hand_gesture": 30.0, # world landmarks are ~0.03-0.06 vs ~1-3 for positions, so bump up
         }
         self.ARM_HAND_BLOCKS = False # set from make_video; last 2*ARM_HAND_BLOCK_DIMS dims of body vectors are hand_position + hand_gesture
         self.ARM_HAND_BLOCK_DIMS = 126 # 2 hands * 21 points * 3 dims
@@ -188,7 +188,7 @@ class SortPose:
             self.CHECK_DESC_DIST = -1
             self.HSV_DELTA_MAX = 1000            
             self.FACE_DUPE_DIST = -1
-            self.BODY_DUPE_DIST = -1
+            self.BODY_DUPE_DIST = -1            
         else: 
             self.MIND = self.MINBODYDIST
             self.MAXD = self.MAXBODYDIST * 4
@@ -198,6 +198,11 @@ class SortPose:
             self.CHECK_DESC_DIST = 45
             if self.SORT_TYPE == "ArmsPoses3D":
                 self.MAXD = self.MAXBODYDIST * 300
+            elif self.SORT_TYPE == "object_fusion":
+                self.MIND = self.MINBODYDIST * 10
+                self.MAXD = self.MAXBODYDIST * 20
+
+
     
 
         self.INPAINT=INPAINT
@@ -547,6 +552,18 @@ class SortPose:
 
         if sort_type not in ("object_fusion", "obj_bbox"):
             return None
+
+        # Fusion vectors with appended hand blocks: [core..., hand_position(n), hand_gesture(n)].
+        # Weight the tail separately and lay out the core exactly as before.
+        n = self.ARM_HAND_BLOCK_DIMS
+        if self.ARM_HAND_BLOCKS and vector_len > 2 * n + 8:
+            core_slices = self._fusion_weight_slices_core(vector_len - 2 * n) or {}
+            core_slices["hand_position"] = slice(vector_len - 2 * n, vector_len - n)
+            core_slices["hand_gesture"] = slice(vector_len - n, vector_len)
+            return core_slices
+        return self._fusion_weight_slices_core(vector_len, sort_type)
+
+    def _fusion_weight_slices_core(self, vector_len, sort_type="object_fusion"):
 
         # Non-fusion obj_bbox is a plain 4D box and should remain unweighted here.
         if sort_type == "obj_bbox" and vector_len <= 8:
