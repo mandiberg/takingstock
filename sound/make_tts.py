@@ -29,8 +29,8 @@ OPTION, MODE = pick(options, title)
 start = time.time()
 io = DataIO()
 print(io.ROOTSSD)
-INPUT = os.path.join(io.ROOTSSD, "tts_sport")
-OUTPUT = "/Volumes/OWC5/tts_sport"
+INPUT = os.path.join(io.ROOTSSD, "tts_office")
+OUTPUT = "/Volumes/OWC5/tts_office"
 # Brandon paths
 # INPUT = os.path.join(io.ROOTSSD, "sound")
 # OUTPUT = os.path.join(io.ROOTSSD, "sound/tts_files_test")
@@ -52,6 +52,9 @@ AUDIO_EXTS = {".wav", ".mp3", ".flac"}
 FISH_MODEL = "s2.1-pro-free"
 FISH_VOICE_PAGE_SIZE = 50
 FISH_VOICE_MAX = 1000
+FISH_TIMEOUT_S = 15.0  # normal requests take ~1-6s; SDK default is 240s
+FISH_MAX_ATTEMPTS = 3
+FISH_RETRY_BACKOFF_S = 3
 
 
 def hashed_audio_path(out_dir, filename):
@@ -177,12 +180,21 @@ def write_TTS_openai(client, input_text, file_name, voice_preset):
 
 
 def write_TTS_fish(client, input_text, file_name, voice_id):
-    audio = client.tts.convert(
-        text=input_text,
-        reference_id=voice_id,
-        format="wav",
-        model=FISH_MODEL,
-    )
+    for attempt in range(1, FISH_MAX_ATTEMPTS + 1):
+        try:
+            audio = client.tts.convert(
+                text=input_text,
+                reference_id=voice_id,
+                format="wav",
+                model=FISH_MODEL,
+            )
+            break
+        except FISH_RETRYABLE as e:
+            if attempt == FISH_MAX_ATTEMPTS:
+                raise
+            wait = FISH_RETRY_BACKOFF_S * 2 ** (attempt - 1)
+            print(f"  retry {attempt}/{FISH_MAX_ATTEMPTS - 1} in {wait}s: {type(e).__name__}: {str(e)[:120]}")
+            time.sleep(wait)
     os.makedirs(os.path.dirname(os.path.abspath(file_name)) or ".", exist_ok=True)
     with open(file_name, "wb") as f:
         f.write(audio)
@@ -245,10 +257,13 @@ if OPTION == "openai_or_eleven_labs":
     WINDOW = [0.7, 1]
 
 elif OPTION == "fish":
+    import httpx
     from fishaudio import FishAudio
+    from fishaudio.exceptions import RateLimitError, ServerError
     from API_fish import FISH_API_KEY
 
-    fish_client = FishAudio(api_key=FISH_API_KEY)
+    FISH_RETRYABLE = (httpx.TransportError, ServerError, RateLimitError)
+    fish_client = FishAudio(api_key=FISH_API_KEY, timeout=FISH_TIMEOUT_S)
     print(f"Loading Fish public English voices ({FISH_MODEL}) …")
     FISH_VOICE_IDS = load_fish_voice_ids(fish_client)
     if not FISH_VOICE_IDS:
@@ -383,7 +398,7 @@ with open(source_path, mode="r", encoding="utf-8-sig", newline="") as csvfile:
                 file_path = hashed_audio_path(OUTPUT, out_name)
                 write_TTS(input_text, file_path)
         except Exception as e:
-            print(f"  FAILED {image_id}: {type(e).__name__}: {e}")
+            print(f"  FAILED {image_id}: {type(e).__name__}: {str(e)[:200]}")
             log_row_progress(item_t0)
             counter += 1
             continue

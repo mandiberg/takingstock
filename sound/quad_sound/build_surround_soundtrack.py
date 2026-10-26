@@ -1,8 +1,9 @@
-"""Quadraphonic soundtrack mixer.
+"""Surround soundtrack mixer.
 
-Same pipeline as build_soundtrack.py, but each clip is placed on 2, 3, or 4
-speakers of a quad square according to the existing quiet / mid / loud volume
-branches. Output is a 4-channel WAV (FL FR BL BR).
+At startup, pick quad or stereo.
+Quad places each clip on 2, 3, or 4 speakers (FL FR BL BR).
+Stereo places the same quiet / mid / loud tiers in L/R, so a two-speaker
+quad pair is not folded into a hard pan.
 """
 import pandas as pd
 import os
@@ -14,6 +15,7 @@ import soundfile as sf
 import numpy as np
 import librosa
 import gc
+from pick import pick
 
 # go get IO class from parent folder
 # caution: path[0] is reserved for script path (or '' in REPL)
@@ -32,7 +34,7 @@ INPUT = io.ROOTSSD # folder that holds SOUND_FOLDER and audiopduction folders
 #################################
 
 ######Tench's folders###########
-INPUT = "/Volumes/OWC52/tts_sport"
+INPUT = "/Volumes/OWC5/tts_office"
 #################################
 
 TOPIC = 0  # non-batch only: which metas_{TOPIC}.csv to mix
@@ -47,40 +49,588 @@ BATCH_MODE = True          # set True to process cluster folders under BATCH_FOL
 # BATCH_FOLDER_NAME = "/Volumes/OWC52/tts_sport/_BODY_c157v3_2000s_preLAX_9000s"
 BATCH_FOLDER_NAME = "/Volumes/LaCie/output_folder/_gattopardo_sept10/mergedforaudio"
 
-
 # Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
 # Empty list = every subfolder that contains metas.csv.
 BATCH_CLUSTERS = [
     # "clustercc1_p1_t0_om1_1788371815.2307808",
     # "clustercc8_p1_t0_om1_1788402205.695117",
 ]
-METAS_CSV_NAME = "metas.csv"
-# Cluster metas.csv has no audio filename; the last field is topic weight.
-METAS_COLUMNS = ["image_id", "description", "topic_fit", "detections", "object", "topic"]
-METAS_AUDIO_COLUMNS = [
-    "image_id", "description", "topic_fit", "detections", "objects", "topic", "filename",
-]
-# -------------------------
 
-CSV_FILE = f"metas_{TOPIC}.csv"  # overwritten per-topic when BATCH_MODE = True
 SOUND_FOLDER = "."
 # SOUND_FOLDER = "37_metas_hold_for_now"
-METAS_AUDIO_CSV = os.path.join(INPUT, "metas_audio.csv")
-MISSING_IDS_CSV = os.path.join(INPUT, "missing_ids.csv")
 
-# TOPICFOLDER = "topic" + str(TOPIC)
+# Sampling rate for the mixdown
+sample_rate = None
 
-# start = time.time()
+class AudioIndex:
+    """Cached audio filename lookup for one input folder."""
+    AUDIO_EXTS = {".wav", ".mp3", ".flac"}
+    HASH_TOP = tuple("0123456789ABCDEF")
+    METAS_CSV_NAME = "metas.csv"
+    METAS_COLUMNS = ["image_id", "description", "topic_fit", "detections", "object", "topic"]
+    METAS_AUDIO_COLUMNS = ["image_id", "description", "topic_fit", "detections", "objects", "topic", "filename"]
+
+    def __init__(self, input_dir, sound_folder=".", io=None):
+        self.input_dir = input_dir
+        self.sound_folder = sound_folder
+        self.io = io
+        self.metas_audio_csv = os.path.join(input_dir, "metas_audio.csv")
+        self.missing_ids_csv = os.path.join(input_dir, "missing_ids.csv")
+        self._filenames_from_csv = None
+        self._walked_audio_by_id = None
+        self._walked_audio_all = None
+        self._metas_audio_fieldnames = None
+        self.missing_ids_written = 0
+        self.missing_ids_fieldnames = None
+
+    def sound_dir(self):
+        return os.path.normpath(os.path.join(self.input_dir, self.sound_folder))
+
+    def hashed_audio_path(self, root, filename):
+        """Two-level MD5 folders keyed on the full filename, including extension."""
+        filename = os.path.basename(filename)
+        level1, level2 = self.io.get_hash_folders(filename)
+        return os.path.join(root, level1, level2, filename)
+
+    def resolve_audio_path(self, filename):
+        """Prefer hashed layout; fall back to a flat file under self.sound_folder."""
+        root = self.sound_dir()
+        filename = os.path.basename(filename)
+        hashed = self.hashed_audio_path(root, filename)
+        if os.path.isfile(hashed):
+            return hashed
+        flat = os.path.join(root, filename)
+        if os.path.isfile(flat):
+            return flat
+        return hashed
+
+    def existing_audio_by_id(self, folder):
+        """Walk hash trees (or the whole folder) and map image_id -> basename."""
+        lists = self.walk_audio_filenames_by_id(folder)
+        return {iid: pick_audio_filename(names) for iid, names in lists.items()}
+
+    def hash_dir_roots(self, folder):
+        """Top-level 0-9/A-F hash directories under folder."""
+        roots = []
+        for top in self.HASH_TOP:
+            path = os.path.join(folder, top)
+            if os.path.isdir(path):
+                roots.append(path)
+        return roots
+
+    def walk_audio_filenames_by_id(self, folder):
+        """image_id -> [basenames] from hash folders, or a full walk if none exist."""
+        by_id = {}
+        if not os.path.isdir(folder):
+            return by_id
+        roots = self.hash_dir_roots(folder)
+        if not roots:
+            roots = [folder]
+        n_files = 0
+        for root in roots:
+            for walk_root, _dirs, files in os.walk(root):
+                if "_x" in walk_root.split(os.sep):
+                    continue
+                for fname in files:
+                    ext = os.path.splitext(fname)[1].lower()
+                    if ext not in self.AUDIO_EXTS:
+                        continue
+                    key = image_id_key(os.path.splitext(fname)[0].split("_")[0])
+                    if key is None:
+                        continue
+                    n_files += 1
+                    by_id.setdefault(key, [])
+                    if fname not in by_id[key]:
+                        by_id[key].append(fname)
+        print(f"  scrape indexed {n_files} audio file(s) for {len(by_id)} image_id(s)")
+        return by_id
+
+    def audio_on_disk(self, filename):
+        filename = _clean_filename(filename)
+        if not filename:
+            return False
+        path = self.resolve_audio_path(filename)
+        return os.path.isfile(path)
+
+    def filenames_from_metas_audio(self):
+        if self._filenames_from_csv is None:
+            self._filenames_from_csv = load_filenames_from_metas_audio(self.metas_audio_csv)
+        return self._filenames_from_csv
+
+    def walked_audio_by_id(self):
+        """Walk hash folders once per process; keep every clip per image_id."""
+        if self._walked_audio_by_id is None:
+            root = self.sound_dir()
+            print(f"Scraping hash-folder audio in {root} …")
+            self._walked_audio_all = self.walk_audio_filenames_by_id(root)
+            self._walked_audio_by_id = {
+                iid: pick_audio_filename(names) for iid, names in self._walked_audio_all.items()
+            }
+            print(f"Walk found {len(self._walked_audio_by_id)} image_id(s) with audio")
+        return self._walked_audio_by_id
+
+    def metas_audio_fieldnames(self):
+        """Header of metas_audio.csv, guaranteeing a filename column."""
+        if self._metas_audio_fieldnames is not None:
+            return self._metas_audio_fieldnames
+        names = list(self.METAS_AUDIO_COLUMNS)
+        if os.path.isfile(self.metas_audio_csv) and os.path.getsize(self.metas_audio_csv) > 0:
+            with open(self.metas_audio_csv, "r", encoding="utf-8-sig", newline="") as f:
+                header = list(csv.DictReader(f).fieldnames or [])
+            if header:
+                names = header
+        if "filename" not in names:
+            names.append("filename")
+        self._metas_audio_fieldnames = names
+        return names
+
+    def append_metas_audio_rows(self, rows):
+        """Append scraped cluster rows (with filename) to metas_audio.csv."""
+        if not rows:
+            return 0
+        fieldnames = self.metas_audio_fieldnames()
+        path = self.metas_audio_csv
+        exists = os.path.isfile(path) and os.path.getsize(path) > 0
+        if exists:
+            _ensure_csv_trailing_newline(path)
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+        with open(path, "a", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            if not exists:
+                writer.writeheader()
+            writer.writerows(rows)
+        return len(rows)
+
+    def append_scraped_cluster_rows(self, df, scraped):
+        """Write metas.csv data + scraped filename for ids not yet in metas_audio.csv."""
+        if not scraped:
+            return 0
+        csv_names = self.filenames_from_metas_audio()
+        keys = df["image_id"].map(image_id_key)
+        fieldnames = self.metas_audio_fieldnames()
+        rows = []
+        for iid, filename in scraped:
+            if iid in csv_names:
+                continue
+            matches = df[keys == iid]
+            if matches.empty:
+                continue
+            row = cluster_row_to_metas_audio(matches.iloc[-1], filename, fieldnames)
+            rows.append(row)
+            csv_names[iid] = filename
+        written = self.append_metas_audio_rows(rows)
+        if self._filenames_from_csv is not None:
+            self._filenames_from_csv.update(csv_names)
+        return written
+
+    def index_audio_for_topic(self, df):
+        """Resolve audio for this cluster's ids; scrape hash folders; backfill metas_audio.csv.
+
+        Returns (existing, still_missing). existing maps image_id -> audio basename.
+        Ids found on disk but missing from metas_audio.csv are appended with the
+        cluster metas.csv fields plus the scraped filename.
+        """
+        csv_names = self.filenames_from_metas_audio()
+        walked = self.walked_audio_by_id()
+        df_ids = {k for k in (image_id_key(v) for v in df["image_id"]) if k is not None}
+        existing = {}
+        still_missing = []
+        scraped = []
+        csv_ok = 0
+        csv_stale = 0
+        for iid in df_ids:
+            csv_name = _clean_filename(csv_names.get(iid))
+            if csv_name and self.audio_on_disk(csv_name):
+                existing[iid] = csv_name
+                csv_ok += 1
+                continue
+            if csv_name:
+                csv_stale += 1
+            walked_name = _clean_filename(walked.get(iid))
+            if walked_name:
+                existing[iid] = walked_name
+                if iid not in csv_names:
+                    scraped.append((iid, walked_name))
+                continue
+            still_missing.append(iid)
+
+        appended = self.append_scraped_cluster_rows(df, scraped)
+        print(f"  metas_audio.csv hits on disk: {csv_ok}; "
+              f"csv filename missing on disk: {csv_stale}; "
+              f"scrape filled: {len(scraped)}; still missing: {len(still_missing)}")
+        if appended:
+            print(f"  appended {appended} row(s) to {self.metas_audio_csv}")
+        return existing, still_missing
+
+    def collect_missing_id_rows(self, df, missing_ids, cluster):
+        """Append metas rows for ids with no audio to missing_ids.csv immediately."""
+        if not missing_ids:
+            return 0
+        missing_set = set(missing_ids)
+        keys = df["image_id"].map(image_id_key)
+        rows = df[keys.isin(missing_set)].copy()
+        if rows.empty:
+            return 0
+        rows.insert(0, "cluster", cluster)
+        path = self.missing_ids_csv
+        exists = os.path.isfile(path) and os.path.getsize(path) > 0
+        if exists:
+            _ensure_csv_trailing_newline(path)
+            if self.missing_ids_fieldnames is None:
+                with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                    self.missing_ids_fieldnames = list(csv.DictReader(f).fieldnames or [])
+            fieldnames = self.missing_ids_fieldnames
+            for col in fieldnames:
+                if col not in rows.columns:
+                    rows[col] = ""
+            rows = rows[fieldnames]
+        else:
+            os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+            self.missing_ids_fieldnames = list(rows.columns)
+        rows.to_csv(path, mode="a", header=not exists, index=False)
+        n = len(rows)
+        self.missing_ids_written += n
+        print(f"  appended {n} missing-id row(s) to {path}")
+        return n
+
+    def write_missing_ids_csv(self, path=None):
+        """Summarize missing_ids.csv appends for this run."""
+        path = path or self.missing_ids_csv
+        if self.missing_ids_written == 0:
+            print(f"No missing ids appended to {path}")
+            return
+        print(f"Appended {self.missing_ids_written} missing-id row(s) this run to {path}")
 
 
-# Choose a file starting with a given string
-# prefixed = [filename for filename in os.listdir('.') if filename.startswith("prefix")]
+class SurroundMixer:
+    """Mix quiet / mid / loud clips into a quad or stereo soundtrack."""
+    TARGET_SAMPLE_RATE = 24000
+    CHUNK_SIZE = 500  # Adjust this value based on your system's capabilities
+    OFFSET_DICT = {
+        23: 0.075, # T23
+        32: 0.0697, # T32
+        37: 0.0755, # T37
+    }
+    WPS = 4
+    SCALE_EXPONENT = 0  # exponent for scale_volume_exp; 0 = linear, 1 = cubic
+    VOLUME_MIN = 0
+    VOLUME_MAX = .8
+    FIT_VOL_MIN = .1
+    FIT_VOL_MAX = 1
+    FADEOUT = 7
+    FADE_TIME = 1
+    QUIET = .5
+    QUIET_VOL_MIN = .02
+    QUIET_VOL_MAX = .08
+    QUIET_PAD_FADE_IN = 3.0  # seconds to crossfade the tail pad into existing quiet
+    QUIET_PAD_FADEOUT = 15   # per-clip fadeout, same default as scale_volume
+    LOUD_ALOWED = 2
+    LOUD_RESET = 7
+    SPEAKER_NAMES = ("FL", "FR", "BL", "BR")
+    STEREO_SPEAKER_NAMES = ("L", "R")
+    CYCLE = (0, 1, 3, 2)  # FL, FR, BR, BL
+    ANCHOR_RANGE_MID = [0.50, 0.75]
+    ANCHOR_RANGE_LOUD = [0.40, 0.70]
+    STEREO_QUIET_RANGE = (0.30, 0.70)
+    KEYS = {
+        0: ["sport", "exercis", "activ", "athlet", "fit", "train", "workout", "lifestyl", "healthi", "yoga"],
+        1: ["outsid", "think", "sceneri", "landscap", "calm", "contempl", "peac", "retir", "pension", "blur"],
+        2: ["chef", "kitchen", "cook", "apron", "cut", "hard", "occup", "food", "restaur", "uniform"],
+        3: ["mustach", "player", "competit", "number", "soccer", "classroom", "limb", "ginger", "count", "curios"],
+        4: ["occup", "adolesc", "employ", "expertis", "wisdom", "squar", "world", "project", "intellig", "composit"],
+        5: ["denim", "pant", "pocket", "convers", "secur", "sweatshirt", "danger", "timber", "knee", "pigtail"],
+        6: ["citi", "urban", "travel", "journey", "street", "sole", "vacat", "walk", "outdoor", "trip"],
+        7: ["light", "phenomenon", "pictur", "natur", "brick", "cheek", "glow", "neutral", "lamp", "illumin"],
+        8: ["vintag", "retro", "banner", "classic", "poster", "even", "cotton", "logo", "candi", "gown"],
+        9: ["makeup", "fashion", "glamour", "beauti", "model", "eleg", "hair", "hairstyl", "style", "sensual"],
+        10: ["drink", "reclin", "alcohol", "refresh", "bottl", "unusu", "chocol", "wine", "bunni", "rabbit"],
+        11: ["busi", "corpor", "execut", "success", "manag", "offic", "suit", "profession", "confid", "worker"],
+        12: ["shoe", "attitud", "determin", "pride", "individu", "desir", "cross", "challeng", "club", "length"],
+        13: ["shadow", "multiraci", "magic", "plastic", "surgeri", "develop", "silhouett", "author", "tech", "attack"],
+        14: ["stop", "skateboard", "ecolog", "skate", "exot", "extrem", "illustr", "poverti", "forbid", "friday"],
+        15: ["muscl", "romant", "shape", "valentin", "heart", "muscular", "lift", "chest", "athlet", "bicep"],
+        16: ["food", "eat", "diet", "fruit", "fresh", "healthi", "meal", "breakfast", "kitchen", "sweet"],
+        17: ["garden", "plant", "farm", "rural", "growth", "agricultur", "nose", "farmer", "harvest", "natur"],
+        18: ["board", "tone", "negat", "headach", "solut", "ribbon", "ecstat", "decis", "choic", "hindu"],
+        19: ["masculin", "conscious", "macho", "eyebrow", "ladi", "eyelash", "perspect", "temptat", "deadlin", "old-fashion"],
+        20: ["medic", "doctor", "colleg", "hospit", "stethoscop", "health", "healthcar", "medicin", "clinic", "nurs"],
+        21: ["educ", "studi", "book", "student", "elementari", "univers", "schoolgirl", "learn", "read", "childhood"],
+        22: ["finger", "gestur", "point", "thumb", "show", "symbol", "hand", "sign", "emot", "express"],
+        23: ["depress", "stress", "problem", "mood", "frustrat", "sad", "worri", "tire", "heel", "balloon"],
+        24: ["winter", "autumn", "cold", "fall", "warm", "scarf", "season", "snow", "forest", "natur"],
+        25: ["fashion", "beauti", "pose", "model", "eleg", "hair", "skirt", "dress", "style", "studio"],
+        26: ["hope", "pray", "funki", "religion", "billboard", "charact", "religi", "boot", "prayer", "cultur"],
+        27: ["flower", "bouquet", "golden", "bride", "fight", "box", "move", "glove", "filter", "wild"],
+        28: ["costum", "tradit", "halloween", "arabian", "fantasi", "carniv", "dress", "cultur", "mysteri", "primari"],
+        29: ["set", "nutrit", "appl", "vitamin", "choos", "garland", "peel", "start", "knitwear", "individu"],
+        30: ["real", "loss", "swimsuit", "vietnames", "villag", "agent", "center", "measur", "fabric", "reject"],
+        31: ["innoc", "small", "childhood", "cute", "sweet", "play", "newborn", "beauti", "face", "happi"],
+        32: ["shock", "surpris", "mouth", "confus", "shade", "fear", "express", "cover", "open", "excit"],
+        33: ["advertis", "engag", "length", "blank", "quarter", "jump", "copi", "inform", "size", "plank"],
+        34: ["achiev", "scream", "excit", "shout", "celebr", "success", "express", "aggress", "fist", "frustrat"],
+        35: ["skin", "clean", "care", "fresh", "treatment", "health", "beauti", "healthi", "clear", "perfect"],
+        36: ["seat", "tie", "chair", "wooden", "floor", "barefoot", "wife", "door", "housewif", "wood"],
+        37: ["franc", "money", "win", "strip", "ball", "credit", "financ", "card", "currenc", "cash"],
+        38: ["headshot", "dream", "hair", "view", "candid", "real", "focus", "foreground", "look", "imagin"],
+        39: ["structur", "floral", "humor", "pattern", "tongu", "rock", "gold", "welcom", "stick", "sound"],
+        40: ["internet", "laptop", "technolog", "digit", "tablet", "onlin", "communic", "wireless", "connect", "busi"],
+        41: ["friend", "protect", "mask", "covid-19", "virus", "epidem", "diseas", "beverag", "medic", "divers"],
+        42: ["coffe", "drink", "break", "cafe", "aspir", "electron", "exhaust", "restaur", "north", "downtown"],
+        43: ["shop", "custom", "sale", "buy", "retail", "store", "purchas", "contact", "shopahol", "consumer"],
+        44: ["observ", "singl", "teeth", "inform", "express", "confid", "emot", "posit", "studio", "cheer"],
+        45: ["spring", "natur", "summer", "beach", "outdoor", "park", "grass", "vacat", "beauti", "activ"],
+        46: ["labor", "construct", "engin", "industri", "muslim", "helmet", "tool", "safeti", "worker", "architect"],
+        47: ["shirt", "cloth", "jean", "fashion", "studio", "casual", "handsom", "model", "pose", "style"],
+        48: ["seduct", "swim", "lingeri", "underwear", "pool", "simplic", "bikini", "water", "culinari", "automobil"],
+        49: ["music", "listen", "headphon", "danc", "perform", "nerd", "dancer", "teacher", "entertain", "audio"],
+        50: ["object", "blow", "cloud", "wind", "bubbl", "kiss", "disabl", "solitud", "shampoo", "soap"],
+        51: ["facad", "individu", "figur", "save", "invest", "retir", "economi", "inform", "chic", "account"],
+        52: ["interior", "home", "room", "domest", "hous", "indoor", "live", "relax", "comfort", "sofa"],
+        53: ["near", "button", "window", "businesswear", "teamwork", "cocktail", "binocular", "smoke", "press", "colleagu"],
+        54: ["action", "time", "applic", "tattoo", "neckti", "textur", "watch", "clock", "histor", "wheel"],
+        55: ["free", "anim", "relationship", "friendship", "togeth", "girlfriend", "pet", "famili", "coupl", "flirt"],
+        56: ["daughter", "sick", "servic", "packag", "overweight", "parent", "deliveri", "transport", "unhealthi", "order"],
+        57: ["satisfact", "collar", "secretari", "star", "well-dress", "reflect", "straw", "vest", "orient", "memori"],
+        58: ["parti", "bald", "birthday", "instrument", "faith", "groom", "celebr", "music", "christian", "musician"],
+        59: ["christma", "celebr", "present", "gift", "holiday", "santa", "decor", "festiv", "winter", "decemb"],
+        60: ["authent", "game", "scienc", "virtual", "placard", "help", "milk", "innov", "templat", "brutal"],
+        61: ["level", "infant", "plain", "artist", "paint", "race", "set", "draw", "fold", "mix"],
+        62: ["offer", "sexual", "ident", "stone", "contain", "actor", "breast", "rear", "partnership", "ancient"],
+        63: ["phone", "mobil", "communic", "telephon", "technolog", "messag", "talk", "smart", "text", "wireless"]
+    }
+    good_files = []
 
-# df and existing_files are loaded per-topic inside main()
+    def __init__(self, input_dir, batch_mode=True, batch_folder=None, batch_clusters=None,
+                 topic=0, key_topics=None, sound_folder=".", io=None):
+        self.input_dir = input_dir
+        self.batch_mode = batch_mode
+        self.batch_folder = batch_folder
+        self.batch_clusters = list(batch_clusters or [])
+        self.topic = topic
+        self.key_topics = list(key_topics) if key_topics is not None else [0, 3, 15, 45]
+        self.audio = AudioIndex(input_dir, sound_folder=sound_folder, io=io)
+        self.csv_file = f"metas_{topic}.csv"
+        self.offset = self.OFFSET_DICT.get(topic, 0.0743)
+        self.loud_counter = []
+        self.channel_counter = 0
+        self.fake_loud = False
+        self.existing_files = {}
+        self.output_mode = "quad"
+        self.n_channels = 4
 
-# # Initialize lists to store audio data for each channel
-# left_channel_data = []
-# right_channel_data = []
+    def choose_output_mode(self):
+        """Ask once per run. Quad stays 4-channel; stereo places in L/R."""
+        title = "Choose soundtrack output:"
+        options = [
+            "quad (4-channel FL FR BL BR)",
+            "stereo",
+        ]
+        _option, index = pick(options, title)
+        if index == 1:
+            self.output_mode = "stereo"
+            self.n_channels = 2
+        else:
+            self.output_mode = "quad"
+            self.n_channels = 4
+        print(f"Output mode: {self.output_mode} ({self.n_channels} channels)")
+
+    def stereo_gains(self, tier):
+        """L/R weights that sum to 1.
+
+        Quiet keeps each side inside self.STEREO_QUIET_RANGE so a clip cannot hard-pan.
+        Mid and loud give one side the anchor share and the other side the rest.
+        Loud alternates the anchor side with self.channel_counter, which ticks once
+        per above-quiet clip just before this is called.
+        """
+        if tier == "quiet":
+            lo, hi = self.STEREO_QUIET_RANGE
+            left = float(np.random.uniform(lo, hi))
+            return np.array([left, 1.0 - left]), None
+
+        if tier == "mid":
+            side = int(np.random.randint(0, 2))
+            lo_hi = self.ANCHOR_RANGE_MID
+        else:
+            side = (self.channel_counter - 1) % 2 if self.channel_counter else 0
+            lo_hi = self.ANCHOR_RANGE_LOUD
+        share = _anchor_share(lo_hi)
+        gains = np.zeros(2)
+        gains[side] = share
+        gains[1 - side] = 1.0 - share
+        return gains, (self.STEREO_SPEAKER_NAMES[side], share, lo_hi)
+
+    def spatial_gains(self, tier):
+        """Weights that sum to 1 over the chosen speakers.
+
+        Quad: FL, FR, BL, BR. Stereo: L, R via stereo_gains.
+        Returns (gains, anchor_info). anchor_info is None for quiet, else
+        (speaker_name, share, [lo, hi]).
+        """
+        if self.output_mode == "stereo":
+            return self.stereo_gains(tier)
+        gains = np.zeros(self.n_channels)
+        start = np.random.randint(0, 4)
+        if tier == "quiet":
+            idxs = [self.CYCLE[start], self.CYCLE[(start + 1) % 4]]
+            weights = random_normalized_weights(len(idxs))
+            for idx, weight in zip(idxs, weights):
+                gains[idx] = weight
+            return gains, None
+
+        if tier == "mid":
+            anchor = self.CYCLE[start]
+            others = [self.CYCLE[(start - 1) % 4], self.CYCLE[(start + 1) % 4]]
+            lo_hi = self.ANCHOR_RANGE_MID
+            share = _anchor_share(lo_hi)
+            remainder = random_normalized_weights(2) * (1.0 - share)
+            gains[anchor] = share
+            for idx, weight in zip(others, remainder):
+                gains[idx] = weight
+            return gains, (self.SPEAKER_NAMES[anchor], share, lo_hi)
+
+        # loud: any speaker as anchor; remainder split among the other three
+        anchor = start
+        others = [i for i in range(self.n_channels) if i != anchor]
+        lo_hi = self.ANCHOR_RANGE_LOUD
+        share = _anchor_share(lo_hi)
+        remainder = random_normalized_weights(3) * (1.0 - share)
+        gains[anchor] = share
+        for idx, weight in zip(others, remainder):
+            gains[idx] = weight
+        return gains, (self.SPEAKER_NAMES[anchor], share, lo_hi)
+
+    def keys_for_search(self):
+        """Union of KEYS stems for every id in KEY_TOPICS, first occurrence kept."""
+        stems = []
+        seen = set()
+        for t in self.key_topics:
+            for key in self.KEYS.get(t, []):
+                if key not in seen:
+                    seen.add(key)
+                    stems.append(key)
+        return stems
+
+    def search_for_keys(self, row):
+        # search the first three words of the description for each key in self.KEYS
+        # if any of the keys are found, set the volume to 1
+        # if not, set the volume to 0.5
+        if pd.isna(row['description']): return [],0
+
+        # found = False
+        found_list=[]
+        desc_split=row['description'].lower().split(" ")
+        desc_count=len(desc_split)
+        active_keys = self.keys_for_search()
+        for index,word in enumerate(desc_split):
+            for key in active_keys:
+                if key in word:
+                    print(" ---- ", key, "found in", word, row['description'],row['image_id'])
+                    found_list.append(index)
+                    break
+        if len(found_list)==0:
+            print("No keys found in", row['description'],"for topic models", self.key_topics)
+        return found_list,desc_count
+
+    def spatial_tier(self, row):
+        """Match scale_volume branches: quiet / loud(keys) / mid."""
+        volume_fit = float(row["topic_fit"])
+        if volume_fit < self.QUIET:
+            return "quiet"
+        key_index, _ = self.search_for_keys(row)
+        if len(key_index) > 0:
+            return "loud"
+        return "mid"
+
+    def scale_volume(self, row, cycler, audio_data, sample_rate):
+        def is_bark_loud(row):
+            # image_id = float(row['topic_fit'])  # Using topic_fit as the volume level 
+            image_id = row['image_id']  # Using topic_fit as the volume level
+            path = self.existing_files.get(image_id_key(image_id))
+            # if path containts meta, return True
+            # TEMP CHANGE (was: if "bark_v5" in path: return True)
+            if path is None: return False
+            if "bark_v5" in path: return True
+            else: return False
+
+        volume_fit = float(row['topic_fit'])  # Using topic_fit as the volume level 
+        # defaults
+        fadein = 0
+        fadeout = 15
+
+        # search_for_keys to see where the matching keys are
+        key_index,desc_count=self.search_for_keys(row)
+
+        if volume_fit < self.QUIET:
+            # vol = scale_volume_exp(volume_fit, 3)
+            vol = scale_volume_linear(volume_fit, self.QUIET_VOL_MIN, self.QUIET_VOL_MAX)*cycler[0]
+            # vol = .001
+        elif len(key_index)>0:
+            # if keys are found, set the volume and fade in out based on the keys found
+            fadein,fadeout=calculate_fades(key_index,desc_count, audio_data, sample_rate)
+            vol = scale_volume_exp(volume_fit,self.SCALE_EXPONENT)*1
+            print(key_index)
+            # start,end=key_index[0],key_index[-1]
+            # vol =0
+            # if vol < .5: vol = .001
+            if vol < self.QUIET: 
+                if vol > self.QUIET/2:
+                    # vol = vol - len(self.loud_counter)*.1
+                    if len(self.loud_counter) == 0:
+                        if not self.fake_loud:
+                            # trying to only trigger this once per self.loud_counter cycle
+                            self.fake_loud = True
+                            print("ffffffff    Fake loud set")
+
+                            # if there are no loud files, scale the volume between .4 and .8
+                            # to fill silence
+                            vol = scale_volume_linear(volume_fit,0 ,.8)
+                        else:
+                            vol = (vol*.35) *cycler[1]
+                            # vol = vol / (len(self.loud_counter)*.5+1)
+                            # vol = .001
+                    else:
+                        # reduce the volume of the audio based on the number of loud files
+                        vol = vol / (len(self.loud_counter)*.5+1)
+                    if np.max(np.abs(audio_data)) > .8: vol = vol/3
+                    # if vol > .8: vol = .8
+                    # vol = .001
+                else:
+                    vol = (vol*.45) *cycler[1]
+                    # vol = .001
+            elif is_bark_loud(row):
+                if np.max(np.abs(audio_data)) > self.QUIET: vol = vol/3
+            # else: vol = .001
+        else:
+            vol = scale_volume_linear(volume_fit, .04,.15)*cycler[1]
+            # if vol > .1: vol = .1
+            # vol = vol*cycler[1]
+            print("cylcerl vol",vol)
+            # vol = .001
+        return vol, fadeout,fadein
+
+    def build_quiet_background(self, quiet_files, total_duration, start_time=0.0, offset=None,
+                               fade_in=None):
+        """Overlapping quiet bed from start_time to total_duration on the OFFSET grid.
+
+        Matches the main mixer: a new clip every OFFSET seconds, quiet-tier volume
+        and two-adjacent-speaker placement. Starts *fade_in* seconds before
+        start_time so the pad crossfades as the original quiet layer dies out.
+        The file pool is shuffled on every pass so the tail is not a literal repeat.
+        """
+        if not quiet_files or total_duration <= 0:
+            return None
+
+        offset = self.offset if offset is None else offset
+        if fade_in is None:
+            fade_in = self.QUIET_PAD_FADE_IN
+        clips = _load_quiet_clips(quiet_files)
+        if not clips:
+            print("build_quiet_background: no readable quiet files, aborting pad")
+            return None
+
+        pad_start = max(0.0, start_time - fade_in)
+        if pad_start >= total_duration:
+            return None
 
 # Sampling rate for the mixdown
 sample_rate = None
@@ -235,8 +785,6 @@ def apply_fadeout(audio, sample_rate, duration=3.0):
     # apply the curve
     audio[start:end] = audio[start:end] * fade_curve
 
-
-
 def apply_fadein(audio, sample_rate, duration=3.0):
     duration = check_fade_length(duration, audio, sample_rate)
     print("sample_rate",sample_rate)
@@ -258,17 +806,17 @@ def apply_fadein(audio, sample_rate, duration=3.0):
     audio[start:end] = audio[start:end] * fade_curve
 
 def conform_sample_rate(audio_data, sample_rate):
-    if sample_rate != TARGET_SAMPLE_RATE:
+    if sample_rate != SurroundMixer.TARGET_SAMPLE_RATE:
         # Resample the audio to 24000 Hz
-        audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=TARGET_SAMPLE_RATE)
+        audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=SurroundMixer.TARGET_SAMPLE_RATE)
     return audio_data, sample_rate
 
 def scale_volume_exp(volume_fit, exponent=3):
-    exp_vol = (volume_fit - FIT_VOL_MIN)**exponent / (FIT_VOL_MAX  - FIT_VOL_MIN)**exponent * (VOLUME_MAX - VOLUME_MIN) + VOLUME_MIN
+    exp_vol = (volume_fit - SurroundMixer.FIT_VOL_MIN)**exponent / (SurroundMixer.FIT_VOL_MAX  - SurroundMixer.FIT_VOL_MIN)**exponent * (SurroundMixer.VOLUME_MAX - SurroundMixer.VOLUME_MIN) + SurroundMixer.VOLUME_MIN
     return exp_vol
 
-def scale_volume_linear(volume_fit, min_out = VOLUME_MIN, max_out = VOLUME_MAX):
-    linear_vol = (volume_fit - FIT_VOL_MIN) / (FIT_VOL_MAX  - FIT_VOL_MIN) * (max_out - min_out) + min_out
+def scale_volume_linear(volume_fit, min_out = SurroundMixer.VOLUME_MIN, max_out = SurroundMixer.VOLUME_MAX):
+    linear_vol = (volume_fit - SurroundMixer.FIT_VOL_MIN) / (SurroundMixer.FIT_VOL_MAX  - SurroundMixer.FIT_VOL_MIN) * (max_out - min_out) + min_out
     return linear_vol
 
 def calculate_fades(key_index,desc_count, audio_data, sample_rate):
@@ -284,6 +832,7 @@ def calculate_fades(key_index,desc_count, audio_data, sample_rate):
         fadein =   start/wps
         fadeout = (desc_count-end-1)/wps 
     return fadein,fadeout
+  
 def scale_volume(row, cycler, audio_data, sample_rate):
     def is_bark_loud(row):
         # image_id = float(row['topic_fit'])  # Using topic_fit as the volume level 
@@ -358,25 +907,12 @@ def to_mono(audio):
         return audio
     return np.mean(audio, axis=1)
 
-
-def spatial_tier(row):
-    """Match scale_volume branches: quiet / loud(keys) / mid."""
-    volume_fit = float(row["topic_fit"])
-    if volume_fit < QUIET:
-        return "quiet"
-    key_index, _ = search_for_keys(row)
-    if len(key_index) > 0:
-        return "loud"
-    return "mid"
-
-
 def random_normalized_weights(n):
     w = np.random.random(n)
     s = w.sum()
     if s <= 0:
         return np.ones(n) / n
     return w / s
-
 
 def _anchor_share(range_lo_hi):
     lo, hi = range_lo_hi
@@ -423,7 +959,6 @@ def spatial_gains(tier):
 
 def apply_quad_gains(mono, gains):
     return np.column_stack([mono * g for g in gains])
-
 
 def tag_quad_wav(path):
     """Stamp WAV channel_layout=quad without rematrixing.
@@ -520,35 +1055,6 @@ def test_repeat(description, last_description):
         return 0, description
 
 # existing_files is populated per-topic inside main()
-existing_files = {}
-
-AUDIO_EXTS = {".wav", ".mp3", ".flac"}
-HASH_TOP = tuple("0123456789ABCDEF")
-
-
-def sound_dir():
-    return os.path.normpath(os.path.join(INPUT, SOUND_FOLDER))
-
-
-def hashed_audio_path(root, filename):
-    """Two-level MD5 folders keyed on the full filename, including extension."""
-    filename = os.path.basename(filename)
-    level1, level2 = io.get_hash_folders(filename)
-    return os.path.join(root, level1, level2, filename)
-
-
-def resolve_audio_path(filename):
-    """Prefer hashed layout; fall back to a flat file under SOUND_FOLDER."""
-    root = sound_dir()
-    filename = os.path.basename(filename)
-    hashed = hashed_audio_path(root, filename)
-    if os.path.isfile(hashed):
-        return hashed
-    flat = os.path.join(root, filename)
-    if os.path.isfile(flat):
-        return flat
-    return hashed
-
 
 def image_id_key(value):
     try:
@@ -558,7 +1064,6 @@ def image_id_key(value):
     except (TypeError, ValueError):
         return None
 
-
 def _clean_filename(value):
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
@@ -566,7 +1071,6 @@ def _clean_filename(value):
     if not name or name.lower() in ("nan", "none"):
         return None
     return name
-
 
 def load_filenames_from_metas_audio(path):
     """image_id -> basename from metas_audio.csv (last non-empty filename wins)."""
@@ -587,51 +1091,6 @@ def load_filenames_from_metas_audio(path):
     print(f"Loaded {len(by_id)} filenames from {path}")
     return by_id
 
-
-def existing_audio_by_id(folder):
-    """Walk hash trees (or the whole folder) and map image_id -> basename."""
-    lists = walk_audio_filenames_by_id(folder)
-    return {iid: pick_audio_filename(names) for iid, names in lists.items()}
-
-
-def hash_dir_roots(folder):
-    """Top-level 0-9/A-F hash directories under folder."""
-    roots = []
-    for top in HASH_TOP:
-        path = os.path.join(folder, top)
-        if os.path.isdir(path):
-            roots.append(path)
-    return roots
-
-
-def walk_audio_filenames_by_id(folder):
-    """image_id -> [basenames] from hash folders, or a full walk if none exist."""
-    by_id = {}
-    if not os.path.isdir(folder):
-        return by_id
-    roots = hash_dir_roots(folder)
-    if not roots:
-        roots = [folder]
-    n_files = 0
-    for root in roots:
-        for walk_root, _dirs, files in os.walk(root):
-            if "_x" in walk_root.split(os.sep):
-                continue
-            for fname in files:
-                ext = os.path.splitext(fname)[1].lower()
-                if ext not in AUDIO_EXTS:
-                    continue
-                key = image_id_key(os.path.splitext(fname)[0].split("_")[0])
-                if key is None:
-                    continue
-                n_files += 1
-                by_id.setdefault(key, [])
-                if fname not in by_id[key]:
-                    by_id[key].append(fname)
-    print(f"  scrape indexed {n_files} audio file(s) for {len(by_id)} image_id(s)")
-    return by_id
-
-
 def pick_audio_filename(names):
     """Prefer wav, then coqui, then a stable last name."""
     names = [n for n in names if n]
@@ -648,59 +1107,6 @@ def pick_audio_filename(names):
 
     return sorted(names, key=score)[-1]
 
-
-def audio_on_disk(filename):
-    filename = _clean_filename(filename)
-    if not filename:
-        return False
-    path = resolve_audio_path(filename)
-    return os.path.isfile(path)
-
-
-_filenames_from_csv = None
-_walked_audio_by_id = None
-_walked_audio_all = None
-_metas_audio_fieldnames = None
-
-
-def filenames_from_metas_audio():
-    global _filenames_from_csv
-    if _filenames_from_csv is None:
-        _filenames_from_csv = load_filenames_from_metas_audio(METAS_AUDIO_CSV)
-    return _filenames_from_csv
-
-
-def walked_audio_by_id():
-    """Walk hash folders once per process; keep every clip per image_id."""
-    global _walked_audio_by_id, _walked_audio_all
-    if _walked_audio_by_id is None:
-        root = sound_dir()
-        print(f"Scraping hash-folder audio in {root} …")
-        _walked_audio_all = walk_audio_filenames_by_id(root)
-        _walked_audio_by_id = {
-            iid: pick_audio_filename(names) for iid, names in _walked_audio_all.items()
-        }
-        print(f"Walk found {len(_walked_audio_by_id)} image_id(s) with audio")
-    return _walked_audio_by_id
-
-
-def metas_audio_fieldnames():
-    """Header of metas_audio.csv, guaranteeing a filename column."""
-    global _metas_audio_fieldnames
-    if _metas_audio_fieldnames is not None:
-        return _metas_audio_fieldnames
-    names = list(METAS_AUDIO_COLUMNS)
-    if os.path.isfile(METAS_AUDIO_CSV) and os.path.getsize(METAS_AUDIO_CSV) > 0:
-        with open(METAS_AUDIO_CSV, "r", encoding="utf-8-sig", newline="") as f:
-            header = list(csv.DictReader(f).fieldnames or [])
-        if header:
-            names = header
-    if "filename" not in names:
-        names.append("filename")
-    _metas_audio_fieldnames = names
-    return names
-
-
 def _csv_cell(value):
     if value is None:
         return ""
@@ -710,7 +1116,6 @@ def _csv_cell(value):
     except (TypeError, ValueError):
         pass
     return value
-
 
 def cluster_row_to_metas_audio(row, filename, fieldnames):
     """Map a cluster metas.csv row onto metas_audio.csv columns + scraped filename."""
@@ -735,7 +1140,6 @@ def cluster_row_to_metas_audio(row, filename, fieldnames):
             out[key] = _csv_cell(data.get(key, ""))
     return out
 
-
 def _ensure_csv_trailing_newline(path):
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         return
@@ -744,137 +1148,8 @@ def _ensure_csv_trailing_newline(path):
         if f.read(1) != b"\n":
             f.write(b"\n")
 
-
-def append_metas_audio_rows(rows):
-    """Append scraped cluster rows (with filename) to metas_audio.csv."""
-    if not rows:
-        return 0
-    fieldnames = metas_audio_fieldnames()
-    path = METAS_AUDIO_CSV
-    exists = os.path.isfile(path) and os.path.getsize(path) > 0
-    if exists:
-        _ensure_csv_trailing_newline(path)
-    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-    with open(path, "a", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        if not exists:
-            writer.writeheader()
-        writer.writerows(rows)
-    return len(rows)
-
-
-def append_scraped_cluster_rows(df, scraped):
-    """Write metas.csv data + scraped filename for ids not yet in metas_audio.csv."""
-    global _filenames_from_csv
-    if not scraped:
-        return 0
-    csv_names = filenames_from_metas_audio()
-    keys = df["image_id"].map(image_id_key)
-    fieldnames = metas_audio_fieldnames()
-    rows = []
-    for iid, filename in scraped:
-        if iid in csv_names:
-            continue
-        matches = df[keys == iid]
-        if matches.empty:
-            continue
-        row = cluster_row_to_metas_audio(matches.iloc[-1], filename, fieldnames)
-        rows.append(row)
-        csv_names[iid] = filename
-    written = append_metas_audio_rows(rows)
-    if _filenames_from_csv is not None:
-        _filenames_from_csv.update(csv_names)
-    return written
-
-
-_missing_ids_written = 0
-_missing_ids_fieldnames = None
-
-
-def index_audio_for_topic(df):
-    """Resolve audio for this cluster's ids; scrape hash folders; backfill metas_audio.csv.
-
-    Returns (existing, still_missing). existing maps image_id -> audio basename.
-    Ids found on disk but missing from metas_audio.csv are appended with the
-    cluster metas.csv fields plus the scraped filename.
-    """
-    csv_names = filenames_from_metas_audio()
-    walked = walked_audio_by_id()
-    df_ids = {k for k in (image_id_key(v) for v in df["image_id"]) if k is not None}
-    existing = {}
-    still_missing = []
-    scraped = []
-    csv_ok = 0
-    csv_stale = 0
-    for iid in df_ids:
-        csv_name = _clean_filename(csv_names.get(iid))
-        if csv_name and audio_on_disk(csv_name):
-            existing[iid] = csv_name
-            csv_ok += 1
-            continue
-        if csv_name:
-            csv_stale += 1
-        walked_name = _clean_filename(walked.get(iid))
-        if walked_name:
-            existing[iid] = walked_name
-            if iid not in csv_names:
-                scraped.append((iid, walked_name))
-            continue
-        still_missing.append(iid)
-
-    appended = append_scraped_cluster_rows(df, scraped)
-    print(f"  metas_audio.csv hits on disk: {csv_ok}; "
-          f"csv filename missing on disk: {csv_stale}; "
-          f"scrape filled: {len(scraped)}; still missing: {len(still_missing)}")
-    if appended:
-        print(f"  appended {appended} row(s) to {METAS_AUDIO_CSV}")
-    return existing, still_missing
-
-
-def collect_missing_id_rows(df, missing_ids, cluster):
-    """Append metas rows for ids with no audio to missing_ids.csv immediately."""
-    global _missing_ids_written, _missing_ids_fieldnames
-    if not missing_ids:
-        return 0
-    missing_set = set(missing_ids)
-    keys = df["image_id"].map(image_id_key)
-    rows = df[keys.isin(missing_set)].copy()
-    if rows.empty:
-        return 0
-    rows.insert(0, "cluster", cluster)
-    path = MISSING_IDS_CSV
-    exists = os.path.isfile(path) and os.path.getsize(path) > 0
-    if exists:
-        _ensure_csv_trailing_newline(path)
-        if _missing_ids_fieldnames is None:
-            with open(path, "r", encoding="utf-8-sig", newline="") as f:
-                _missing_ids_fieldnames = list(csv.DictReader(f).fieldnames or [])
-        fieldnames = _missing_ids_fieldnames
-        for col in fieldnames:
-            if col not in rows.columns:
-                rows[col] = ""
-        rows = rows[fieldnames]
-    else:
-        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-        _missing_ids_fieldnames = list(rows.columns)
-    rows.to_csv(path, mode="a", header=not exists, index=False)
-    n = len(rows)
-    _missing_ids_written += n
-    print(f"  appended {n} missing-id row(s) to {path}")
-    return n
-
-
-def write_missing_ids_csv(path=None):
-    """Summarize missing_ids.csv appends for this run."""
-    path = path or MISSING_IDS_CSV
-    if _missing_ids_written == 0:
-        print(f"No missing ids appended to {path}")
-        return
-    print(f"Appended {_missing_ids_written} missing-id row(s) this run to {path}")
-
-
 def _load_quiet_clips(quiet_files):
-    """Load unique quiet files to mono at TARGET_SAMPLE_RATE."""
+    """Load unique quiet files to mono at SurroundMixer.TARGET_SAMPLE_RATE."""
     clips = []
     for filepath in dict.fromkeys(quiet_files):
         try:
@@ -888,8 +1163,7 @@ def _load_quiet_clips(quiet_files):
         clips.append(audio)
     return clips
 
-
-def _fadeout_mono(audio, duration, sample_rate=TARGET_SAMPLE_RATE):
+def _fadeout_mono(audio, duration, sample_rate=SurroundMixer.TARGET_SAMPLE_RATE):
     """Squared fadeout without the verbose apply_fadeout prints."""
     duration = check_fade_length(duration, audio, sample_rate)
     length = int(duration * sample_rate)
@@ -1174,9 +1448,9 @@ def process_audio_chunk(chunk_df, existing_files, input_folder, start_index, chu
 
 def merge_audio(combined_audio, chunk_audio_without_silence):
     # Assuming sample_rate is defined
-    # sample_rate = TARGET_SAMPLE_RATE  # Example sample rate, replace with your actual sample rate
+    # sample_rate = SurroundMixer.TARGET_SAMPLE_RATE  # Example sample rate, replace with your actual sample rate
     overlap_duration = 10  # Duration in seconds
-    overlap_samples = TARGET_SAMPLE_RATE * overlap_duration
+    overlap_samples = SurroundMixer.TARGET_SAMPLE_RATE * overlap_duration
 
     # Extract the last 10 seconds of combined_audio
     combined_audio_last_10s = combined_audio[-overlap_samples:]
@@ -1201,16 +1475,8 @@ def merge_audio(combined_audio, chunk_audio_without_silence):
 
     # Concatenate the mixed segment with the remaining parts of combined_audio and chunk_audio_without_silence
     combined_audio = np.concatenate((combined_audio[:-overlap_samples], overlapped_segment, chunk_audio_without_silence[overlap_samples:]))
-    # sf.write(str(len(c ombined_audio))+"combined_audio.wav", combined_audio, TARGET_SAMPLE_RATE, format='wav')
+    # sf.write(str(len(c ombined_audio))+"combined_audio.wav", combined_audio, SurroundMixer.TARGET_SAMPLE_RATE, format='wav')
     return combined_audio
-
-
-def resolve_batch_folder(folder_name):
-    """Return an absolute path to the parent folder of cluster directories."""
-    if os.path.isabs(folder_name):
-        return folder_name
-    return os.path.join(INPUT, folder_name)
-
 
 def metas_csv_has_header(path):
     """True if the first field of the first line is image_id."""
@@ -1221,13 +1487,11 @@ def metas_csv_has_header(path):
     first_field = first.split(",", 1)[0].strip().strip('"').lower()
     return first_field == "image_id"
 
-
 def metas_read_csv_kwargs(path):
     """Kwargs so headerless cluster metas.csv files still expose named columns."""
     if metas_csv_has_header(path):
         return {}
-    return {"header": None, "names": METAS_COLUMNS}
-
+    return {"header": None, "names": AudioIndex.METAS_COLUMNS}
 
 def normalize_metas_df(df):
     """Cluster metas.csv stores topic weight, not an audio filename."""
@@ -1238,7 +1502,6 @@ def normalize_metas_df(df):
         if audio_names.notna().sum() == 0:
             df = df.rename(columns={"filename": "weight"})
     return df
-
 
 def read_metas_csv(path, **kwargs):
     merged = metas_read_csv_kwargs(path)
@@ -1251,10 +1514,8 @@ def read_metas_csv(path, **kwargs):
         )
     return normalize_metas_df(pd.read_csv(path, **merged))
 
-
 def cluster_csv_path(folder):
-    return os.path.join(folder, METAS_CSV_NAME)
-
+    return os.path.join(folder, AudioIndex.METAS_CSV_NAME)
 
 def resolve_cluster_folder(entry, parent):
     """Resolve a BATCH_CLUSTERS entry to an absolute cluster folder path."""
@@ -1262,180 +1523,19 @@ def resolve_cluster_folder(entry, parent):
         return entry
     return os.path.join(parent, entry)
 
-
-def list_cluster_jobs(parent, names=None):
-    """Return (folder_name, metas.csv path) for each cluster folder to mix.
-
-    If names is empty, every subdirectory of parent that contains metas.csv
-    is included. Otherwise each name is a folder under parent, or an absolute
-    cluster path.
-    """
-    if not os.path.isdir(parent):
-        raise FileNotFoundError(f"Batch folder not found: {parent}")
-
-    if names:
-        candidates = [resolve_cluster_folder(n, parent) for n in names]
-    else:
-        candidates = [
-            os.path.join(parent, name)
-            for name in sorted(os.listdir(parent))
-            if os.path.isdir(os.path.join(parent, name))
-        ]
-
-    jobs = []
-    for folder in candidates:
-        csv_path = cluster_csv_path(folder)
-        label = os.path.basename(os.path.normpath(folder))
-        if not os.path.isdir(folder):
-            print(f"Skipping {label}: not a directory ({folder})")
-            continue
-        if not os.path.isfile(csv_path):
-            print(f"Skipping {label}: no {METAS_CSV_NAME} in {folder}")
-            continue
-        jobs.append((label, csv_path))
-    return jobs
-
-
-def run_topic(topic, csv_path=None):
-    """Process a single topic/cluster and write its output file."""
-    global TOPIC, CSV_FILE, OFFSET, existing_files, loud_counter, channel_counter, fake_loud
-
-    # configure globals for this topic
-    TOPIC = topic
-    if csv_path is None:
-        CSV_FILE = f"metas_{TOPIC}.csv"
-        csv_path = os.path.join(INPUT, "audioproduction", CSV_FILE)
-    else:
-        CSV_FILE = os.path.basename(csv_path)
-    OFFSET = OFFSET_DICT.get(TOPIC, 0.0743)
-
-    # reset stateful globals so each topic starts clean
-    loud_counter = []
-    channel_counter = 0
-    fake_loud = False
-
-    output_path = os.path.join(INPUT, f"multitrack_mixdown_offset_{TOPIC}_quad.wav")
-
-    topic_t0 = time.time()
-    print(f"\n{'='*60}")
-    print(f"[Topic {TOPIC}] Starting — CSV: {csv_path}  OFFSET: {OFFSET}")
-    missing_key_topics = [t for t in KEY_TOPICS if t not in KEYS]
-    if missing_key_topics:
-        print(f"[Topic {TOPIC}] WARNING: KEY_TOPICS not in KEYS dict: {missing_key_topics}")
-    print(f"[Topic {TOPIC}] KEY_TOPICS {KEY_TOPICS} → {keys_for_search()}")
-    print(f"{'='*60}")
-
-    df = read_metas_csv(csv_path)
-
-    print(f"[Topic {TOPIC}] Resolving audio via metas_audio.csv + hash-folder scrape")
-    existing_files, missing_ids = index_audio_for_topic(df)
-    collect_missing_id_rows(df, missing_ids, TOPIC)
-    print(f"[Topic {TOPIC}] Existing files after INTERSECT:", len(existing_files))
-    for k, v in list(existing_files.items())[:5]:
-        print(f"  existing_files key: {repr(k)}  ->  {resolve_audio_path(v)}")
-
-    if os.path.exists(output_path):
-        print(f"[Topic {TOPIC}] Output already exists, skipping: {output_path}")
-        return None
-
-    combined_audio = None
-    start_index = 0
-    all_quiet_files = []      # accumulate quiet-tier file paths across all chunks
-    quiet_coverage_end = 0.0  # track the furthest end time of any quiet-tier clip
-
-    chunks = read_metas_csv(csv_path, chunksize=CHUNK_SIZE)
-    for chunk_index, chunk in enumerate(chunks):
-        chunk_audio, chunk_end_time, chunk_quiet_files, chunk_quiet_end = process_audio_chunk(chunk, existing_files, INPUT, start_index, chunk_index)
-        print(f"[Topic {TOPIC}] Chunk audio length/sample:", len(chunk_audio)/TARGET_SAMPLE_RATE, "Chunk end time:", chunk_end_time)
-
-        # collect quiet-tier bookkeeping
-        all_quiet_files.extend(chunk_quiet_files)
-        quiet_coverage_end = max(quiet_coverage_end, chunk_quiet_end)
-
-        if combined_audio is None:
-            combined_audio = chunk_audio
-            print(chunk_index, "Combined audio shape:", combined_audio.shape, "Chunk audio shape:", chunk_audio.shape)
-        else:
-            non_silent_index_raw = np.argmax(np.abs(chunk_audio) > 0)
-            nch = chunk_audio.shape[1] if chunk_audio.ndim > 1 else 1
-            non_silent_index = int(np.floor(non_silent_index_raw / nch))
-            print("Non-silent index:", non_silent_index)
-            print("combined_audio shape:", combined_audio.shape, "chunk_audio shape:", chunk_audio.shape)
-            np.set_printoptions(threshold=100)
-            print(chunk_audio[:non_silent_index])
-            print(chunk_audio[non_silent_index:])
-            chunk_audio_without_silence = chunk_audio[non_silent_index:]
-            combined_audio = merge_audio(combined_audio, chunk_audio_without_silence)
-        del chunk_audio
-        gc.collect()
-
-    # --- Quiet-tier tail pad: overlapping murmur from where original quiet dies out ---
-    total_duration = len(combined_audio) / TARGET_SAMPLE_RATE
-    print(f"[Topic {TOPIC}] Quiet tier reached {quiet_coverage_end:.1f}s / {total_duration:.1f}s total")
-    gap = total_duration - quiet_coverage_end
-    if all_quiet_files and gap > OFFSET:
-        print(f"[Topic {TOPIC}] Building overlapping quiet pad ({gap:.1f}s gap, "
-              f"{len(set(all_quiet_files))} unique files, offset={OFFSET}s)…")
-        quiet_bg = build_quiet_background(
-            all_quiet_files,
-            total_duration,
-            start_time=quiet_coverage_end,
-        )
-        if quiet_bg is not None:
-            if len(quiet_bg) > len(combined_audio):
-                combined_audio = np.pad(
-                    combined_audio,
-                    ((0, len(quiet_bg) - len(combined_audio)), (0, 0)),
-                    'constant',
-                )
-            combined_audio[:len(quiet_bg)] += quiet_bg
-            print(f"[Topic {TOPIC}] Quiet pad mixed in ({len(quiet_bg)/TARGET_SAMPLE_RATE:.1f}s)")
-    elif not all_quiet_files:
-        print(f"[Topic {TOPIC}] No quiet-tier files collected — skipping quiet pad")
-    else:
-        print(f"[Topic {TOPIC}] Quiet tier already covers the track, skipping pad")
-
-    print(f"[Topic {TOPIC}] Combined audio shape before writing:", combined_audio.shape)
-    print(f"[Topic {TOPIC}] Writing to file:", output_path)
-    sf.write(output_path, combined_audio, TARGET_SAMPLE_RATE, format='wav')
-    tag_quad_wav(output_path)
-    elapsed = time.time() - topic_t0
-    print(f"[Topic {TOPIC}] Time to process output file: {elapsed:.1f}s")
-    del combined_audio
-    gc.collect()
-    return elapsed
-
-
 def main():
-    global _missing_ids_written, _missing_ids_fieldnames
-    _missing_ids_written = 0
-    _missing_ids_fieldnames = None
-    filenames_from_metas_audio()
-    walked_audio_by_id()
-    elapsed_times = []
-    if BATCH_MODE:
-        batch_dir = resolve_batch_folder(BATCH_FOLDER_NAME)
-        jobs = list_cluster_jobs(batch_dir, BATCH_CLUSTERS)
-        print(f"Batch mode ON — found {len(jobs)} cluster folder(s) in {batch_dir}")
-        if not jobs:
-            print(f"No cluster folders with {METAS_CSV_NAME} found.")
-            return
-        for topic, csv_path in jobs:
-            elapsed = run_topic(topic, csv_path=csv_path)
-            if elapsed is not None:
-                elapsed_times.append(elapsed)
-        print("\nBatch complete.")
-    else:
-        elapsed = run_topic(TOPIC)
-        if elapsed is not None:
-            elapsed_times.append(elapsed)
-    write_missing_ids_csv()
-    if elapsed_times:
-        avg = sum(elapsed_times) / len(elapsed_times)
-        print(f"Average processing time per cluster: {avg:.1f}s "
-              f"({len(elapsed_times)} cluster(s))")
-    else:
-        print("Average processing time per cluster: n/a (no clusters processed)")
+    mixer = SurroundMixer(
+        INPUT,
+        batch_mode=BATCH_MODE,
+        batch_folder=BATCH_FOLDER_NAME,
+        batch_clusters=BATCH_CLUSTERS,
+        topic=TOPIC,
+        key_topics=KEY_TOPICS,
+        sound_folder=SOUND_FOLDER,
+        io=io,
+    )
+    mixer.run()
+
 
 if __name__ == "__main__":
     main()
