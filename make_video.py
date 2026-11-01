@@ -1115,6 +1115,7 @@ cfg = {
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
+sort.FULL_BODY_DEDUPE = FULL_BODY # dedupe uses resize-tolerant signals instead of selfie SSIM
 if USE_BIIIIIG_FULL_BODY_MULTIPLIER: 
     print("MAKING PRINTS: USE_BIIIIIG_FULL_BODY_MULTIPLIER is True, setting image_edge_multiplier to [8, 11, 14, 11]")
     sort.image_edge_multiplier = BIIIIIG_FULL_BODY_MULTIPLIER  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose

@@ -122,6 +122,18 @@ class SortPose:
             "hand_position": 0.001,
             "hand_gesture": 30.0, # world landmarks are ~0.03-0.06 vs ~1-3 for positions, so bump up
         }
+        # FULL_BODY dedupe: set from make_video. Uses resize-tolerant image signals instead of pixel bbox + selfie SSIM
+        self.FULL_BODY_DEDUPE = False
+        self.FB_DEDUPE = {
+            "dhash_max": 24,          # of 64 bits, whole-image dHash hamming distance
+            "face_bbox_max": 0.02,    # distance of face bbox normalized by image size [left/w, top/h, height/h]
+            "orb_gate": 0.25,         # pass-1 candidate if ORB good-match fraction >= this
+            "orb_confirm": 0.40,      # confirm dupe if ORB frac >= this (and dhash ok)
+            "orb_confirm_same_face": 0.20,  # confirm dupe if ORB frac >= this AND face bbox matches AND dhash ok
+            "orb_compute_dhash_max": 30,    # only run ORB matching if dhash <= this and
+            "orb_compute_face_bbox_max": 0.35,  # face bbox dist <= this (saves time)
+            "orb_match_distance": 40, # hamming distance for a "good" ORB match
+        }
         self.ARM_HAND_BLOCKS = False # set from make_video; last 2*ARM_HAND_BLOCK_DIMS dims of body vectors are hand_position + hand_gesture
         self.ARM_HAND_BLOCK_DIMS = 126 # 2 hands * 21 points * 3 dims
 
@@ -1458,7 +1470,19 @@ class SortPose:
         # df = self.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list")
 
         if self.VERBOSE: print(f"Processing {n_rows} images for duplicate detection...")
+        # DEDUPE_DEBUG_IDS="id1,id2,..." logs every pass-1 pair where both image_ids are listed
+        debug_ids = {x.strip() for x in os.environ.get("DEDUPE_DEBUG_IDS", "").split(",") if x.strip()}
+        if debug_ids:
+            present = {str(x) for x in df['image_id']}
+            print(f"[DEDUPE DEBUG] rows_in={n_rows} debug ids present in df: {sorted(debug_ids & present)} missing: {sorted(debug_ids - present)}")
+            print("[DEDUPE DEBUG] row index -> image_id: " + ", ".join(f"{k}:{df.iloc[k]['image_id']}" for k in range(n_rows) if str(df.iloc[k]['image_id']) in debug_ids))
+        full_body = bool(getattr(self, "FULL_BODY_DEDUPE", False))
+        fbp = self.FB_DEDUPE
+        feature_cache = {}
+        pair_signal_cache = {}
         look_closer_dict = {}
+        fb_counts = {"pairs": 0, "candidates": 0, "old_gate_candidates": 0, "orb_computed": 0}
+        if self.VERBOSE or full_body: print(f"[DEDUPE] mode={'FULL_BODY signals' if full_body else 'standard (SSIM/selfie)'}")
         AUTO_CHECK = .2
         THRESH1 = 2
         SITE_NAME_ID_THRESH = 100000
@@ -1485,6 +1509,62 @@ class SortPose:
             site_name_id = df.iloc[key]['site_name_id']
             return os.path.join(folder_list[site_name_id], filename)
         
+        def iid(key):
+            # image_id for a positional row index, for log output
+            return df.iloc[key].get('image_id')
+
+        def image_features(k):
+            # per-image resize-tolerant features, computed once per row
+            if k in feature_cache: return feature_cache[k]
+            feat = None
+            try:
+                img = open_and_crop(k, df)
+                if img is not None:
+                    h, w = img.shape[:2]
+                    b = df.iloc[k]['bbox']
+                    fh = max(b['bottom'] - b['top'], 1)
+                    face_norm = np.array([b['left']/w, b['top']/h, fh/h])
+                    g8 = cv2.cvtColor(cv2.resize(img, (9, 8)), cv2.COLOR_BGR2GRAY)
+                    dhash = (g8[:, 1:] > g8[:, :-1]).flatten()
+                    g512 = cv2.cvtColor(cv2.resize(img, (512, 512)), cv2.COLOR_BGR2GRAY)
+                    _, desc = cv2.ORB_create(1000).detectAndCompute(g512, None)
+                    feat = {"shape": (h, w), "face_norm": face_norm, "dhash": dhash, "orb": desc}
+            except Exception as e:
+                print(f"[DEDUPE SIGNALS] feature error row {k} image_id {iid(k)}: {e}")
+            feature_cache[k] = feat
+            return feat
+
+        def pair_signals(i, j, force_orb=False):
+            if (i, j) in pair_signal_cache: return pair_signal_cache[(i, j)]
+            fi, fj = image_features(i), image_features(j)
+            if fi is None or fj is None:
+                out = None
+            else:
+                out = {
+                    "face_bbox_dist": round(float(np.linalg.norm(fi["face_norm"] - fj["face_norm"])), 3),
+                    "dhash": int(np.sum(fi["dhash"] != fj["dhash"])),
+                    "orb_matches": None,
+                    "orb_frac": None,
+                }
+                if force_orb or (out["dhash"] <= fbp["orb_compute_dhash_max"] and out["face_bbox_dist"] <= fbp["orb_compute_face_bbox_max"]):
+                    if fi["orb"] is not None and fj["orb"] is not None:
+                        matches = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(fi["orb"], fj["orb"])
+                        n_good = sum(1 for m in matches if m.distance < fbp["orb_match_distance"])
+                        out["orb_matches"] = n_good
+                        out["orb_frac"] = round(n_good / max(min(len(fi["orb"]), len(fj["orb"])), 1), 3)
+            pair_signal_cache[(i, j)] = out
+            return out
+
+        def fb_is_candidate(sig):
+            if sig is None: return False
+            if sig["orb_frac"] is not None and sig["orb_frac"] >= fbp["orb_gate"]: return True
+            return sig["face_bbox_dist"] <= fbp["face_bbox_max"] and sig["dhash"] <= fbp["dhash_max"]
+
+        def fb_is_dupe(sig):
+            if sig is None or sig["orb_frac"] is None or sig["dhash"] > fbp["dhash_max"]: return False
+            if sig["orb_frac"] >= fbp["orb_confirm"]: return True
+            return sig["orb_frac"] >= fbp["orb_confirm_same_face"] and sig["face_bbox_dist"] <= fbp["face_bbox_max"]
+
         def open_and_crop(key,df):
             img = cv2.imread(construct_filepath(key, df))
             dfrow = df.iloc[key]
@@ -1630,27 +1710,45 @@ class SortPose:
                     normed_dist = norm_dist(this_dist, threshold)
                     this_dist_list.append(normed_dist)
                 
-                if sum(this_dist_list) <= THRESH1 or any(d < AUTO_CHECK for d in this_dist_list):
+                if debug_ids and str(df.iloc[i]['image_id']) in debug_ids and str(df.iloc[j]['image_id']) in debug_ids:
+                    passed = sum(this_dist_list) <= THRESH1 or any(d < AUTO_CHECK for d in this_dist_list)
+                    print(f"[DEDUPE DEBUG] pass1 {i},{j} image_ids {df.iloc[i]['image_id']},{df.iloc[j]['image_id']} keys {keys_to_check} normed {[round(float(d), 3) for d in this_dist_list]} sum={sum(this_dist_list):.3f} passed={passed} signals={pair_signals(i, j, force_orb=True)}")
+                old_gate = sum(this_dist_list) <= THRESH1 or any(d < AUTO_CHECK for d in this_dist_list)
+                if full_body:
+                    sig = pair_signals(i, j)
+                    gate = fb_is_candidate(sig)
+                    fb_counts["pairs"] += 1
+                    fb_counts["candidates"] += int(gate)
+                    fb_counts["old_gate_candidates"] += int(old_gate)
+                    fb_counts["orb_computed"] += int(sig is not None and sig["orb_frac"] is not None)
+                    if self.VERBOSE: print(f"[DEDUPE SIGNALS] {i},{j} image_ids {iid(i)},{iid(j)} signals={sig} fb_candidate={gate} old_gate={old_gate} old_normed={[round(float(d), 3) for d in this_dist_list]}")
+                else:
+                    gate = old_gate
+                if gate:
                     # if the normed dist is low enough, look closer
                     look_closer_dict[(i,j)] = this_dist_list
                     if self.VERBOSE: 
-                        print(f"dupe_detection_pass_1 triggered at {i},{j}. with NORMED distances {this_dist_list}")
+                        print(f"dupe_detection_pass_1 triggered at {i},{j} (image_ids {iid(i)},{iid(j)}). with NORMED distances {this_dist_list}")
                 else:
                     #print(f"tossing {i},{j}. with n_d {this_dist_list}")
                     
                     continue
                       # If only one of the checks passed, skip to next pair
+        if full_body: print(f"[DEDUPE SIGNALS] pass1 summary {fb_counts} (per-pair lines need VERBOSE)")
         add_remove_timing("pass1", time.perf_counter() - pass1_start)
         dedupe_stats["look_closer_candidates"] = len(look_closer_dict)
 
         notdupe_filter_start = time.perf_counter()
         if not_dupes is not None:
+            # print(f"there are {len(not_dupes)} not_dupes")
             #interlude 1, check to see if any are in not_dupes list, if so, remove from look_closer_dic
             not_dupes_to_remove = []
             for (i,j), this_dist_list in look_closer_dict.items():
                 if (i,j) in not_dupes or (j,i) in not_dupes:
+                    print(f" ⚠️⚠️ removing {i}, {j} which are in the {len(not_dupes)} not_dupes ⚠️⚠️")
                     not_dupes_to_remove.append((i,j))
                     continue
+            print(f"no not_dupes to remove")
             pop_look_closer_dict(look_closer_dict, not_dupes_to_remove)
             dedupe_stats["removed_by_notdupe_cache"] = len(not_dupes_to_remove)
         add_remove_timing("notdupe_filter", time.perf_counter() - notdupe_filter_start)
@@ -1667,9 +1765,9 @@ class SortPose:
                 this_dist_list.append(normed_dist)
                 # update look_closer_dict
                 look_closer_dict[(i,j)] = this_dist_list
-                if self.VERBOSE: print(f"{normed_dist}   >>  so FACEMATCH {i},{j}. this_dist_list {this_dist_list}")
+                if self.VERBOSE: print(f"{normed_dist}   >>  so FACEMATCH {i},{j} (image_ids {iid(i)},{iid(j)}). raw_face_dist {this_dist} this_dist_list {this_dist_list}")
             else:
-                if self.VERBOSE: print(f"{normed_dist} noface {i},{j}. this_dist_list {this_dist_list}")
+                if self.VERBOSE: print(f"{normed_dist} noface {i},{j} (image_ids {iid(i)},{iid(j)}). raw_face_dist {this_dist} this_dist_list {this_dist_list}")
                 # mark for removal after iteration
                 keys_to_remove_prob_not_dupes.append((i,j))
                 continue
@@ -1729,8 +1827,19 @@ class SortPose:
             if i in confirmed_dupes:
                 if self.VERBOSE: print(f"  >>> skipping {i},{j} because {i} is already confirmed dupe")
                 continue
-            if self.VERBOSE: print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
+            print(f"[DEDUPE LOG] closest_look {i},{j} image_ids {iid(i)},{iid(j)} dists [body_lms, face_xyz, bbox, face_enc, hands, desc, site_id]: {this_dist_list}")
             dedupe_stats["ssim_pairs_tested"] += 1
+
+            if full_body:
+                # signals are cached from pass 1; SSIM / selfie masks are not used for full body
+                sig = pair_signals(i, j, force_orb=True)
+                is_dupe = fb_is_dupe(sig)
+                print(f"[DEDUPE SIGNALS] decision {i},{j} image_ids {iid(i)},{iid(j)} signals={sig} dupe={is_dupe}")
+                # synthetic score only routes save_dupes_look_closer: 0.95 -> dupe folder, 0.1 -> ignored
+                if save_dupes_look_closer(i, j, 0.95 if is_dupe else 0.1, this_dist_list, df):
+                    confirmed_dupes.add(j)
+                    dedupe_stats["confirmed_dupes"] += 1
+                continue
 
             # open images i and j, crop to bbox. if can't open, remove from df and continue
             image_i = open_image_remove_if_error(i, df)
@@ -1741,7 +1850,8 @@ class SortPose:
             if image_i is not None and image_j is not None:
  
                 
-                ssim_score = self.calculate_ssim(image_i, image_j)
+                full_ssim_score = self.calculate_ssim(image_i, image_j)
+                ssim_score = full_ssim_score
 
 
                 if round(image_i.shape[0]/image_i.shape[1], 2) == round(image_j.shape[0]/image_j.shape[1], 2):
@@ -1791,7 +1901,7 @@ class SortPose:
                         selfie_j = cv2.resize(selfie_j, (selfie_i.shape[1], selfie_i.shape[0]))
                     print(f'selfie sizes after cropping to bbox: {selfie_i.shape}, {selfie_j.shape}')
                     ssim_score = self.calculate_ssim(selfie_i, selfie_j)
-                    print(f"SSIM score for selfies of {i} and {j} is {ssim_score}")
+                    print(f"[DEDUPE LOG] SSIM {i},{j} image_ids {iid(i)},{iid(j)} full_image={full_ssim_score:.3f} selfie={ssim_score:.3f} same_shape={same_shape}")
                     is_dupe = save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
                     if is_dupe:
                         if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
@@ -1801,7 +1911,7 @@ class SortPose:
                         # if it passess SSIM, save isnotdupe pair to sql to avoid future work
                         write_is_not_dupe_sql(i, j, df)
                 except Exception as e:
-                    print(f"Error processing segmentation masks for images {i} and {j}: {e}")
+                    print(f"[DEDUPE LOG] selfie SSIM error {i},{j} image_ids {iid(i)},{iid(j)} full_image={full_ssim_score:.3f}: {e}")
                     ssim_score = 0
                     selfie_ssim_score = 0
                     continue

@@ -211,7 +211,7 @@ MULTIPLIER_DICT = {
     "sq_massive_right": [2,5,6,3], # 32 massive square shift RIGHT
     "sq_massive_left": [2,3,6,5], # 33 massive square shift LEFT
     "sq_xmassive_left": [2.5,3.5,8,7], # 33 massive square shift LEFT
-    "sq_xmassive": [2.5,5.75,10,6.25], # 33 massive square shift LEFT
+    "sq_xmassive": [2.5,6.25,10,6.25], # 33 massive square shift LEFT
 
     # legacy
     "sq_selfie_shift_left": [2.2,2.4,4,3.8], # 20 selfie shift LEFT - arm out)
