@@ -124,6 +124,7 @@ class SortPose:
         }
         # FULL_BODY dedupe: set from make_video. Uses resize-tolerant image signals instead of pixel bbox + selfie SSIM
         self.FULL_BODY_DEDUPE = False
+        self.SAVE_CROPS = True # full-body dedupe: also save the SSIM comparison crops next to each review pair
         self.FB_DEDUPE = {
             "dhash_max": 24,          # of 64 bits, whole-image dHash hamming distance
             "face_bbox_max": 0.02,    # distance of face bbox normalized by image size [left/w, top/h, height/h]
@@ -133,6 +134,21 @@ class SortPose:
             "orb_compute_dhash_max": 30,    # only run ORB matching if dhash <= this and
             "orb_compute_face_bbox_max": 0.35,  # face bbox dist <= this (saves time)
             "orb_match_distance": 40, # hamming distance for a "good" ORB match
+            # PROVISIONAL cheap-signal gates/tiers (normalized: face_xyz / 15, face_encodings68 / .5, body lms / 1). Tune from [DEDUPE TIER] logs
+            "xyz_gate": 0.75,         # pass 1: face_xyz (pitch/yaw/roll) normalized distance must be <= this
+            "enc_gate": 0.65,          # pass 2: face encoding normalized distance must be < this
+            "body_max": 2.0,          # body_landmarks_normalized_array normalized distance must be <= this
+            "sf_min": 0.40,           # figure-box SSIM below this is tossed (nearly all false positives)
+            "sf_high": 0.65,          # figure-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
+            "st_min": 0.40,           # torso-box SSIM below this is tossed (nearly all false positives)
+            "st_high": 0.65,          # torse-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
+            # crop boxes as multiples of the face bbox (width mults x face width; vertical mults x face height, down from face top)
+            "fig_width_mult": 2.0,    # figure box total width
+            "fig_down_mult": 5.0,     # figure box extends this many face-heights down from the top of the face
+            "torso_width_mult": 1.2,  # torso (clothes sample) box total width, centred on the face
+            "torso_y_range": (2.0, 4.0),  # torso box top/bottom, in face-heights below the face top
+            "scombo_min": 1.0,          # combo-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
+
         }
         self.ARM_HAND_BLOCKS = False # set from make_video; last 2*ARM_HAND_BLOCK_DIMS dims of body vectors are hand_position + hand_gesture
         self.ARM_HAND_BLOCK_DIMS = 126 # 2 hands * 21 points * 3 dims
@@ -1439,6 +1455,15 @@ class SortPose:
         score, _ = ssim(gray1, gray2, full=True)
         return score  # Return the SSIM score
 
+    def calculate_ssim_color(self, image1, image2, size=None):
+        """SSIM over the B, G, R channels (averaged), so hue differences count. Both images are resized to `size` (default TARGET_SIZE)."""
+        size = size or self.TARGET_SIZE
+        image1, image2 = cv2.resize(image1, size), cv2.resize(image2, size)
+        try:
+            return float(ssim(image1, image2, channel_axis=2))
+        except TypeError: # skimage < 0.19
+            return float(ssim(image1, image2, multichannel=True))
+
     def remove_duplicates(self, folder_list, df: pd.DataFrame, not_dupe_list, PURGING_DUPES=False, timing_callback=None) -> pd.DataFrame:
         """
         Main method to remove duplicates from the dataframe.
@@ -1481,7 +1506,7 @@ class SortPose:
         feature_cache = {}
         pair_signal_cache = {}
         look_closer_dict = {}
-        fb_counts = {"pairs": 0, "candidates": 0, "old_gate_candidates": 0, "orb_computed": 0}
+        fb_counts = {"pairs": 0, "candidates": 0, "old_gate_candidates": 0, "orb_computed": 0, "pose_gate_candidates": 0, "tier_dupe": 0, "tier_high": 0, "tier_medium": 0, "tier_none": 0}
         if self.VERBOSE or full_body: print(f"[DEDUPE] mode={'FULL_BODY signals' if full_body else 'standard (SSIM/selfie)'}")
         AUTO_CHECK = .2
         THRESH1 = 2
@@ -1565,6 +1590,145 @@ class SortPose:
             if sig["orb_frac"] >= fbp["orb_confirm"]: return True
             return sig["orb_frac"] >= fbp["orb_confirm_same_face"] and sig["face_bbox_dist"] <= fbp["face_bbox_max"]
 
+        pose_cache = {}
+        pose_px_check = {"n": 0, "out_of_image": 0, "range_max": 0.0}
+        pose_box_cache = {}
+        pose_img_cache = {}
+
+        def pose_features(k):
+            # body_landmarks_normalized: nose-origin, in face-height units, so already scale-comparable across images.
+            # rel = pose relative to hip midpoint in torso-length units; xy_px = body_landmarks (0-1 image coords) x image dims (crop boxes only)
+            if k in pose_cache: return pose_cache[k]
+            out = None
+            try:
+                lms = df.iloc[k]['body_landmarks_normalized'].landmark
+                pts = np.array([[l.x, l.y, l.visibility] for l in lms], dtype=float)
+                xy, vis = pts[:, :2], pts[:, 2]
+                hip, sh = (xy[23] + xy[24]) / 2, (xy[11] + xy[12]) / 2
+                scale = float(np.linalg.norm(sh - hip))
+                if scale > 0 and (vis >= 0.5).sum() >= 8:
+                    # pixel positions come from body_landmarks (image-normalized 0-1), scaled by the image dims
+                    raw = self.str_to_landmarks(df.iloc[k]['body_landmarks'])
+                    px = np.array([[l.x, l.y, l.visibility] for l in raw.landmark], dtype=float)
+                    if k not in pose_img_cache: pose_img_cache[k] = open_and_crop(k, df)
+                    h, w = pose_img_cache[k].shape[:2]
+                    trim = {2: 100, 9: 90}.get(df.iloc[k]['site_name_id'], 0) # trim_bottom removes rows after the landmarks were computed
+                    xy_px = px[:, :2] * np.array([w, h + trim])
+                    seen = px[:, 2] >= 0.5
+                    pose_px_check["n"] += int(seen.sum())
+                    pose_px_check["out_of_image"] += int((seen & ((xy_px[:, 0] < 0) | (xy_px[:, 0] > w) | (xy_px[:, 1] < 0) | (xy_px[:, 1] > h))).sum())
+                    pose_px_check["range_max"] = max(pose_px_check["range_max"], float(np.abs(px[:, :2]).max()))
+                    out = {"rel": (xy - hip) / scale, "vis": vis, "xy_px": xy_px}
+            except Exception as e:
+                print(f"[DEDUPE POSE] feature error row {k} image_id {iid(k)}: {e}")
+            pose_cache[k] = out
+            return out
+
+        def pose_boxes(k):
+            # figure and torso crop boxes as fixed multiples of the face bbox (no landmarks), in pixels.
+            # widths are multiples of face width, vertical extents multiples of face height, measured down from the face top.
+            if k in pose_box_cache: return pose_box_cache[k]
+            out = None
+            try:
+                if k not in pose_img_cache: pose_img_cache[k] = open_and_crop(k, df)
+                img = pose_img_cache[k]
+                h, w = img.shape[:2]
+                b = df.iloc[k]['bbox']
+                fw, fh = max(b['right'] - b['left'], 1), max(b['bottom'] - b['top'], 1)
+                cx = (b['left'] + b['right']) / 2
+                def clip_box(x0, y0, x1, y1):
+                    x0, x1 = max(int(x0), 0), min(int(x1), w)
+                    y0, y1 = max(int(y0), 0), min(int(y1), h)
+                    return (x0, y0, x1, y1) if x1 - x0 >= 8 and y1 - y0 >= 8 else None
+                half_fig = fbp["fig_width_mult"] * fw / 2
+                half_torso = fbp["torso_width_mult"] * fw / 2
+                t0, t1 = fbp["torso_y_range"]
+                out = {"img": img,
+                       "figure_box": clip_box(cx - half_fig, b['top'], cx + half_fig, b['top'] + fbp["fig_down_mult"] * fh),
+                       "torso_box": clip_box(cx - half_torso, b['top'] + t0 * fh, cx + half_torso, b['top'] + t1 * fh)}
+            except Exception as e:
+                print(f"[DEDUPE POSE] box error row {k} image_id {iid(k)}: {e}")
+            pose_box_cache[k] = out
+            return out
+
+        def pose_dist(i, j):
+            # cheap (no image access): returns (shared_count, mean, max) of scale-normalized landmark distances, or None
+            fi, fj = pose_features(i), pose_features(j)
+            if fi is None or fj is None: return None
+            shared = (fi["vis"] >= 0.5) & (fj["vis"] >= 0.5)
+            if shared.sum() < 8: return None
+            d = np.linalg.norm(fi["rel"][shared] - fj["rel"][shared], axis=1)
+            return int(shared.sum()), round(float(d.mean()), 3), round(float(d.max()), 3)
+
+        def crop_signals(fi, fj, box_key, size=(128, 256)):
+            bi, bj = fi[box_key], fj[box_key]
+            if bi is None or bj is None: return None
+            def crop(f, b):
+                x0, y0, x1, y1 = b
+                return cv2.cvtColor(cv2.resize(f["img"][y0:y1, x0:x1], size), cv2.COLOR_BGR2GRAY)
+            gi, gj = crop(fi, bi), crop(fj, bj)
+            ci, cj = (cv2.resize(f["img"][b[1]:b[3], b[0]:b[2]], size) for f, b in ((fi, bi), (fj, bj)))
+            out = {"ssim": round(self.calculate_ssim_color(ci, cj, size), 3), "ssim_gray": round(float(ssim(gi, gj)), 3)}
+            hi = cv2.resize(gi, (17, 16)); hj = cv2.resize(gj, (17, 16))
+            out["dhash_frac"] = round(float(np.mean((hi[:, 1:] > hi[:, :-1]) != (hj[:, 1:] > hj[:, :-1]))), 3)
+            orb = cv2.ORB_create(500)
+            _, di = orb.detectAndCompute(cv2.resize(gi, (size[0] * 2, size[1] * 2)), None)
+            _, dj = orb.detectAndCompute(cv2.resize(gj, (size[0] * 2, size[1] * 2)), None)
+            if di is not None and dj is not None:
+                good = [m for m in cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(di, dj) if m.distance < fbp["orb_match_distance"]]
+                out["orb_frac"] = round(len(good) / max(min(len(di), len(dj)), 1), 3)
+            return out
+
+        def pose_box_signals(i, j):
+            pd_ = pose_dist(i, j)
+            if pd_ is None: return "pose unavailable"
+            out = {"shared_lms": pd_[0], "pose_dist_mean": pd_[1], "pose_dist_max": pd_[2]}
+            try:
+                out["face_enc_dist"] = round(float(self.dupe_comparison(i, j, 'face_encodings68', df)), 3)
+            except Exception:
+                out["face_enc_dist"] = None
+            bi, bj = pose_boxes(i), pose_boxes(j)
+            out["figure_box"] = crop_signals(bi, bj, "figure_box") if bi and bj else None
+            out["torso_box"] = crop_signals(bi, bj, "torso_box") if bi and bj else None
+            return out
+
+        def comparison_crops(i, j):
+            # the exact regions fed to the SSIM signals: whole image (384x384), torso and figure boxes (128x256 shown 2x), colour
+            out = {}
+            if not self.SAVE_CROPS: return out
+            try:
+                for k in (i, j):
+                    out[f"crop_whole_{iid(k)}.jpg"] = cv2.resize(open_and_crop(k, df), self.TARGET_SIZE)
+            except Exception as e:
+                print(f"[DEDUPE TIER] whole crop error {i},{j}: {e}")
+            bi, bj = pose_boxes(i), pose_boxes(j)
+            if not bi or not bj: return out
+            for box_key in ("figure_box", "torso_box"):
+                if bi[box_key] is None or bj[box_key] is None: continue
+                for k, b in ((i, bi), (j, bj)):
+                    x0, y0, x1, y1 = b[box_key]
+                    out[f"crop_{box_key.split('_')[0]}_{iid(k)}.jpg"] = cv2.resize(b["img"][y0:y1, x0:x1], (256, 512))
+            return out
+
+        def fb_tier(sig, pose):
+            # returns "dupe" | "high" | "medium" | None. pose is the pose_box_signals dict (or a string / None if unavailable)
+            if sig is None: return None
+            orb, dh = sig["orb_frac"], sig["dhash"]
+            if orb is not None and dh <= fbp["dhash_max"] and orb >= fbp["orb_confirm"]:
+                return "dupe"
+            same_face_box = sig["face_bbox_dist"] <= fbp["face_bbox_max"]
+            if orb is not None and dh <= fbp["dhash_max"] and orb >= fbp["orb_confirm_same_face"] and same_face_box:
+                return "high"
+            if isinstance(pose, dict) and "pose_dist_mean" in pose and pose["pose_dist_mean"] <= fbp["pose_medium"]:
+                torso = pose.get("torso_box") or {}
+                fig = pose.get("figure_box") or {}
+                tssim, torb = torso.get("ssim", 0), torso.get("orb_frac", 0) or 0
+                if pose["pose_dist_mean"] <= fbp["pose_high"] and (tssim >= fbp["torso_ssim_high"] or torb >= fbp["torso_orb_high"]):
+                    return "high"
+                if tssim >= fbp["torso_ssim_medium"] or torb >= fbp["torso_orb_medium"] or fig.get("dhash_frac", 1) <= fbp["figure_dhash_medium"]:
+                    return "medium"
+            return None
+
         def open_and_crop(key,df):
             img = cv2.imread(construct_filepath(key, df))
             dfrow = df.iloc[key]
@@ -1608,17 +1772,18 @@ class SortPose:
             #         sort_folder += "sameSHOOT"
             return sort_folder
         
-        def save_dupes_look_closer(i, j, ssim_score, this_dist_list, df):
+        def save_dupes_look_closer(i, j, ssim_score, this_dist_list, df, force_folder=None, foldername_override=None, extra_images=None):
             # Treat True as 1 and False as 0 for summing
             sum_this_dist_list = round(sum(this_dist_list[:3]), 2)
             rounded_dist_list = [f"{x:.2f}" if isinstance(x, (float, int)) else str(x) for x in this_dist_list]
             foldername = f"{sum_this_dist_list}_{ssim_score:.2f}_{i}_{j}" + "_" + "_".join(rounded_dist_list)
+            if foldername_override: foldername = foldername_override
             is_dupe = False # default to not dupe
                         
             # copy images to folder to look closer
             for key in [i,j]:
                 filepath = construct_filepath(key, df)
-                sort_folder = sort_on_score(ssim_score, this_dist_list)
+                sort_folder = force_folder or sort_on_score(ssim_score, this_dist_list)
                 # print(f"Saving duplicate look closer images to {save_folder} for {filepath} from site {site_name_id}")
                 # save the images to the folder
                 if sort_folder not in ["nope", "dupe"]:
@@ -1634,7 +1799,7 @@ class SortPose:
                     is_dupe = True
                     save_folder = os.path.join(os.path.dirname(self.outfolder),"dupe_sorting", sort_folder, foldername)
                     os.makedirs(save_folder, exist_ok=True)
-                    # print(f"made SQL {save_folder}")
+                    if force_folder: shutil.copy(filepath, save_folder) # full-body debugging: keep dupe images for review
                 # else:
                 #     save_folder = os.path.join(os.path.dirname(self.outfolder), "dupe_sorting", os.path.basename(self.outfolder), sort_folder, foldername)
             if sort_folder != "nope":
@@ -1646,6 +1811,8 @@ class SortPose:
                 sql = f"UPDATE Encodings SET is_dupe_of = {image_id_i} WHERE image_id = {image_id_j}; \n -- image_id_i is {image_id_i} with filename {imagename_i}"
                 with open(os.path.join(save_folder, f"dupe_{image_id_j}.sql"), "a") as f:
                     f.write(sql + "\n")
+                for name, crop_img in (extra_images or {}).items():
+                    cv2.imwrite(os.path.join(save_folder, name), crop_img)
             return is_dupe
         # i is to be kept, j is to be removed if dupe
         # Pass 1: Fast screening, if it sum(norm_dist) < threshold, add it into the look_closer list to be checked in pass 2
@@ -1693,6 +1860,15 @@ class SortPose:
             for j in range(i + 1, n_rows):
                 if abs(i - j) > check_range: continue
                 this_dist_list = []
+                if full_body:
+                    # cheap pass 1: head pose (face_xyz) only; face encoding is pass 2, body landmarks pass 3
+                    xyz = self.dupe_comparison(i, j, 'face_xyz', df)
+                    xyz_n = norm_dist(xyz, threshold_dict['face_xyz'][0]) if xyz not in (None, False) else float('inf')
+                    fb_counts["pairs"] += 1
+                    if xyz_n <= fbp["xyz_gate"]:
+                        fb_counts["candidates"] += 1
+                        look_closer_dict[(i, j)] = [xyz_n]
+                    continue
                 keys_to_check = ['wrist_ankle_landmarks_normalized_array', 'face_xyz', 'bbox_array']
                 # check to see if there are any where 'wrist_ankle_landmarks_normalized_array' is None, if so, skip it
                 # print(" ankle lists")
@@ -1713,10 +1889,16 @@ class SortPose:
                 if debug_ids and str(df.iloc[i]['image_id']) in debug_ids and str(df.iloc[j]['image_id']) in debug_ids:
                     passed = sum(this_dist_list) <= THRESH1 or any(d < AUTO_CHECK for d in this_dist_list)
                     print(f"[DEDUPE DEBUG] pass1 {i},{j} image_ids {df.iloc[i]['image_id']},{df.iloc[j]['image_id']} keys {keys_to_check} normed {[round(float(d), 3) for d in this_dist_list]} sum={sum(this_dist_list):.3f} passed={passed} signals={pair_signals(i, j, force_orb=True)}")
+                    print(f"[DEDUPE POSE] {i},{j} image_ids {df.iloc[i]['image_id']},{df.iloc[j]['image_id']} {pose_box_signals(i, j)}")
                 old_gate = sum(this_dist_list) <= THRESH1 or any(d < AUTO_CHECK for d in this_dist_list)
                 if full_body:
                     sig = pair_signals(i, j)
                     gate = fb_is_candidate(sig)
+                    if not gate:
+                        pd_ = pose_dist(i, j)
+                        if pd_ is not None and pd_[1] <= fbp["pose_gate"]:
+                            gate = True
+                            fb_counts["pose_gate_candidates"] += 1
                     fb_counts["pairs"] += 1
                     fb_counts["candidates"] += int(gate)
                     fb_counts["old_gate_candidates"] += int(old_gate)
@@ -1734,7 +1916,7 @@ class SortPose:
                     
                     continue
                       # If only one of the checks passed, skip to next pair
-        if full_body: print(f"[DEDUPE SIGNALS] pass1 summary {fb_counts} (per-pair lines need VERBOSE)")
+        if full_body: print(f"[DEDUPE] pass1 summary {fb_counts}")
         add_remove_timing("pass1", time.perf_counter() - pass1_start)
         dedupe_stats["look_closer_candidates"] = len(look_closer_dict)
 
@@ -1760,8 +1942,10 @@ class SortPose:
             key = "face_encodings68"
             threshold, _ = threshold_dict[key]
             this_dist = self.dupe_comparison(i, j, key, df)
-            normed_dist = norm_dist(this_dist, threshold)
+            if full_body and this_dist in (None, False): this_dist = float('inf')
+            normed_dist = norm_dist(this_dist, fbp["enc_gate"] * threshold if full_body else threshold)
             if normed_dist < 1:
+                if full_body: normed_dist = norm_dist(this_dist, threshold)
                 this_dist_list.append(normed_dist)
                 # update look_closer_dict
                 look_closer_dict[(i,j)] = this_dist_list
@@ -1782,9 +1966,14 @@ class SortPose:
             key = "body_landmarks_normalized_array"
             threshold, operator = threshold_dict[key]
             body_dist = self.dupe_comparison(i, j, key, df)
+            if full_body and body_dist in (None, False): body_dist = float('inf')
             normed_body_dist = norm_dist(body_dist, threshold)
-            # replace the exising hands/ankles with full body lms
-            this_dist_list[0] = normed_body_dist
+            if full_body:
+                # [xyz, enc] + body; the old path replaces its hands/ankles slot instead
+                this_dist_list.append(normed_body_dist)
+            else:
+                # replace the exising hands/ankles with full body lms
+                this_dist_list[0] = normed_body_dist
 
             # calculate hand dist
             key = "hand_landmarks"
@@ -1831,14 +2020,51 @@ class SortPose:
             dedupe_stats["ssim_pairs_tested"] += 1
 
             if full_body:
-                # signals are cached from pass 1; SSIM / selfie masks are not used for full body
-                sig = pair_signals(i, j, force_orb=True)
-                is_dupe = fb_is_dupe(sig)
-                print(f"[DEDUPE SIGNALS] decision {i},{j} image_ids {iid(i)},{iid(j)} signals={sig} dupe={is_dupe}")
-                # synthetic score only routes save_dupes_look_closer: 0.95 -> dupe folder, 0.1 -> ignored
-                if save_dupes_look_closer(i, j, 0.95 if is_dupe else 0.1, this_dist_list, df):
-                    confirmed_dupes.add(j)
-                    dedupe_stats["confirmed_dupes"] += 1
+                # tiers come from the cheap signals only: [face_xyz, face_enc, body_lms, ...] (all normalized)
+                xyz_n, enc_n, body_n = this_dist_list[0], this_dist_list[1], this_dist_list[2]
+                body_ok = body_n is not None and body_n is not False and body_n <= fbp["body_max"]
+                if not body_ok or xyz_n > fbp["xyz_gate"] or enc_n > fbp["enc_gate"]:
+                    fb_counts["tier_none"] += 1
+                    continue
+                # figure-box SSIM decides the tier; whole and torso SSIM are logged and named only
+                ssim_whole = ssim_whole_gray = ssim_torso = ssim_fig = ssim_torso_gray = ssim_fig_gray = None
+                try:
+                    img_i, img_j = open_and_crop(i, df), open_and_crop(j, df)
+                    ssim_whole = round(self.calculate_ssim_color(img_i, img_j), 3)
+                    ssim_whole_gray = round(float(self.calculate_ssim(img_i, img_j)), 3)
+                    bi, bj = pose_boxes(i), pose_boxes(j)
+                    if bi and bj:
+                        ct, cf = crop_signals(bi, bj, "torso_box"), crop_signals(bi, bj, "figure_box")
+                        ssim_torso = ct["ssim"] if ct else None
+                        ssim_fig = cf["ssim"] if cf else None
+                        ssim_torso_gray = ct["ssim_gray"] if ct else None
+                        ssim_fig_gray = cf["ssim_gray"] if cf else None
+                except Exception as e:
+                    print(f"[DEDUPE TIER] ssim error {i},{j}: {e}")
+                # no auto-dupes: everything goes to manual review. An unavailable figure SSIM goes to missing.
+                
+                if ssim_fig is not None and ssim_torso is not None:
+                    if (ssim_fig+ssim_torso) > fbp["scombo_min"] and ssim_fig > fbp["sf_min"] and ssim_torso > fbp["st_min"]:
+                        # print(f"inside the scombo")
+                        # if it meets the combo threshold, and both individual thresholds, it is some kind of dupe
+                        if ssim_fig > fbp["sf_high"] and ssim_torso > fbp["sf_high"]:
+                            # it is a high probability dupe
+                            tier = "high"
+                            # print(f"tier: {tier}")
+                        else:
+                            tier = "medium"
+                            # print(f"tier: {tier}")
+                    else:
+                        tier = None
+                else:
+                    tier = "missing"
+                    print(f" ⚠️⚠️⚠️ NO SSIM RESULTS for {i},{j} image_ids {iid(i)},{iid(j)}. ssim_whole={ssim_whole} ssim_torso={ssim_torso} ssim_fig={ssim_fig} (gray: whole={ssim_whole_gray} torso={ssim_torso_gray} figure={ssim_fig_gray}) ⚠️⚠️⚠️")
+                fb_counts["tier_" + (tier or "none")] += 1
+                print(f"[DEDUPE TIER] {tier} {i},{j} image_ids {iid(i)},{iid(j)} xyz={xyz_n:.3f} enc={enc_n:.3f} body={round(float(body_n), 3)} whole={ssim_whole} torso={ssim_torso} figure={ssim_fig} (gray: whole={ssim_whole_gray} torso={ssim_torso_gray} figure={ssim_fig_gray})")
+                if tier is None:
+                    continue
+                tier_name = f"{tier}_{iid(i)}_{iid(j)}_xyz{xyz_n:.2f}_enc{enc_n:.2f}_body{body_n:.2f}_sw{ssim_whole}_st{ssim_torso}_sf{ssim_fig}"
+                save_dupes_look_closer(i, j, {"high": 0.85, "medium": 0.70}[tier], this_dist_list, df, force_folder=tier, foldername_override=tier_name, extra_images=comparison_crops(i, j))
                 continue
 
             # open images i and j, crop to bbox. if can't open, remove from df and continue
@@ -1951,6 +2177,7 @@ class SortPose:
         print(sorted_df.head())
         add_remove_timing("finalize", time.perf_counter() - finalize_start)
         add_remove_timing("total", time.perf_counter() - remove_total_start)
+        if full_body: print(f"[DEDUPE TIER] summary {fb_counts}")
         print(
             "[DEDUPE] remove_duplicates summary "
             f"rows_in={n_rows} rows_out={sorted_df.shape[0]} "
