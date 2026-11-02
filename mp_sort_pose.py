@@ -124,7 +124,7 @@ class SortPose:
         }
         # FULL_BODY dedupe: set from make_video. Uses resize-tolerant image signals instead of pixel bbox + selfie SSIM
         self.FULL_BODY_DEDUPE = False
-        self.SAVE_CROPS = True # full-body dedupe: also save the SSIM comparison crops next to each review pair
+        self.SAVE_CROPS = False # full-body dedupe: also save the SSIM comparison crops next to each review pair
         self.FB_DEDUPE = {
             "dhash_max": 24,          # of 64 bits, whole-image dHash hamming distance
             "face_bbox_max": 0.02,    # distance of face bbox normalized by image size [left/w, top/h, height/h]
@@ -136,12 +136,15 @@ class SortPose:
             "orb_match_distance": 40, # hamming distance for a "good" ORB match
             # PROVISIONAL cheap-signal gates/tiers (normalized: face_xyz / 15, face_encodings68 / .5, body lms / 1). Tune from [DEDUPE TIER] logs
             "xyz_gate": 0.75,         # pass 1: face_xyz (pitch/yaw/roll) normalized distance must be <= this
-            "enc_gate": 0.65,          # pass 2: face encoding normalized distance must be < this
-            "body_max": 2.0,          # body_landmarks_normalized_array normalized distance must be <= this
+            "enc_gate": 1.2,          # pass 2: face encoding normalized distance must be < this - was set to .65. setting to 1, because I think this is only used in normalizing to a 0-1 based on threshold_dict which is .5
+            "body_max": 1.0,          # normalized body distance must be <= this (raw = body_max * world_threshold when world lms are used)
+            "bd_low": 0.3,              # normalized body distance below this -> high; between bd_low and body_max -> medium. No auto-dupe tier.
+            "bd_high": 0.6,             # normalized body distance above this -> high; between bd_low and body_max -> medium. No auto-dupe tier.
+            "sw_max": 0.85,             # threshold for whole-image SSIM to be considered a dupe (high or medium)
             "sf_min": 0.40,           # figure-box SSIM below this is tossed (nearly all false positives)
-            "sf_high": 0.65,          # figure-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
+            "sf_high": 0.7,          # figure-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
             "st_min": 0.40,           # torso-box SSIM below this is tossed (nearly all false positives)
-            "st_high": 0.65,          # torse-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
+            "st_high": 0.7,          # torse-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
             # crop boxes as multiples of the face bbox (width mults x face width; vertical mults x face height, down from face top)
             "fig_width_mult": 2.0,    # figure box total width
             "fig_down_mult": 5.0,     # figure box extends this many face-heights down from the top of the face
@@ -2043,15 +2046,33 @@ class SortPose:
                     print(f"[DEDUPE TIER] ssim error {i},{j}: {e}")
                 # no auto-dupes: everything goes to manual review. An unavailable figure SSIM goes to missing.
                 
+                # bd_avg = (fbp["bd_high"]+ fbp["body_max"])/2
+                sf_avg = (fbp["sf_high"]+fbp["sf_min"])/2
+                st_avg = (fbp["st_high"]+fbp["st_min"])/2
+                small_slice = 0
                 if ssim_fig is not None and ssim_torso is not None:
                     if (ssim_fig+ssim_torso) > fbp["scombo_min"] and ssim_fig > fbp["sf_min"] and ssim_torso > fbp["st_min"]:
-                        # print(f"inside the scombo")
-                        # if it meets the combo threshold, and both individual thresholds, it is some kind of dupe
-                        if ssim_fig > fbp["sf_high"] and ssim_torso > fbp["sf_high"]:
-                            # it is a high probability dupe
+                        # if it meets the combo threshold, and both individual thresholds, it is probably some kind of dupe
+                        if body_n > (fbp["body_max"]-small_slice) and ssim_fig < sf_avg and ssim_torso < st_avg and ssim_whole < fbp["st_min"]:
+                            # if body is greater than the avg between high and max, and lower than the avg for SSIM, toss it
+                            print(f" YYY BODY LMS low tier None with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
+                            tier = None
+                        elif ssim_fig > fbp["sf_high"] and ssim_torso > fbp["sf_high"]:
+                            print(f" YYY SSIM high tier with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
+                            # figure and torse SSIM meets higher threshold -> high probability dupe
                             tier = "high"
-                            # print(f"tier: {tier}")
+                        elif body_n < fbp["bd_low"]:
+                            print(f" YYY BODY LMS high tier with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
+                            #  body 3D lms are very similar -> high probability dupe
+                            tier = "high"
+                        elif body_n < fbp["bd_high"] and ssim_fig > sf_avg and ssim_torso > st_avg:
+                            # both body 3D lms and SSIM are pretty similar -> high probability dupe
+                            print(f" YYY COMBO high tier with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
+                            bd = fbp["bd_high"]
+                            print(f" thresholds to clear are {bd} and {sf_avg} and {st_avg}")
+                            tier = "high"
                         else:
+                            print(f" ZZZZ MEDIUM tier with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
                             tier = "medium"
                             # print(f"tier: {tier}")
                     else:
@@ -2060,10 +2081,10 @@ class SortPose:
                     tier = "missing"
                     print(f" ⚠️⚠️⚠️ NO SSIM RESULTS for {i},{j} image_ids {iid(i)},{iid(j)}. ssim_whole={ssim_whole} ssim_torso={ssim_torso} ssim_fig={ssim_fig} (gray: whole={ssim_whole_gray} torso={ssim_torso_gray} figure={ssim_fig_gray}) ⚠️⚠️⚠️")
                 fb_counts["tier_" + (tier or "none")] += 1
-                print(f"[DEDUPE TIER] {tier} {i},{j} image_ids {iid(i)},{iid(j)} xyz={xyz_n:.3f} enc={enc_n:.3f} body={round(float(body_n), 3)} whole={ssim_whole} torso={ssim_torso} figure={ssim_fig} (gray: whole={ssim_whole_gray} torso={ssim_torso_gray} figure={ssim_fig_gray})")
+                print(f"[DEDUPE TIER] {tier} {i},{j} image_ids {iid(i)},{iid(j)} xyz={xyz_n:.3f} enc={enc_n:.3f} body={round(float(body_n), 3)} (raw {body_n}) whole={ssim_whole} torso={ssim_torso} figure={ssim_fig} (gray: whole={ssim_whole_gray} torso={ssim_torso_gray} figure={ssim_fig_gray})")
                 if tier is None:
                     continue
-                tier_name = f"{tier}_{iid(i)}_{iid(j)}_xyz{xyz_n:.2f}_enc{enc_n:.2f}_body{body_n:.2f}_sw{ssim_whole}_st{ssim_torso}_sf{ssim_fig}"
+                tier_name = f"{tier}_{iid(i)}_{iid(j)}_xyz{xyz_n:.2f}_enc{enc_n:.2f}_body_n{body_n:.2f}_sw{ssim_whole}_st{ssim_torso}_sf{ssim_fig}"
                 save_dupes_look_closer(i, j, {"high": 0.85, "medium": 0.70}[tier], this_dist_list, df, force_folder=tier, foldername_override=tier_name, extra_images=comparison_crops(i, j))
                 continue
 
