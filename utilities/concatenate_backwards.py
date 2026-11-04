@@ -75,18 +75,18 @@ def compare_both_folders(dedupe_this, duped, removed_files, to_dupe):
 	# REVERSED: files present in deduped → removed_files (actually NOT dupes → is_not_dupe_of)
     not_dupes = deduped_sql_files
     for rel_path in not_dupes:
-        file_name = os.path.basename(rel_path)
         src = os.path.join(duped, rel_path)
-        dst = os.path.join(removed_files, file_name)
+        dst = os.path.join(removed_files, rel_path)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copy2(src, dst)
         print(f"[not-dupe] Copied {src} to {dst}")
 
 	# REVERSED: files in dedupe_this NOT in deduped → to_dupe (actual dupes → dupes.sql)
     actual_dupes = dedupe_sql_files - deduped_sql_files
     for rel_path in actual_dupes:
-        file_name = os.path.basename(rel_path)
         src = os.path.join(dedupe_this, rel_path)
-        dst = os.path.join(to_dupe, file_name)
+        dst = os.path.join(to_dupe, rel_path)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copy2(src, dst)
         print(f"[dupe] Copied {src} to {dst}")
 
