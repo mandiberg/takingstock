@@ -120,13 +120,13 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_handpartitionsort_oct25_d15_pos1_gest25_splitconstzero" 
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_Thoma_Nov2/_BODY_Thoma_Nov2_dupecheck"
 ### >>> go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, /data manifest,  multiplier, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 
 FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_none" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
-MAX_ROWS_PER_OUTPUT_CSV = 300 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
+MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
 DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 0 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
 ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
@@ -205,7 +205,7 @@ OBJECT_COLLAPSE_MIN = 1000       # minimum topic-count for a signature bin to be
 MULTIPOLICY = False
 
 # CONTROL LEG STUFF FOR ARMS CLUSTERS
-INCLUDE_LEG_POSE_FEATURES = True  # join LocationHandsFeet for leg-shape cluster separability testing
+INCLUDE_LEG_POSE_FEATURES = False  # join LocationHandsFeet for leg-shape cluster separability testing
 LEG_POSE_FLOOR_PCT = 5.0             # minimum visible-leg percentage required before split test
 LEG_POSE_MIN_BUCKET_SIZE = 20        # minimum rows required on each side of the candidate valley
 LEG_POSE_MIN_GAP_RATIO = 0.35        # valley-to-peak ratio for a real split; not a literal empty-gap width
@@ -524,7 +524,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     else:
         N_HSV = 0 # don't do HSV clusters
 
-    PURGING_DUPES = False # skips build/save, just compares dupes
+    PURGING_DUPES = True # skips build/save, just compares dupes
 
     ###### IMPORTANT ######
     # this is the switch that controls the CSV output count
@@ -4747,7 +4747,8 @@ def _mode1_recheck_is_dupe_of(db_session, df):
 
 
 def _mode1_get_not_dupes_sql(db_session):
-    query = db_session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).all()
+    # only human-reviewed non-dupes
+    query = db_session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).filter(IsNotDupeOf.manual_check == True).all()
     return {(row.image_id_i, row.image_id_j): True for row in query}
 
 

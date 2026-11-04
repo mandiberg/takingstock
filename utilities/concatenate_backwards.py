@@ -16,8 +16,22 @@ removed_files = os.path.join(ROOT_FOLDER, 'removed_files') # files present in de
 to_dupe = os.path.join(ROOT_FOLDER, 'to_dupe')           # files in dedupe_this NOT in deduped → these are actual dupes → dupes.sql
 dupes_file = os.path.join(to_dupe, "dupes.sql")
 
+def normalize_sql_line(raw_line):
+	line = raw_line.strip()
+	if not line or line.startswith("--"):
+		return None
+	# Ignore trailing inline comments so the same statement doesn't get repeated
+	# just because a different file recorded a different comment after it.
+	if " -- " in line:
+		line = line.split(" -- ", 1)[0].rstrip()
+	if not line:
+		return None
+	return line
+
+
 def concatenate_sql_files(base_folder, merged_file):
 	total_files = 0
+	seen_sql = set()
 	if ONLY_DUPES:
 		base_folder = os.path.join(base_folder, "dupe")
 	with open(merged_file, "w", encoding="utf-8") as outfile:
@@ -29,10 +43,13 @@ def concatenate_sql_files(base_folder, merged_file):
 				if file.endswith(".sql") and file != "merged.sql":
 					file_path = os.path.join(root, file)
 					with open(file_path, "r", encoding="utf-8") as infile:
-						# outfile.write(f"-- Start of {file_path}\n")
-						outfile.write(infile.read())
+						for line in infile:
+							normalized = normalize_sql_line(line)
+							if normalized is None or normalized in seen_sql:
+								continue
+							outfile.write(normalized + "\n")
+							seen_sql.add(normalized)
 						total_files += 1
-						# outfile.write(f"\n-- End of {file_path}\n\n")
 	print(f"Merged all .sql files into {merged_file} with total {total_files} files.")
 
 def compare_both_folders(dedupe_this, duped, removed_files, to_dupe):
@@ -78,6 +95,7 @@ def compare_both_folders(dedupe_this, duped, removed_files, to_dupe):
 def build_not_dupe_sql(removed_files):
     IS_NOT_DUPES_FILE = os.path.join(ROOT_FOLDER, "is_not_dupe_of.sql")
     total_files = 0
+    seen_pairs = set()
     with open(IS_NOT_DUPES_FILE, "w", encoding="utf-8") as outfile:
         outfile.write("USE Stock;\n")
         for root, dirs, files in os.walk(removed_files):
@@ -91,6 +109,10 @@ def build_not_dupe_sql(removed_files):
                             if m:
                                 image_id_i = m.group(1)
                                 image_id_j = m.group(2)
+                                pair = (image_id_i, image_id_j)
+                                if pair in seen_pairs:
+                                    continue
+                                seen_pairs.add(pair)
                                 outfile.write(f"INSERT IGNORE INTO IsNotDupeOf (image_id_i, image_id_j, manual_check) VALUES ({image_id_i},{image_id_j}, 1);\n")
                         total_files += 1
     print(f"Merged all .sql files into {IS_NOT_DUPES_FILE} with total {total_files} files.")

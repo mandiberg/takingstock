@@ -1928,12 +1928,14 @@ class SortPose:
             # print(f"there are {len(not_dupes)} not_dupes")
             #interlude 1, check to see if any are in not_dupes list, if so, remove from look_closer_dic
             not_dupes_to_remove = []
+            # not_dupes holds image_id pairs; i,j are row positions, so map to image_ids first
+            not_dupes_canon = {tuple(sorted((int(a), int(b)))) for (a, b) in not_dupes}
             for (i,j), this_dist_list in look_closer_dict.items():
-                if (i,j) in not_dupes or (j,i) in not_dupes:
-                    print(f" ⚠️⚠️ removing {i}, {j} which are in the {len(not_dupes)} not_dupes ⚠️⚠️")
+                if tuple(sorted((int(iid(i)), int(iid(j))))) in not_dupes_canon:
+                    if self.VERBOSE:
+                        print(f" removing {iid(i)}, {iid(j)} (rows {i},{j}) found in not_dupes")
                     not_dupes_to_remove.append((i,j))
-                    continue
-            print(f"no not_dupes to remove")
+            print(f"[DEDUPE] not_dupes loaded={len(not_dupes_canon)} removed={len(not_dupes_to_remove)}")
             pop_look_closer_dict(look_closer_dict, not_dupes_to_remove)
             dedupe_stats["removed_by_notdupe_cache"] = len(not_dupes_to_remove)
         add_remove_timing("notdupe_filter", time.perf_counter() - notdupe_filter_start)
@@ -2154,9 +2156,9 @@ class SortPose:
                         if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
                         confirmed_dupes.add(j)
                         dedupe_stats["confirmed_dupes"] += 1
-                    else:
-                        # if it passess SSIM, save isnotdupe pair to sql to avoid future work
-                        write_is_not_dupe_sql(i, j, df)
+                    # else:
+                    #     # if it passess SSIM, save isnotdupe pair to sql to avoid future work
+                    #     write_is_not_dupe_sql(i, j, df)
                 except Exception as e:
                     print(f"[DEDUPE LOG] selfie SSIM error {i},{j} image_ids {iid(i)},{iid(j)} full_image={full_ssim_score:.3f}: {e}")
                     ssim_score = 0
