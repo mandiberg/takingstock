@@ -120,10 +120,10 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_Thoma_Nov2/_BODY_Thoma_Nov2_dupecheck"
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_ARMS_Thoma_Nov5"
 ### >>> go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, /data manifest,  multiplier, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_none" # canonical full_body goes here, so I don't reuse for ARMS
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_Thoma_Nov2" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -205,10 +205,12 @@ OBJECT_COLLAPSE_MIN = 1000       # minimum topic-count for a signature bin to be
 MULTIPOLICY = False
 
 # CONTROL LEG STUFF FOR ARMS CLUSTERS
-INCLUDE_LEG_POSE_FEATURES = False  # join LocationHandsFeet for leg-shape cluster separability testing
+INCLUDE_LEG_POSE_FEATURES = True  # join LocationHandsFeet for leg-shape cluster separability testing
 LEG_POSE_FLOOR_PCT = 5.0             # minimum visible-leg percentage required before split test
 LEG_POSE_MIN_BUCKET_SIZE = 20        # minimum rows required on each side of the candidate valley
 LEG_POSE_MIN_GAP_RATIO = 0.35        # valley-to-peak ratio for a real split; not a literal empty-gap width
+LEG_POSE_PRESENCE_MIN_PCT = 5.0     # first-stage legless vs leg-visible split needs each side >= this % of the cluster
+LEG_POSE_PRESENCE_MIN_COUNT = 100   # first-stage legless vs leg-visible split min count for each side to split
 LEG_POSE_ASYMMETRY_THRESHOLD = 0.15  # leg_asymmetry threshold for single- vs both-leg extended
 print("THISISTHENEWTHING")
 # overriding DB for testing
@@ -339,7 +341,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    FULL_BODY = True # FULL_BODY_SWITCH
+    FULL_BODY = False # FULL_BODY_SWITCH
     if FULL_BODY: 
         matrix_family = "BodyPoses3D" 
         MULTIPLIER_PADDING = MULTIPLIER_PADDING+.5 # if body, add to the padding
@@ -524,7 +526,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     else:
         N_HSV = 0 # don't do HSV clusters
 
-    PURGING_DUPES = True # skips build/save, just compares dupes
+    PURGING_DUPES = False # skips build/save, just compares dupes
 
     ###### IMPORTANT ######
     # this is the switch that controls the CSV output count
@@ -5983,11 +5985,28 @@ def main():
 
         Ordered largest-group-first so sbNNN numbering in logs stays stable/readable.
         """
-        labels = cl.label_by_leg_pose(
-            df_segment,
-            leg_pose_check["boundary"],
-            asymmetry_threshold=LEG_POSE_ASYMMETRY_THRESHOLD,
-        )
+        if leg_pose_check.get("split_mode") == "presence":
+            labels = cl.label_by_leg_presence(df_segment)
+            # leg-visible rows may still hold seated vs standing; run the valley test on them alone
+            legs_df = df_segment[labels == "legs_visible"]
+            sub_check = cl.assess_leg_pose_separability(
+                legs_df,
+                floor_pct=0.0,
+                min_bucket_size=LEG_POSE_MIN_BUCKET_SIZE,
+                min_gap_ratio=LEG_POSE_MIN_GAP_RATIO,
+            )
+            if sub_check["is_separable"]:
+                sub_labels = cl.label_by_leg_pose(
+                    legs_df, sub_check["boundary"], asymmetry_threshold=LEG_POSE_ASYMMETRY_THRESHOLD
+                )
+                labels = labels.astype(object)
+                labels.loc[sub_labels.index] = sub_labels
+        else:
+            labels = cl.label_by_leg_pose(
+                df_segment,
+                leg_pose_check["boundary"],
+                asymmetry_threshold=LEG_POSE_ASYMMETRY_THRESHOLD,
+            )
         partition_df = df_segment.copy()
         partition_df["_leg_pose_label"] = labels
 
@@ -6254,9 +6273,10 @@ def main():
                     leg_pose_check = cl.assess_leg_pose_separability(
                         df_segment,
                         floor_pct=LEG_POSE_FLOOR_PCT,
-                        min_bucket_size=LEG_POSE_MIN_BUCKET_SIZE,
+                        min_bucket_size=LEG_POSE_PRESENCE_MIN_COUNT, # switching this from the leg pose min size to a larger is_legs one
                         min_gap_ratio=LEG_POSE_MIN_GAP_RATIO,
                         cluster_label=base_file_prefix,
+                        presence_min_pct=LEG_POSE_PRESENCE_MIN_PCT,
                     )
                     record_leg_pose_result(leg_pose_check)
                     if leg_pose_check["is_separable"]:
