@@ -31,9 +31,10 @@ def pip(*args: str) -> None:
 def main() -> None:
     print("=== Installing Coqui TTS dependencies ===")
 
-    # Core Coqui TTS package. Pulls in coqpit, librosa, inflect,
-    # anyascii, phonemizer, trainer, etc.
-    pip("TTS")
+    # Core Coqui TTS package (maintained idiap fork; the original "TTS" package
+    # on PyPI requires Python <3.12). Still imported as `TTS`. Pulls in coqpit,
+    # librosa, inflect, anyascii, phonemizer, trainer, etc.
+    pip("coqui-tts")
 
     print("\n=== Installing audio / numeric support packages ===")
     pip(
