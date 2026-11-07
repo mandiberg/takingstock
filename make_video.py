@@ -8,6 +8,7 @@ import glob
 import time
 import sys
 import threading
+import re
 import resource
 import subprocess
 import pickle
@@ -52,6 +53,9 @@ elif '--1' in sys.argv:
 else:
     option, MODE = pick(options, title)
 
+_ck_idx = sys.argv.index('--crop-key') if '--crop-key' in sys.argv else -1
+FILTER_1x1_CROP_KEY = sys.argv[_ck_idx + 1] if _ck_idx >= 0 else None
+
 # keep this live, even if not SSD
 # SegmentTable_name = 'SegmentOct20'
 # SegmentHelper_name = None
@@ -69,11 +73,11 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-SSD_PATH = "/Volumes/LaCie/segment_images" # this controls where the source files are located, not cache files
+SSD_PATH = "/Volumes/OWC52/stub_set/segment_images" # this controls where the source files are located, not cache files
 # SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 
 # override for cache writes only. this controls where the cached files are written. if not None will override io.ROOT below
-CACHE_ROOT_OVERRIDE = "/Volumes/LaCie/output_folder/"  # e.g. None or "/Volumes/LaCie/segment_images_thegym"
+CACHE_ROOT_OVERRIDE = "/Volumes/OWC52/stub_set/segment_images/"  # e.g. None or "/Volumes/LaCie/segment_images_thegym"
 
 ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 # DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
@@ -101,6 +105,7 @@ if not (io.IS_TENCH or io.IS_MICHELLE) and IS_SSD:
     # io.ROOT_PROD=  "/Users/michaelmandiberg/Documents/projects-active/facemap_production" ## MBP
     print("Setting io.ROOT to ROOTSSD:", io.ROOTSSD)
     io.ROOT = os.path.join(io.ROOT_PROD, "output_folder")
+
 if CACHE_ROOT_OVERRIDE is not None:
     print("Overriding io.ROOT with CACHE_ROOT_OVERRIDE:", CACHE_ROOT_OVERRIDE)
     # io.ROOT = os.path.join("/Volumes/LaCie/segment_images_thegym", "output_folder")
@@ -119,8 +124,8 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-# CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_handgesture_test_oct21" # go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, FUSION_PAIR_DICT_DETECTIONS_THEGYM, /data manifest,  multipliers, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+CSV_MAIN_FOLDER = "/Volumes/OWC52/"
+CSV_RUN_FOLDER = "stub_set/_ARMS_Thoma_nolimit_stub" # go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, FUSION_PAIR_DICT_DETECTIONS_THEGYM, /data manifest,  multipliers, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_none" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
@@ -223,6 +228,13 @@ LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
 MODE1_MAX_ROWS_PER_CLUSTER = None # if None, no cap; otherwise process at most this many rows per cluster
 MODE1_MIN_CLUSTER_ROWS = 50 # skip any cluster if there are less than this number of rows
 CROP_MULTIPLIER = 5
+CANONICAL_MULT_1x1_GRID_MODE = "1x1_square"  # when not None, every image uses CANONICAL_MULT_FALLBACKS[this value] as its multiplier; None disables
+CANONICAL_MULT_FALLBACKS = {
+    "1x1_horizontal": resolve_multiplier("9x16_regular_miami"),
+    "1x1_square":     resolve_multiplier("sq_medium"),
+    "1x1_vertical":   resolve_multiplier("16x9_portrait_torso"),
+}
+canonical_1x1_fallback_pairs = set()  # populated by _mode1_set_multiplier; written to CSV at end of run
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
@@ -1162,7 +1174,7 @@ def get_cache_worker_upscale_model():
 ######################################################################################
 ######################################################################################
 
-if not io.IS_TENCH:
+if not (io.IS_TENCH or io.IS_MICHELLE):
     if db['unix_socket']:
         # for MM's MAMP config
         engine = create_engine("mysql+pymysql://{user}:{pw}@/{db}?unix_socket={socket}".format(
@@ -4272,7 +4284,7 @@ def _mode1_calc_dynamic_multiplier_bbox_aware(df_segment, padding=0):
     return merged_multiplier
 
 
-def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, leg_pose_variant=None):
+def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, leg_pose_variant=None, canonical_1x1_keys_registry=None):
     """Standalone set_multiplier_and_dims for pool workers (no main() closures).
 
     Mirrors the logic of the nested set_multiplier_and_dims but reads from
@@ -4306,7 +4318,21 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, l
         sort.set_output_dims()
         return learned_record
     if not use_pose_crop:
-        if cluster_no is not None and pose_no is not None:
+        if CANONICAL_MULT_1x1_GRID_MODE is not None:
+            _col_map = {"1x1_horizontal": "horizontal_key", "1x1_square": "square_key", "1x1_vertical": "vertical_key"}
+            _col = _col_map.get(CANONICAL_MULT_1x1_GRID_MODE)
+            _csv_key = (canonical_1x1_keys_registry or {}).get((cluster_no, pose_no), {}).get(_col) if _col else None
+            if _csv_key:
+                canonical_multiplier = resolve_multiplier(_csv_key)
+                print(f"[1x1 keys] CSV override ({cluster_no},{pose_no}) key={_csv_key}: {canonical_multiplier}")
+            else:
+                if cluster_no is not None and pose_no is not None:
+                    canonical_1x1_fallback_pairs.add((cluster_no, pose_no))
+                _fallback = (CANONICAL_MULT_FALLBACKS or {}).get(CANONICAL_MULT_1x1_GRID_MODE)
+                if _fallback is not None:
+                    canonical_multiplier = _fallback
+                    print(f"[canonical multipliers] 1x1 grid fallback mode={CANONICAL_MULT_1x1_GRID_MODE}: {_fallback}")
+        elif cluster_no is not None and pose_no is not None:
             if normalized_leg_variant is not None:
                 exact_variant_key = (cluster_no, pose_no, normalized_leg_variant)
                 if VERBOSE: print(
@@ -4841,6 +4867,7 @@ def main():
 
     canonical_multiplier_registry = {}
     canonical_multiplier_csv_path = None
+    canonical_1x1_keys_registry = {}  # (cluster_id, pose_no) → {"horizontal_key": ..., "square_key": ..., "vertical_key": ...}
     full_body_used_image_ids = set()
     full_body_exclusion_enabled = False
 
@@ -5169,6 +5196,9 @@ def main():
         filename = f"canonical_multipliers_{cluster}_{arms_dim}_ObjectFusion_{object_dim}.csv"
         return os.path.join(data_dir, filename)
 
+    def resolve_1x1_canonical_keys_csv_path():
+        return os.path.join(os.getcwd(), "utilities", "1x1_grid", "1x1_canonical_keys.csv")
+
     def normalize_leg_pose_variant(value):
         if value is None:
             return None
@@ -5257,6 +5287,32 @@ def main():
         print(
             f"[canonical multipliers] loaded {loaded_count} rows from {canonical_multiplier_csv_path}"
         )
+
+    def load_1x1_canonical_keys_once():
+        if CANONICAL_MULT_1x1_GRID_MODE is None:
+            return
+        csv_path = resolve_1x1_canonical_keys_csv_path()
+        if not os.path.exists(csv_path):
+            print(f"[1x1 keys] no CSV at {csv_path}, using fallbacks only")
+            return
+        try:
+            df = pd.read_csv(csv_path, dtype=str).fillna("")
+        except Exception as e:
+            print(f"[1x1 keys] failed to read {csv_path}: {e}")
+            return
+        loaded = 0
+        for _, row in df.iterrows():
+            cluster_id = normalize_cluster_token(row.get("arms_cluster_id"))
+            pose_no = normalize_cluster_token(row.get("object_signature_cluster_id"))
+            if cluster_id is None or pose_no is None:
+                continue
+            canonical_1x1_keys_registry[(cluster_id, pose_no)] = {
+                "horizontal_key": row.get("horizontal_key", ""),
+                "square_key":     row.get("square_key", ""),
+                "vertical_key":   row.get("vertical_key", ""),
+            }
+            loaded += 1
+        print(f"[1x1 keys] loaded {loaded} rows from {csv_path}")
 
     def get_canonical_multiplier(cluster_no, pose_no, leg_pose_variant=None):
         if not should_use_canonical_multiplier_registry():
@@ -5627,7 +5683,17 @@ def main():
 
         canonical_multiplier = None
         if not use_pose_crop:
-            canonical_multiplier = get_canonical_multiplier(cluster_no, pose_no)
+            if CANONICAL_MULT_1x1_GRID_MODE is not None:
+                _col_map = {"1x1_horizontal": "horizontal_key", "1x1_square": "square_key", "1x1_vertical": "vertical_key"}
+                _col = _col_map.get(CANONICAL_MULT_1x1_GRID_MODE)
+                _csv_key = canonical_1x1_keys_registry.get((cluster_no, pose_no), {}).get(_col) if _col else None
+                if _csv_key:
+                    canonical_multiplier = resolve_multiplier(_csv_key)
+                    print(f"[1x1 keys] CSV override ({cluster_no},{pose_no}) key={_csv_key}: {canonical_multiplier}")
+                else:
+                    canonical_multiplier = (CANONICAL_MULT_FALLBACKS or {}).get(CANONICAL_MULT_1x1_GRID_MODE)
+            else:
+                canonical_multiplier = get_canonical_multiplier(cluster_no, pose_no)
         if canonical_multiplier is not None:
             sort.image_edge_multiplier = list(canonical_multiplier)
             print(
@@ -6260,6 +6326,7 @@ def main():
                 )
 
         load_canonical_multiplier_registry_once()
+        load_1x1_canonical_keys_once()
         mode1_enable_db_dedupe = bool(globals().get("MODE1_ENABLE_DB_DEDUPE", True))
         print(f"[MODE1 DEDUPE] MODE1_ENABLE_DB_DEDUPE={mode1_enable_db_dedupe}")
 
@@ -6271,6 +6338,7 @@ def main():
             "CSV_FOLDER": CSV_FOLDER,
             "mode1_enable_db_dedupe": mode1_enable_db_dedupe,
             "canonical_registry": canonical_multiplier_registry,
+            "canonical_1x1_keys_registry": canonical_1x1_keys_registry,
         }
 
         cluster_no = pose_no = segment_count = topic_no = background_hsv_no = object_hsv_no = None
@@ -6284,6 +6352,24 @@ def main():
             f for f in files_in_folder
             if f.endswith(".csv") and f.startswith("df_sorted_")
         ]
+
+        if FILTER_1x1_CROP_KEY:
+            if CANONICAL_MULT_1x1_GRID_MODE is None:
+                raise RuntimeError(
+                    f"--crop-key '{FILTER_1x1_CROP_KEY}' requires CANONICAL_MULT_1x1_GRID_MODE to be set"
+                )
+            _col_map = {"1x1_horizontal": "horizontal_key", "1x1_square": "square_key", "1x1_vertical": "vertical_key"}
+            _filter_col = _col_map.get(CANONICAL_MULT_1x1_GRID_MODE)
+            _csv_re = re.compile(r"df_sorted_c(-?\d+)_p(\d+)")
+            def _csv_has_key(fname):
+                m = _csv_re.search(fname)
+                if not m:
+                    return False
+                pair = (int(m.group(1)), int(m.group(2)))
+                return canonical_1x1_keys_registry.get(pair, {}).get(_filter_col) == FILTER_1x1_CROP_KEY
+            before = len(csv_files_to_process)
+            csv_files_to_process = [f for f in csv_files_to_process if _csv_has_key(f)]
+            print(f"[crop-key filter] key='{FILTER_1x1_CROP_KEY}' col='{_filter_col}': {len(csv_files_to_process)}/{before} CSVs match")
 
         if MODE1_MIN_CLUSTER_ROWS is not None:
             eligible_csv_files = []
@@ -6378,6 +6464,22 @@ def main():
         print_mode1_timing_summary(total_csv_candidates)
         MODE1_ASSEMBLY_TIMING_CALLBACK = None
 
+        if CANONICAL_MULT_1x1_GRID_MODE is not None:
+            _fb_path = os.path.join(os.getcwd(), "utilities", "1x1_grid", "1x1_unassigned_pairs.csv")
+            _keys_path = resolve_1x1_canonical_keys_csv_path()
+            _keys_df = pd.read_csv(_keys_path, dtype=str).fillna("") if os.path.exists(_keys_path) else pd.DataFrame()
+            _fb_rows = sorted(canonical_1x1_fallback_pairs)
+            _fb_df = pd.DataFrame(_fb_rows, columns=["arms_cluster_id", "object_signature_cluster_id"])
+            _fb_df["arms_cluster_id"] = _fb_df["arms_cluster_id"].astype(str)
+            _fb_df["object_signature_cluster_id"] = _fb_df["object_signature_cluster_id"].astype(str)
+            if not _keys_df.empty:
+                _fb_df = _fb_df.merge(_keys_df[["arms_cluster_id", "object_signature_cluster_id", "horizontal_key", "square_key", "vertical_key"]], on=["arms_cluster_id", "object_signature_cluster_id"], how="left").fillna("")
+            else:
+                _fb_df["horizontal_key"] = ""
+                _fb_df["square_key"] = ""
+                _fb_df["vertical_key"] = ""
+            _fb_df.to_csv(_fb_path, index=False)
+            print(f"[1x1 keys] {len(_fb_rows)} unassigned pairs written to {_fb_path}")
 
 
     # this is the start of the main part of main()
