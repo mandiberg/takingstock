@@ -176,6 +176,7 @@ POSE_CROP_DICT_FULL_BODY = {
 
 MULTIPLIER_DICT = {
     # [top,right,bottom,left]
+    "exclude": [1,1,1,1], # creating entry to build images to exclude
     "sq_default": [1.3,1.85,2.4,1.85], # 1 SQ (and legacy 11 placeholder)
     # "sq_default": [1.5,2.5,3.4,2.5], # HACK temp for 1k smaller reprocess
 
@@ -222,6 +223,8 @@ MULTIPLIER_DICT = {
 
     # 9x16
     "9x16_regular_miami": [1.5,4,3,4],
+    "9x16_regular_miami_left": [1.5,4.3,3,3.7],
+    "9x16_regular_miami_right": [1.5,3.7,3,4.3],
     "9x16_regular_up": [1.7,4,2.8,4],
     # "9x16_shoulders": [1.54,2.475,1.70843794,2.475],
     "9x16_shoulders": [1.45,3,1.925,3],
@@ -239,6 +242,9 @@ MULTIPLIER_DICT = {
     # 16x9
     "16x9_portrait_torso": [1.6,1.9,5.1555,1.9],
     "16x9_portrait_torso_up": [1.9,1.9,4.8555,1.9],
+    "16x9_portrait_torso_left": [1.6,1.7,5.1555,2.1],
+    "16x9_portrait_torso_right": [1.6,2.1,5.1555,1.7],
+    "16x9_portrait_torso": [1.6,1.9,5.1555,1.9],
     "16x9_.75body": [1.5,2.575,8.9,2.575],
     "16x9_fullbody": [1.5,3.375,10.5,3.375],
     "16x9_fullbody_left": [1.5,2.875,10.5,3.875],

@@ -38,7 +38,9 @@ CSV_PATH    = os.path.join(_HERE, "1x1_canonical_keys.csv")
 def _parse_folder(folder_name):
     """Return (prefix, mult_key), or None if no recognized prefix.
     Exits with an error if prefix matches but key is not in MULTIPLIER_DICT.
+    Expects a folder name with this structure: {horizontal|square|vertical}_{MULTIPLIER_DICT_key}
     """
+    
     for prefix in PREFIX_TO_COL:
         if folder_name.lower().startswith(prefix + "_"):
             mult_key = folder_name[len(prefix) + 1:]
