@@ -51,7 +51,7 @@ def _parse_folder(folder_name):
         if folder_name.lower().startswith(prefix + "_"):
             mult_key = folder_name[len(prefix) + 1:]
             if mult_key not in MULTIPLIER_DICT:
-                print(f"ERROR: '{mult_key}' not found in MULTIPLIER_DICT.")
+                print(f"ERROR: '{mult_key}' not found in MULTIPLIER_DICT from folder '{folder_name}'.")
                 print("Valid keys:\n  " + "\n  ".join(sorted(MULTIPLIER_DICT)))
                 sys.exit(1)
             return prefix, mult_key
