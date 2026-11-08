@@ -25,6 +25,12 @@ _ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
 sys.path.insert(0, _ROOT)
 from constants_make_video import MULTIPLIER_DICT
 
+FULL_BODY = True
+if FULL_BODY: 
+    matrix_family = "BodyPoses3D"
+else:
+    matrix_family = "ArmsPoses3D"
+
 PREFIX_TO_COL = {
     "horizontal": "horizontal_key",
     "square":     "square_key",
@@ -32,7 +38,7 @@ PREFIX_TO_COL = {
 }
 CSV_COLUMNS = ["arms_cluster_id", "object_signature_cluster_id", "horizontal_key", "square_key", "vertical_key"]
 IMG_RE      = re.compile(r"merged_cluster(-?\d+)_p(\d+)")
-CSV_PATH    = os.path.join(_HERE, "1x1_canonical_keys.csv")
+CSV_PATH    = os.path.join(_HERE, f"1x1_canonical_keys_{matrix_family}.csv")
 
 
 def _parse_folder(folder_name):
@@ -40,7 +46,7 @@ def _parse_folder(folder_name):
     Exits with an error if prefix matches but key is not in MULTIPLIER_DICT.
     Expects a folder name with this structure: {horizontal|square|vertical}_{MULTIPLIER_DICT_key}
     """
-    
+
     for prefix in PREFIX_TO_COL:
         if folder_name.lower().startswith(prefix + "_"):
             mult_key = folder_name[len(prefix) + 1:]

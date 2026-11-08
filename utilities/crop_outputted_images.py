@@ -12,6 +12,14 @@ crop_dict = {
     24866: [10344, 10344],
     33154: [13792, 13792]
 }
+
+'''
+Nov 2026 notes:
+crop torso takes the 4140/8280 wide images and crops them from the top and center
+2500w image becomes a 15000w image (6x). 
+
+'''
+
 MAX_WIDTH_DIFFERENCE = 10
 
 # Define the cropping parameters

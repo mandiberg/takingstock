@@ -5197,7 +5197,7 @@ def main():
         return os.path.join(data_dir, filename)
 
     def resolve_1x1_canonical_keys_csv_path():
-        return os.path.join(os.getcwd(), "utilities", "1x1_grid", "1x1_canonical_keys.csv")
+        return os.path.join(os.getcwd(), "utilities", "1x1_grid", f"1x1_canonical_keys_{matrix_family}.csv")
 
     def normalize_leg_pose_variant(value):
         if value is None:
