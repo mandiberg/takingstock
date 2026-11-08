@@ -77,7 +77,7 @@ SSD_PATH = "/Volumes/Lacie/segment_images" # this controls where the source file
 # SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 
 # override for cache writes only. this controls where the cached files are written. if not None will override io.ROOT below
-CACHE_ROOT_OVERRIDE = "/Volumes/Lacie/segment_images/"  # e.g. None or "/Volumes/LaCie/segment_images_thegym"
+CACHE_ROOT_OVERRIDE = "/Volumes/Lacie/output_folder/"  # e.g. None or "/Volumes/LaCie/output_folder" <- have been using output_folder
 
 ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 # DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
@@ -86,7 +86,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -4558,6 +4558,10 @@ def _mode1_set_multiplier(df_segment, cluster_no, pose_no, canonical_registry, l
             _col = _col_map.get(CANONICAL_MULT_1x1_GRID_MODE)
             _csv_key = (canonical_1x1_keys_registry or {}).get((cluster_no, pose_no), {}).get(_col) if _col else None
             if _csv_key:
+                if _csv_key == "exclude":
+                    # I need to skip this entire cluster_no/pose_no pair, so return None and let the caller handle it
+                    print(f"[1x1 keys] CSV override ({cluster_no},{pose_no}) key=exclude: skipping multiplier assignment")
+                    return _csv_key
                 canonical_multiplier = resolve_multiplier(_csv_key)
                 print(f"[1x1 keys] CSV override ({cluster_no},{pose_no}) key={_csv_key}: {canonical_multiplier}")
             else:
@@ -4991,7 +4995,20 @@ def _mode1_process_one_csv_shared(csv_file: str, cfg: dict, db_session=None) -> 
 
         multiplier_start = time.perf_counter()
         learned_multiplier = _mode1_set_multiplier(df_sorted, cluster_no, pose_no, canonical_registry, leg_pose_variant=leg_pose_variant)
-        if learned_multiplier is not None:
+        if learned_multiplier == "exclude":
+            timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (
+                time.perf_counter() - multiplier_start
+            )
+            timing["file_total"] = timing.get("file_total", 0.0) + (time.perf_counter() - file_start)
+            return {
+                "csv_file": csv_file,
+                "success": True,
+                "early_return": "excluded",
+                "error": None,
+                "timing": timing,
+                "learned_multipliers": learned_multipliers,
+            }
+        elif learned_multiplier is not None:
             learned_multipliers.append(learned_multiplier)
         timing["multiplier_setup"] = timing.get("multiplier_setup", 0.0) + (
             time.perf_counter() - multiplier_start
