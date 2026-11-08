@@ -79,7 +79,7 @@ SSD_PATH = "/Volumes/Lacie/segment_images" # this controls where the source file
 # override for cache writes only. this controls where the cached files are written. if not None will override io.ROOT below
 CACHE_ROOT_OVERRIDE = "/Volumes/Lacie/segment_images/"  # e.g. None or "/Volumes/LaCie/segment_images_thegym"
 
-ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 # DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
@@ -240,6 +240,7 @@ CANONICAL_MULT_FALLBACKS = {
 }
 canonical_1x1_fallback_pairs = set()  # populated by _mode1_set_multiplier; written to CSV at end of run
 GRID_MODE_DIMS = {
+    # w x h dimensions
     "1x1_horizontal": (3840, 2160),
     "1x1_square":     (2160, 2160),
     "1x1_vertical":   (2160, 3840),

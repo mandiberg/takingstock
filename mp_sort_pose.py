@@ -2699,6 +2699,7 @@ class SortPose:
         except Exception as e:
             print(f"auto_edge_crop: error cropping image: {e}")
             cropped = image
+        cropped = self.crop_to_canonical_size(cropped)
         # # display the cropped image for debugging
         # cv2.imshow("Cropped Image", cropped)
         # cv2.waitKey(1)  # Display the window for 1 ms
@@ -3172,12 +3173,31 @@ class SortPose:
         return toobig
 
     def crop_to_canonical_size(self, image):
-        # Access the shared canonical ratio table via self.RATIOS_DICT.
-        aspect_ratio = image.shape[1] / image.shape[0]
-        print(f"crop_to_canonical_size: aspect_ratio {aspect_ratio}")
-        
-        # if aspect_ratio in self.RATIOS_DICT.keys():
-        pass
+        diff_threshold = .05
+        image_h, image_w = image.shape[:2]
+        print(f"crop_to_canonical_size: image shape {image.shape}")
+        target_dims = self.canonical_1x1_export_dims
+        if not target_dims or not all(target_dims):
+            return image
+        target_w, target_h = target_dims
+        aspect_ratio = image_w / image_h
+        print(f"crop_to_canonical_size: current aspect_ratio {aspect_ratio}")
+        target_aspect_ratio = target_w / target_h
+        print(f"crop_to_canonical_size: target_aspect_ratio {target_aspect_ratio}")
+
+        # if the difference between the ratios is less than the threshold, we can consider them equal
+        if abs(aspect_ratio - target_aspect_ratio) < diff_threshold:
+            if aspect_ratio > target_aspect_ratio:
+                crop_width = min(image_w, round(image_h * target_aspect_ratio))
+                crop_left = (image_w - crop_width) // 2
+                image = image[:, crop_left:crop_left + crop_width]
+                print(f"crop_to_canonical_size: cropped width to {image.shape}")
+            elif aspect_ratio < target_aspect_ratio:
+                crop_height = min(image_h, round(image_w / target_aspect_ratio))
+                crop_top = (image_h - crop_height) // 2
+                image = image[crop_top:crop_top + crop_height, :]
+                print(f"crop_to_canonical_size: cropped height to {image.shape}")
+        return image
 
     def auto_edge_crop_from_geometry(self, bbox, image, resize, face_height, image_edge_multiplier=None):
         """Tench's body landmark crop using row-local geometry."""
@@ -3185,35 +3205,34 @@ class SortPose:
             return image
 
         multiplier = image_edge_multiplier or self.image_edge_multiplier
-        print(f"auto_edge_crop: image edge multiplier {multiplier}")
+        print(f"auto_edge_crop_from_geometry: image edge multiplier {multiplier}")
         top, right, bottom, left = multiplier
         bbox_dimensions = self.bbox_to_pixel_conversion(bbox)
-        print(f"auto_edge_crop: initial bbox dimensions {bbox_dimensions} x {resize} == {bbox_dimensions['horizontal']*resize}, {bbox_dimensions['vertical']*resize}")
+        print(f"auto_edge_crop_from_geometry: initial bbox dimensions {bbox_dimensions} x {resize} == {bbox_dimensions['horizontal']*resize}, {bbox_dimensions['vertical']*resize}")
         bbox_dimensions["horizontal"] = bbox_dimensions["horizontal"] * resize
         bbox_dimensions["vertical"] = bbox_dimensions["vertical"] * resize
 
         scaled_face_height = face_height * resize
-        print(f"auto_edge_crop: should multiply/crop w/ scaled_face_height {face_height} x {resize}: {scaled_face_height}")
-        print(f"auto_edge_crop: we {bbox_dimensions}")
-        print("auto_edge_crop: current image shape", image.shape)
-        print("auto_edge_crop: resize factor", resize)
+        print(f"auto_edge_crop_from_geometry: should multiply/crop w/ scaled_face_height {face_height} x {resize}: {scaled_face_height}")
+        print(f"auto_edge_crop_from_geometry: we {bbox_dimensions}")
+        print("auto_edge_crop_from_geometry: current image shape", image.shape)
+        print("auto_edge_crop_from_geometry: resize factor", resize)
         print("top, right, bottom, left", top, right, bottom, left)
         factor = 1.0 if self.DYN_BBOX_FROM_IMAGE_DIMS else 1.3
-        print(f"auto_edge_crop: multiplier factor={factor} (DYN_BBOX_FROM_IMAGE_DIMS={self.DYN_BBOX_FROM_IMAGE_DIMS})")
+        print(f"auto_edge_crop_from_geometry: multiplier factor={factor} (DYN_BBOX_FROM_IMAGE_DIMS={self.DYN_BBOX_FROM_IMAGE_DIMS})")
         top = int((image.shape[0] / 2) - abs(scaled_face_height * (top * factor)))
         right = int((image.shape[1] / 2) + abs(scaled_face_height * (right * factor)))
         bottom = int((image.shape[0] / 2) + abs(scaled_face_height * (bottom * factor)))
         left = int((image.shape[1] / 2) - abs(scaled_face_height * (left * factor)))
 
-        print(f"auto_edge_crop: calculated crop coords before bounds check: top:{top}, right:{right}, bottom:{bottom}, left:{left}")
+        print(f"auto_edge_crop_from_geometry: calculated crop coords before bounds check: top:{top}, right:{right}, bottom:{bottom}, left:{left}")
         try:
             cropped = image[top:bottom, left:right]
-            print(f"auto_edge_crop: cropped image shape {cropped.shape}")
+            print(f"auto_edge_crop_from_geometry: cropped image shape {cropped.shape}")
         except Exception as e:
-            print(f"auto_edge_crop: error cropping image: {e}")
+            print(f"auto_edge_crop_from_geometry: error cropping image: {e}")
             cropped = image
-        cropped = self.crop_to_canonical_size(cropped)
-        print(f"auto_edge_crop: image edge mult {multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
+        print(f"auto_edge_crop_from_geometry: image edge mult {multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
         return cropped
 
     def expand_image_from_geometry(self, geometry, expand_size=None, face_height_output=None, bg_color=None, upscale_model=None):
