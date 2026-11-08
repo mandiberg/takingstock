@@ -189,8 +189,9 @@ MULTIPLIER_DICT = {
 
     "sq_sm_up": [1.8,2.3,2.8, 2.3], # 18 slightly bigger SQ
     "sq_sm": [1.4,2.3,3.2, 2.3], # 18 slightly bigger SQ
-    "sq_sm_lower": [1.3,2.3,3.3, 2.3], # 18 slightly bigger SQ
-    "sq_sm_left": [1.1,1.7,3.1, 2.7], # 18 slightly bigger SQ
+    "sq_sm_lower": [1.3,2.3,3.3, 2.3], # 18 shift down
+    "sq_sm_left": [1.1,1.7,3.1, 2.7], # 18 shift left
+    "sq_sm_right": [1.1,2.7,3.1, 1.7], # 18 shift right
 
     "sq_sm_plus": [1.4,2.5,3.6, 2.5], # 18 slightly bigger SQ
     "sq_plus_left": [1.4,2.3,3.6, 2.7], # 18 slightly bigger SQ
