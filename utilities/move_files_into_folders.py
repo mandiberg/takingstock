@@ -29,7 +29,7 @@ io = DataIO()
 ##################  CAREFUL. ###################
 # (does not leave original file in place)
 # if False it will not delete the original file
-MOVE_DELETE_ORIGINAL = True
+MOVE_DELETE_ORIGINAL = False
 ################################################
 
 VERBOSE = True
@@ -40,8 +40,8 @@ WRITE_CSV_LIST = False
 # PATH = "/Volumes/SSD4green/images_shutterstock2"
 # NEWPATH = "/Volumes/RAID54/images_shutterstock"
 
-PATH = "/Volumes/LaCie/segment_images_45_nature"
-NEWPATH = "/Volumes/LaCie/segment_images_0_sport"
+PATH = "/Volumes/LaCie/segment_images/images_shutterstock"
+NEWPATH = "/Volumes/RAID54"
 
 ALL_IN_ONE_FOLDER = False # if False it will walk through all folders inside of PATH
 SAVE_TO_SITE_FOLDERS = True # if True, it will recognize the sitefolder, and include that in the savepath, to preserve the 20 site folders
@@ -84,8 +84,7 @@ def get_dir_files(folder):
 
 
 def touch(folder):
-    if not os.path.exists(folder):
-        os.makedirs(folder)
+    os.makedirs(folder, exist_ok=True)
 
 def make_hash_folders():
     # basepath = '/new_images_pexels'
@@ -162,6 +161,10 @@ def threaded_process_files():
         else:
             newpathfile = os.path.join(NEWPATH, a, b, newfile)
 
+        destination_dir = os.path.dirname(newpathfile)
+        with lock:
+            os.makedirs(destination_dir, exist_ok=True)
+
         if os.path.exists(newpathfile):
             pass
             # print("file exists, skipping: ", newpathfile)
@@ -177,9 +180,8 @@ def threaded_process_files():
                 #     if os.path.exists(newpathfile):
                 #         print(f"verified that {newpathfile} exists")
             else:
-                shutil.copy(currentpathfile,  newpathfile)
+                shutil.copy(currentpathfile, newpathfile)
                 print(f"copied {currentpathfile} (w/o deleting) to: {newpathfile}")
-
 
         with lock:
             global counter

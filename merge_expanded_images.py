@@ -28,12 +28,13 @@ SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
+# ROOT_FOLDER_PATH = '/Volumes/LaCie/segment_images_theoffice'
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "GYM_build_life_size_prints"
-FOLDER_NAME = "output_folder/_BODY_T45_prints_oct17_round2"
+FOLDER_NAME = "output_folder/_ARMS_Thoma_Nov5v2"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -50,7 +51,7 @@ CROP_AFTER_COUNT = 80
 # minimum-image cutoff. Set to None or 0 to disable entirely.
 # This applies to the actual mp4 build, not the GIF preview export path.
 # Video-only, unless you turn on USE_THRESHOLD_FOR_IMAGES
-CUTOFF_THRESHOLD = 50
+CUTOFF_THRESHOLD = 0
 USE_THRESHOLD_FOR_IMAGES = True
 
 
@@ -2750,7 +2751,7 @@ def main():
     if IS_CLUSTER is True:
         subfolders = io.get_folders(FOLDER_PATH, SORT_ORDER)
         # skip any folder with SKIP_PREFIX in it
-        subfolders = [subfolder for subfolder in subfolders if SKIP_PREFIX not in subfolder]
+        subfolders = [subfolder for subfolder in subfolders if not os.path.basename(subfolder.rstrip('/')).startswith(SKIP_PREFIX)]
         print("subfolders", subfolders)
         if DO_INSTALLATION_ONLY:
             print("doing installation only")

@@ -79,7 +79,7 @@ SSD_PATH = "/Volumes/OWC52/stub_set/segment_images" # this controls where the so
 # override for cache writes only. this controls where the cached files are written. if not None will override io.ROOT below
 CACHE_ROOT_OVERRIDE = "/Volumes/OWC52/stub_set/segment_images/"  # e.g. None or "/Volumes/LaCie/segment_images_thegym"
 
-ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 # DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
@@ -124,13 +124,15 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
-CSV_MAIN_FOLDER = "/Volumes/OWC52/"
-CSV_RUN_FOLDER = "stub_set/_ARMS_Thoma_nolimit_stub" # go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, FUSION_PAIR_DICT_DETECTIONS_THEGYM, /data manifest,  multipliers, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_none" # canonical full_body goes here, so I don't reuse for ARMS
+# CSV_MAIN_FOLDER = "/Volumes/LaCie"
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_ARMS_Thoma_Nov5"
+### >>> go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, /data manifest,  multiplier, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_Thoma_Nov2" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
-DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 2 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
+DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT = 0 # this gets subtracted from the result of dividing count by MAX_ROWS to determin knn clusters
 ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
 MODE0_WRITE_TYPED_INTERMEDIATE = True
@@ -208,10 +210,12 @@ OBJECT_COLLAPSE_MIN = 1000       # minimum topic-count for a signature bin to be
 MULTIPOLICY = False
 
 # CONTROL LEG STUFF FOR ARMS CLUSTERS
-INCLUDE_LEG_POSE_FEATURES = False  # join LocationHandsFeet for leg-shape cluster separability testing
+INCLUDE_LEG_POSE_FEATURES = True  # join LocationHandsFeet for leg-shape cluster separability testing
 LEG_POSE_FLOOR_PCT = 5.0             # minimum visible-leg percentage required before split test
 LEG_POSE_MIN_BUCKET_SIZE = 20        # minimum rows required on each side of the candidate valley
 LEG_POSE_MIN_GAP_RATIO = 0.35        # valley-to-peak ratio for a real split; not a literal empty-gap width
+LEG_POSE_PRESENCE_MIN_PCT = 5.0     # first-stage legless vs leg-visible split needs each side >= this % of the cluster
+LEG_POSE_PRESENCE_MIN_COUNT = 100   # first-stage legless vs leg-visible split min count for each side to split
 LEG_POSE_ASYMMETRY_THRESHOLD = 0.15  # leg_asymmetry threshold for single- vs both-leg extended
 print("THISISTHENEWTHING")
 # overriding DB for testing
@@ -349,7 +353,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    FULL_BODY = True # FULL_BODY_SWITCH
+    FULL_BODY = False # FULL_BODY_SWITCH
     if FULL_BODY: 
         matrix_family = "BodyPoses3D" 
         MULTIPLIER_PADDING = MULTIPLIER_PADDING+.5 # if body, add to the padding
@@ -468,8 +472,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             GENERATE_FUSION_PAIRS = False 
 
             # use this to turn on multiplier CSV creation/augmentation
-            FORCE_CANONICAL_MULT_CREATION = False # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
-            RECALCULATE_CANONICALS = False # When this is True, and FORCE_CANONICAL_MULT_CREATION is true it ignores existing canonicals and recalcs and overwrites them
+            FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
+            RECALCULATE_CANONICALS = True # When this is True, and FORCE_CANONICAL_MULT_CREATION is true it ignores existing canonicals and recalcs and overwrites them
             USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
             BIIIIIG_FULL_BODY_MULTIPLIER = [8, 11, 14, 11] # for mural prints
             # BIIIIIG_FULL_BODY_MULTIPLIER = [4, 6, 12, 6] # for life-sized prints
@@ -540,7 +544,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     # this is the switch that controls the CSV output count
     # this is a target goal/cutoff. set to 1M or something to get everythin. 
     # FORCE_TARGET_COUNT = 90 # default for GIF version
-    FORCE_TARGET_COUNT = 200 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    # FORCE_TARGET_COUNT = 200 # this controls TSP sort target output count. The dynamic IQR head angle filter uses this to scale the amount of filtering.
+    FORCE_TARGET_COUNT = None # turn off limits on CSV output count!
     ###### IMPORTANT ######
 
     TSP_NOLIMITS = False # if True, it will not apply the FORCE_TARGET_COUNT cutoff to the TSP sort, which means it will sort on all files. If False, it will apply the cutoff, which means it will only sort on the top FORCE_TARGET_COUNT files. This is for testing whether the TSP sort is working on all files or just the top ones.
@@ -715,9 +720,21 @@ DROP_LOW_VIS = False
 # body3D/ArmsPoses3D only: BodyPoses3D cluster_ids whose sort vector gets hand position + hand gesture (world) landmarks.
 # All other clusters get zeros in those slots, so vector length is the same for every cluster.
 # Set to [] to disable and leave the body vector untouched.
-ADD_ARM_POSITION_AND_GESTURE = [25, 40, 48, 68, 70, 71, 79, 87, 93, 109, 111, 112, 122, 133, 156, 158, 177, 184, 220, 256, 266, 287, 294, 299, 301, 308, 317, 361, 386, 398, 408, 431, 438, 442, 460, 462, 466, 495, 502, 508, 530, 533, 537, 549, 551, 552, 557, 559, 580, 581, 584, 585, 601, 620, 623, 628, 642, 645, 646, 654, 655, 658, 660, 663, 678, 685, 708, 717, 718, 731, 734, 737, 741, 742, 754]
+
+if FULL_BODY:
+    # ADD_ARM_POSITION_AND_GESTURE = None
+    # ADD_ARM_POSITION_AND_GESTURE = [[718,1], [70, 1], [708, 15], [678, 15],]
+    ADD_ARM_POSITION_AND_GESTURE = [25, 40, 48, 68, 70, 71, 79, 87, 93, 109, 111, 112, 122, 133, 156, 158, 177, 184, 220, 256, 266, 287, 294, 299, 301, 308, 317, 361, 386, 398, 408, 431, 438, 442, 460, 462, 466, 495, 502, 508, 530, 533, 537, 549, 551, 552, 557, 559, 580, 581, 584, 585, 601, 620, 623, 628, 642, 645, 646, 654, 655, 658, 660, 663, 678, 685, 708, 717, 718, 731, 734, 737, 741, 742, 754]
+else:
+    # arms
+    ADD_ARM_POSITION_AND_GESTURE = [7, 35, 42, 47, 50, 65, 69, 83, 100, 105, 121, 129, 133, 136, 140, 164, 167, 173, 174, 221, 227, 232, 263, 272, 285, 290, 298, 299, 303, 307, 319, 330, 335, 336, 384, 390, 402, 416, 423, 436, 468, 490, 498, 510, 523, 537, 542, 566, 573, 581, 592, 593, 660, 678, 720, 749, 752, 764, 84,]
+
 # True drops images with no hand landmarks (both hands empty) from arm clusters; False keeps them zero-filled
-DROP_IMAGES_WITHOUT_HANDS = False
+DROP_IMAGES_WITHOUT_HANDS = True
+
+# Total influence of each feature group in the arm-cluster KMeans partition.
+# Each group is standardized, then scaled by weight/sqrt(n_dims) so group size doesn't skew the balance.
+PARTITION_GROUP_WEIGHTS = {"head_pose": 1.0, "hand_presence": 1.0, "hand_position": 1.0, "hand_depth": 1.5, "hand_gesture": 2.5}
 
 # cut the kids
 NO_KIDS = True
@@ -1112,6 +1129,7 @@ cfg = {
 sort = SortPose(config=cfg)
 sort.trust_face_pair_cache = TRUST_FACE_PAIR_CACHE
 sort.skip_face_pair_testing = SKIP_FACE_PAIR_TESTING
+sort.FULL_BODY_DEDUPE = FULL_BODY # dedupe uses resize-tolerant signals instead of selfie SSIM
 if USE_BIIIIIG_FULL_BODY_MULTIPLIER: 
     print("MAKING PRINTS: USE_BIIIIIG_FULL_BODY_MULTIPLIER is True, setting image_edge_multiplier to [8, 11, 14, 11]")
     sort.image_edge_multiplier = BIIIIIG_FULL_BODY_MULTIPLIER  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
@@ -1926,6 +1944,7 @@ def sort_by_face_dist_NN(df_enc):
         sort.CUTOFF = min(FORCE_TARGET_COUNT * FORCE_CUTOFF_MULTIPLIER, len(df_enc.index))
         itters = min(math.floor(FORCE_TARGET_COUNT * FORCE_TARGET_MULTIPLIER), len(df_enc.index))
     else:
+        print(f"sort_by_face_dist_NN len(df_enc.index) is {len(df_enc.index)}")
         if FORCE_TARGET_COUNT is not None and FORCE_TARGET_COUNT > 0 and FORCE_TARGET_COUNT < len(df_enc.index): itters = math.floor(FORCE_TARGET_COUNT * FORCE_TARGET_MULTIPLIER)
         elif sort.CUTOFF < len(df_enc.index): itters = sort.CUTOFF
         else: itters = len(df_enc.index)
@@ -2054,52 +2073,253 @@ def tsp_sort(df_enc):
     df_sorted = df_enc.iloc[df_sorted_clean['original_index']].reset_index(drop=True)
     return df_sorted
 
-def add_arm_hand_blocks(df_segment, add_arms):
+def _coerce_landmark_xyz(landmark):
+    if landmark is None:
+        return None
+    if isinstance(landmark, dict):
+        x = landmark.get('x')
+        y = landmark.get('y')
+        z = landmark.get('z', 0.0)
+        if x is not None and y is not None:
+            return [float(x), float(y), float(z)]
+        return None
+    if hasattr(landmark, 'x') and hasattr(landmark, 'y'):
+        z = getattr(landmark, 'z', 0.0)
+        return [float(landmark.x), float(landmark.y), float(z)]
+    if isinstance(landmark, (list, tuple, np.ndarray)):
+        if len(landmark) >= 3:
+            return [float(landmark[0]), float(landmark[1]), float(landmark[2])]
+    return None
+
+
+def _normalize_world_landmarks(world_landmarks):
+    if world_landmarks is None:
+        return []
+    if isinstance(world_landmarks, (list, tuple, np.ndarray)) and len(world_landmarks) > 0:
+        if isinstance(world_landmarks[0], (list, tuple, np.ndarray)) and len(world_landmarks[0]) >= 3:
+            pts = [_coerce_landmark_xyz(lm) for lm in world_landmarks]
+            pts = [pt for pt in pts if pt is not None]
+            return pts
+        if hasattr(world_landmarks[0], 'x') and hasattr(world_landmarks[0], 'y'):
+            pts = [_coerce_landmark_xyz(lm) for lm in world_landmarks]
+            pts = [pt for pt in pts if pt is not None]
+            return pts
+        if len(world_landmarks) >= 21 and all(isinstance(v, (int, float, np.floating)) for v in world_landmarks[:21]):
+            normal = []
+            for i in range(0, min(len(world_landmarks), 63), 3):
+                if i + 2 < len(world_landmarks):
+                    normal.append([float(world_landmarks[i]), float(world_landmarks[i + 1]), float(world_landmarks[i + 2])])
+            return normal
+    return []
+
+
+def _compact_gesture_block_for_hand(world_landmarks):
+    pts = _normalize_world_landmarks(world_landmarks)
+    if len(pts) < 21:
+        return [0.0] * 15
+
+    wrist = pts[0]
+    palm_center = [
+        (pts[5][0] + pts[9][0] + pts[13][0] + pts[17][0]) / 4.0,
+        (pts[5][1] + pts[9][1] + pts[13][1] + pts[17][1]) / 4.0,
+        (pts[5][2] + pts[9][2] + pts[13][2] + pts[17][2]) / 4.0,
+    ]
+    thumb_tip = pts[4]
+    index_tip = pts[8]
+    middle_tip = pts[12]
+
+    feature_vectors = [
+        [palm_center[i] - wrist[i] for i in range(3)],
+        [palm_center[i] - thumb_tip[i] for i in range(3)],
+        [palm_center[i] - index_tip[i] for i in range(3)],
+        [palm_center[i] - middle_tip[i] for i in range(3)],
+        [wrist[i] - palm_center[i] for i in range(3)],
+    ]
+    flat = [coord for vec in feature_vectors for coord in vec]
+    if not any(abs(v) > 1e-9 for v in flat):
+        return [0.0] * 15
+    return flat
+
+
+def _compact_gesture_array_from_world_landmarks(left_world_landmarks, right_world_landmarks):
+    left_block = _compact_gesture_block_for_hand(left_world_landmarks)
+    right_block = _compact_gesture_block_for_hand(right_world_landmarks)
+    compact = left_block + right_block
+    if len(compact) < sort.ARM_HAND_BLOCK_DIMS:
+        compact.extend([0.0] * (sort.ARM_HAND_BLOCK_DIMS - len(compact)))
+    return compact[:sort.ARM_HAND_BLOCK_DIMS]
+
+
+def build_basic_partition_features(df_segment):
+    """Numeric, standardized features for the default (non-arm) partition.
+
+    pointer knuckles are [x, y, z] lists, which kmeans_cluster silently drops as non-numeric,
+    so expand them to x/y columns (off-screen default [0, 8] when missing).
     """
-    Append hand position (norm) and hand gesture (world) blocks to body_landmarks_array so every
-    vector is body + 126 + 126 long. Non-arm clusters get zeros in both blocks.
-    Idempotent: always rebuilds from body_landmarks_array_base.
+    from sklearn.preprocessing import StandardScaler
+
+    def knuckle_xy(value):
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) >= 2:
+            return [float(value[0]), float(value[1])]
+        return [0.0, 8.0]
+
+    head = df_segment[["pitch", "yaw", "roll", "is_feet"]].astype(float).to_numpy()
+    pos = np.array([
+        knuckle_xy(l) + knuckle_xy(r)
+        for l, r in zip(df_segment["left_pointer_knuckle_norm"], df_segment["right_pointer_knuckle_norm"])
+    ])
+    arr = np.nan_to_num(np.hstack([head, pos]))
+    columns = ["pitch", "yaw", "roll", "is_feet", "left_knuckle_x", "left_knuckle_y", "right_knuckle_x", "right_knuckle_y"]
+    return pd.DataFrame(StandardScaler().fit_transform(arr), columns=columns, index=df_segment.index)
+
+
+def build_arm_partition_features(df_segment):
+    """Numeric, standardized, group-weighted feature frame for partitioning ADD_ARM_POSITION_AND_GESTURE clusters.
+
+    head_pose: pitch, yaw, roll, is_feet
+    hand_presence: whether the hand detector found the left / right hand
+    hand_position: left/right pointer knuckle x,y (standardized only over rows where that hand exists)
+    hand_depth: how far each wrist is in front of its shoulder (body world landmarks), so an extended arm
+        separates from a hand held at the face
+    hand_gesture: compact world-landmark vectors per hand (palm->wrist, palm->thumb/index/middle tips)
     """
+    from sklearn.preprocessing import StandardScaler
+
+    def knuckle_xy(value):
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) >= 2:
+            return [float(value[0]), float(value[1])]
+        return [0.0, 8.0]  # same off-screen default as prep_knuckle_landmarks
+
+    def gesture_vec(value):
+        # compact layout is 15 dims per hand; the 5th vector (wrist - palm) just negates the 1st, so drop it
+        if isinstance(value, (list, tuple, np.ndarray)) and len(value) >= 30:
+            return [float(v) for v in list(value[0:12]) + list(value[15:27])]
+        return [0.0] * 24
+
+    head = df_segment[["pitch", "yaw", "roll", "is_feet"]].astype(float).to_numpy()
+    pos = np.array([
+        knuckle_xy(l) + knuckle_xy(r)
+        for l, r in zip(df_segment["left_pointer_knuckle_norm"], df_segment["right_pointer_knuckle_norm"])
+    ])
+    ges = np.array([gesture_vec(v) for v in df_segment["hand_gesture_array"]])
+
+    # a hand counts as present only if the hand detector produced a gesture block for it.
+    # (knuckle xy and depth come from body landmarks, which the pose model emits even with no visible hand)
+    left_present = np.abs(ges[:, :12]).sum(axis=1) > 0
+    right_present = np.abs(ges[:, 12:]).sum(axis=1) > 0
+
+    def arm_depth(body_array, wrist_idx, shoulder_idx):
+        # body_landmarks_array is flat [x, y, z, visibility] * 33 from the 3D world landmarks (hip-centered, z smaller = closer to camera)
+        try:
+            # visibility is not gated: a detected hand already confirms the wrist, and the pose z is still emitted
+            return float(body_array[shoulder_idx * 4 + 2] - body_array[wrist_idx * 4 + 2]), True
+        except (TypeError, IndexError):
+            return 0.0, False
+
+    depth_l = [arm_depth(b, 15, 11) for b in df_segment["body_landmarks_array"]]
+    depth_r = [arm_depth(b, 16, 12) for b in df_segment["body_landmarks_array"]]
+    depth = np.array([[l[0], r[0]] for l, r in zip(depth_l, depth_r)])
+    left_depth_ok = left_present & np.array([l[1] for l in depth_l])
+    right_depth_ok = right_present & np.array([r[1] for r in depth_r])
+
+    def masked_standardize(arr, mask):
+        # standardize using only rows where the hand exists; absent rows get 0 (the neutral mean) so they
+        # neither skew the mean/std of real hands nor pull KMeans toward a fake position
+        arr = np.nan_to_num(np.asarray(arr, dtype=float))
+        out = np.zeros_like(arr)
+        if mask.sum() > 1:
+            mu = arr[mask].mean(axis=0)
+            sd = arr[mask].std(axis=0)
+            sd[sd < 1e-9] = 1.0
+            out[mask] = (arr[mask] - mu) / sd
+        return out
+
+    presence = np.column_stack([left_present, right_present]).astype(float)
+    groups = [
+        ("head_pose", StandardScaler().fit_transform(np.nan_to_num(head.astype(float)))),
+        ("hand_presence", StandardScaler().fit_transform(presence)),
+        ("hand_position", np.hstack([masked_standardize(pos[:, 0:2], left_present), masked_standardize(pos[:, 2:4], right_present)])),
+        ("hand_depth", np.hstack([masked_standardize(depth[:, 0:1], left_depth_ok), masked_standardize(depth[:, 1:2], right_depth_ok)])),
+        ("hand_gesture", np.hstack([masked_standardize(ges[:, :12], left_present), masked_standardize(ges[:, 12:], right_present)])),
+    ]
+
+    columns, blocks = [], []
+    print(f"[partition] arm feature diagnostics for {len(df_segment)} rows: hands present L {int(left_present.sum())} R {int(right_present.sum())} "
+          f"both {int((left_present & right_present).sum())} neither {int((~left_present & ~right_present).sum())}; "
+          f"depth valid L {int(left_depth_ok.sum())} R {int(right_depth_ok.sum())}, raw depth min {depth.min():.3f} max {depth.max():.3f}")
+    for name, scaled in groups:
+        scaled = scaled * (PARTITION_GROUP_WEIGHTS[name] / np.sqrt(scaled.shape[1]))
+        print(f"[partition]   {name}: variance share {float((scaled ** 2).sum(axis=1).mean()):.3f}")
+        blocks.append(scaled)
+        columns += [f"{name}_{i}" for i in range(scaled.shape[1])]
+    return pd.DataFrame(np.hstack(blocks), columns=columns, index=df_segment.index)
+
+
+def add_arm_hand_blocks(df_segment, add_arms, sort_type=None, is_multislot_obj_bbox_mode=False):
+    """
+    Append hand position (norm) and hand gesture (world) blocks (126 each) to the vector the KNN
+    actually sorts on, so every vector ends with [..., hand_position(126), hand_gesture(126)].
+    Non-arm clusters get zeros in both blocks, so vector length is the same for every cluster.
+    - fusion sorts: appended to obj_bbox_fusion_list (and obj_bbox_list for multislot obj_bbox).
+      That list is rebuilt on every prep_encodings_NN call, so no idempotency handling is needed.
+    - body3D/ArmsPoses3D: appended to body_landmarks_array, rebuilt from body_landmarks_array_base.
+    """
+    sort_type = sort_type or sort.SORT_TYPE
+    print(f"[arm hands] add_arm_hand_blocks: {len(df_segment)} rows, add_arms={add_arms}, sort_type={sort_type}")
     n = sort.ARM_HAND_BLOCK_DIMS
     zeros = [0.0] * n
-    if "body_landmarks_array_base" not in df_segment.columns:
-        df_segment["body_landmarks_array_base"] = df_segment["body_landmarks_array"]
+    is_fusion = ("fusion" in sort_type) or is_multislot_obj_bbox_mode
+    if is_fusion:
+        target_cols = ["obj_bbox_fusion_list"]
+        if is_multislot_obj_bbox_mode: target_cols.append("obj_bbox_list")
+        base_series = df_segment["obj_bbox_fusion_list"]
+    else:
+        target_cols = ["body_landmarks_array"]
+        if "body_landmarks_array_base" not in df_segment.columns:
+            df_segment["body_landmarks_array_base"] = df_segment["body_landmarks_array"]
+        base_series = df_segment["body_landmarks_array_base"]
 
     def as_block(value):
         if isinstance(value, (list, tuple, np.ndarray)) and len(value) == n:
             return [float(x) for x in value]
         return zeros
 
+    def zero_series():
+        return pd.Series([zeros] * len(df_segment), index=df_segment.index)
+
     if add_arms:
-        pos = df_segment["hand_landmarks"].apply(as_block) if "hand_landmarks" in df_segment.columns else pd.Series([zeros] * len(df_segment), index=df_segment.index)
-        ges = df_segment["hand_gesture_array"].apply(as_block) if "hand_gesture_array" in df_segment.columns else pd.Series([zeros] * len(df_segment), index=df_segment.index)
+        pos = df_segment["hand_landmarks"].apply(as_block) if "hand_landmarks" in df_segment.columns else zero_series()
+        ges = df_segment["hand_gesture_array"].apply(as_block) if "hand_gesture_array" in df_segment.columns else zero_series()
         no_hands = pos.apply(lambda v: not any(v)) & ges.apply(lambda v: not any(v))
         print(f"[arm hands] cluster in ADD_ARM_POSITION_AND_GESTURE: {len(df_segment)} rows, {int(no_hands.sum())} without any hand lms ({100*no_hands.mean():.1f}%)")
         if DROP_IMAGES_WITHOUT_HANDS and no_hands.any():
             keep = ~no_hands
-            df_segment, pos, ges = df_segment[keep].copy(), pos[keep], ges[keep]
+            df_segment, pos, ges, base_series = df_segment[keep].copy(), pos[keep], ges[keep], base_series[keep]
             print(f"[arm hands] DROP_IMAGES_WITHOUT_HANDS: dropped {int(no_hands.sum())}, {len(df_segment)} rows left")
     else:
-        pos = pd.Series([zeros] * len(df_segment), index=df_segment.index)
-        ges = pd.Series([zeros] * len(df_segment), index=df_segment.index)
+        pos, ges = zero_series(), zero_series()
 
     if df_segment.empty:
         return df_segment
 
-    df_segment["body_landmarks_array"] = [list(b) + p + g for b, p, g in zip(df_segment["body_landmarks_array_base"], pos, ges)]
+    combined = [list(b) + p + g for b, p, g in zip(base_series, pos, ges)]
+    for col in target_cols:
+        df_segment[col] = combined
 
     # report value ranges going into the KNN, before and after weighting
-    mat = np.asarray(df_segment["body_landmarks_array"].tolist(), dtype=float)
-    blocks = {"body": mat[:, :-2 * n], "hand_position": mat[:, -2 * n:-n], "hand_gesture": mat[:, -n:]}
-    weighted = sort.apply_sort_feature_weights_array(mat, sort_type=SORT_TYPE)
-    wblocks = {"body": weighted[:, :-2 * n], "hand_position": weighted[:, -2 * n:-n], "hand_gesture": weighted[:, -n:]}
-    print(f"[arm hands] vector len {mat.shape[1]}, add_arms={add_arms}, weights={ {k: sort.SORT_VECTOR_WEIGHTS[k] for k in ('hand_position', 'hand_gesture')} }")
-    for name, block in blocks.items():
-        nz = block[np.any(block != 0, axis=1)]
-        if len(nz) == 0:
+    mat = np.asarray(combined, dtype=float)
+    weighted = sort.apply_sort_feature_weights_array(mat, sort_type=sort_type)
+    print(f"[arm hands] vector len {mat.shape[1]} in {target_cols}, weights applied={not np.array_equal(mat, weighted)}, "
+          f"weights={ {k: sort.SORT_VECTOR_WEIGHTS[k] for k in ('hand_position', 'hand_gesture')} }, sort_type={sort_type}, ARM_HAND_BLOCKS={sort.ARM_HAND_BLOCKS}")
+    split = {"core": slice(0, mat.shape[1] - 2 * n), "hand_position": slice(mat.shape[1] - 2 * n, mat.shape[1] - n), "hand_gesture": slice(mat.shape[1] - n, mat.shape[1])}
+    for name, sl in split.items():
+        block, wblock = mat[:, sl], weighted[:, sl]
+        rows = np.any(block != 0, axis=1)
+        if not rows.any():
             print(f"[arm hands] {name}: all zeros")
             continue
-        print(f"[arm hands] {name}: nonzero rows {len(nz)}/{len(block)} min {nz.min():.4f} max {nz.max():.4f} mean {nz.mean():.4f} std {nz.std():.4f} | mean |x| weighted {np.abs(wblocks[name][np.any(block != 0, axis=1)]).mean():.4f}")
+        nz, wnz = block[rows], wblock[rows]
+        print(f"[arm hands] {name}: nonzero rows {len(nz)}/{len(block)} | raw min {nz.min():.4f} max {nz.max():.4f} mean {nz.mean():.4f} std {nz.std():.4f} mean|x| {np.abs(nz).mean():.4f} | weighted min {wnz.min():.4f} max {wnz.max():.4f} std {wnz.std():.4f} mean|x| {np.abs(wnz).mean():.4f}")
     return df_segment
 
 def prep_encodings_NN(df_segment, effective_sort_type=None):
@@ -2242,8 +2462,12 @@ def prep_encodings_NN(df_segment, effective_sort_type=None):
             #     )            
             #     # print("body_landmarks_array after adding head pose", df_segment["body_landmarks_array"])
         
-    if _sort_type in ("body3D", "ArmsPoses3D") and sort.ARM_HAND_BLOCKS and "body_landmarks_array" in df_segment.columns:
-        df_segment = add_arm_hand_blocks(df_segment, sort.counter_dict.get("add_arms", False))
+    if sort.ARM_HAND_BLOCKS:
+        _is_fusion_vec = ("fusion" in _sort_type) or is_multislot_obj_bbox_mode
+        if _is_fusion_vec and "obj_bbox_fusion_list" in df_segment.columns:
+            df_segment = add_arm_hand_blocks(df_segment, sort.counter_dict.get("add_arms", False), sort_type=_sort_type, is_multislot_obj_bbox_mode=is_multislot_obj_bbox_mode)
+        elif _sort_type in ("body3D", "ArmsPoses3D") and "body_landmarks_array" in df_segment.columns:
+            df_segment = add_arm_hand_blocks(df_segment, sort.counter_dict.get("add_arms", False), sort_type=_sort_type)
 
     if USE_HEAD_POSE:
         pass
@@ -3862,9 +4086,12 @@ def make_hsv_cycle_meta(this_cluster=None, this_topic=None, background_hsv=None,
 
 
 def is_arm_cluster(cluster_no):
-    """True if this run's BodyPoses3D cluster_id is in ADD_ARM_POSITION_AND_GESTURE."""
+    # print(f"[is_arm_cluster] checking cluster_no={cluster_no} for ADD_ARM_POSITION_AND_GESTURE {ADD_ARM_POSITION_AND_GESTURE}")
+    # """True if this run's BodyPoses3D cluster_id is in ADD_ARM_POSITION_AND_GESTURE."""
     if isinstance(cluster_no, (list, tuple)):
         cluster_no = cluster_no[0] if len(cluster_no) else None
+    if not ADD_ARM_POSITION_AND_GESTURE:
+        return False
     try:
         return int(cluster_no) in ADD_ARM_POSITION_AND_GESTURE
     except (TypeError, ValueError):
@@ -3888,7 +4115,7 @@ def set_my_counter_dict(this_topic=None, cluster_no=None, pose_no=None, hsv_meta
     print("mkdir", mkdir, "root", io.ROOT)
     sort.set_counters(io.ROOT,cluster_string, start_img_name,start_site_image_id, hsv_cluster=hsv_meta, pose_no=pose_no, mkdir=mkdir)
     sort.counter_dict["add_arms"] = is_arm_cluster(cluster_no)
-    if sort.counter_dict["add_arms"]: print(f"set_my_counter_dict: cluster_no {cluster_no} is in ADD_ARM_POSITION_AND_GESTURE")
+    # if sort.counter_dict["add_arms"]: print(f"set_my_counter_dict: cluster_no {cluster_no} is in ADD_ARM_POSITION_AND_GESTURE")
 
     if counter_state is not None:
         counter_state.clear()
@@ -4548,7 +4775,8 @@ def _mode1_recheck_is_dupe_of(db_session, df):
 
 
 def _mode1_get_not_dupes_sql(db_session):
-    query = db_session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).all()
+    # only human-reviewed non-dupes
+    query = db_session.query(IsNotDupeOf.image_id_i, IsNotDupeOf.image_id_j).filter(IsNotDupeOf.manual_check == True).all()
     return {(row.image_id_i, row.image_id_j): True for row in query}
 
 
@@ -5755,13 +5983,12 @@ def main():
             return 1
         return max(1, int(math.ceil(float(row_count) / float(max_rows_per_csv)))-DEFAULT_LARGE_CLUSTER_SPLIT_CONSTANT)
 
-    def partition_segment_with_kmeans(df_segment, max_rows_per_csv):
+    def partition_segment_with_kmeans(df_segment, max_rows_per_csv, use_arm_gesture=False):
         row_count = len(df_segment.index)
         if row_count <= max_rows_per_csv:
             return [df_segment]
 
         # chop the df down to the key dimensions to send that in to kmeans for partitioning
-        cols_to_cluster = ["pitch", "yaw", "roll", "left_pointer_knuckle_norm", "right_pointer_knuckle_norm", "is_feet"]
         # print(f"first row of df_segment:", df_segment.iloc[0]['body_landmarks_array'])
         # create an is_feet bool column and set it to True if any of the feet lms [27-32] have a visibility greater than .5
         feet_vis_items = [(i*4+3) for i in range(27, 33)]
@@ -5779,9 +6006,18 @@ def main():
             f"and max_rows_per_csv={max_rows_per_csv}"
         )
 
-        # only send in the cols_to_cluster
+        if use_arm_gesture and "hand_gesture_array" in df_segment.columns:
+            # already standardized + group weighted, so bypass any cluster-type feature prep
+            kmeans_input = build_arm_partition_features(df_segment)
+            prepare_fn = lambda d, fit_scaler=False: d
+            print(f"[partition] arm cluster: partitioning on head pose + hand position + hand gesture ({kmeans_input.shape[1]} dims)")
+        else:
+            kmeans_input = build_basic_partition_features(df_segment)
+            prepare_fn = lambda d, fit_scaler=False: d
+
         labels = cl.kmeans_cluster(
-            df_segment[cols_to_cluster],
+            kmeans_input,
+            prepare_fn=prepare_fn,
             n_clusters=n_clusters,
             fit_scaler=True,
             random_state=42,
@@ -5815,11 +6051,28 @@ def main():
 
         Ordered largest-group-first so sbNNN numbering in logs stays stable/readable.
         """
-        labels = cl.label_by_leg_pose(
-            df_segment,
-            leg_pose_check["boundary"],
-            asymmetry_threshold=LEG_POSE_ASYMMETRY_THRESHOLD,
-        )
+        if leg_pose_check.get("split_mode") == "presence":
+            labels = cl.label_by_leg_presence(df_segment)
+            # leg-visible rows may still hold seated vs standing; run the valley test on them alone
+            legs_df = df_segment[labels == "legs_visible"]
+            sub_check = cl.assess_leg_pose_separability(
+                legs_df,
+                floor_pct=0.0,
+                min_bucket_size=LEG_POSE_MIN_BUCKET_SIZE,
+                min_gap_ratio=LEG_POSE_MIN_GAP_RATIO,
+            )
+            if sub_check["is_separable"]:
+                sub_labels = cl.label_by_leg_pose(
+                    legs_df, sub_check["boundary"], asymmetry_threshold=LEG_POSE_ASYMMETRY_THRESHOLD
+                )
+                labels = labels.astype(object)
+                labels.loc[sub_labels.index] = sub_labels
+        else:
+            labels = cl.label_by_leg_pose(
+                df_segment,
+                leg_pose_check["boundary"],
+                asymmetry_threshold=LEG_POSE_ASYMMETRY_THRESHOLD,
+            )
         partition_df = df_segment.copy()
         partition_df["_leg_pose_label"] = labels
 
@@ -5985,6 +6238,15 @@ def main():
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_landmarks_norm", second_col="right_hand_landmarks_norm", structure="list")
             # gesture = mediapipe world landmarks (3D, wrist-relative), kept in its own column
             df = sort.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list", dest_col="hand_gesture_array")
+            add_arms_for_cluster = getattr(sort, "counter_dict", {}).get("add_arms", is_arm_cluster(cluster_no))
+            if add_arms_for_cluster:
+                df["hand_gesture_array"] = df.apply(
+                    lambda row: _compact_gesture_array_from_world_landmarks(
+                        row.get("left_hand_world_landmarks"),
+                        row.get("right_hand_world_landmarks"),
+                    ),
+                    axis=1,
+                )
             df = sort.split_landmarks_to_columns_or_list(df, first_col="body_landmarks_3D", second_col=None, structure="list")
             # if VERBOSE: print("after split_landmarks_to_columns_or_list, ", df.iloc[0])
             if VERBOSE: print("df len after unpickling and split columns,", len(df))
@@ -6077,9 +6339,10 @@ def main():
                     leg_pose_check = cl.assess_leg_pose_separability(
                         df_segment,
                         floor_pct=LEG_POSE_FLOOR_PCT,
-                        min_bucket_size=LEG_POSE_MIN_BUCKET_SIZE,
+                        min_bucket_size=LEG_POSE_PRESENCE_MIN_COUNT, # switching this from the leg pose min size to a larger is_legs one
                         min_gap_ratio=LEG_POSE_MIN_GAP_RATIO,
                         cluster_label=base_file_prefix,
+                        presence_min_pct=LEG_POSE_PRESENCE_MIN_PCT,
                     )
                     record_leg_pose_result(leg_pose_check)
                     if leg_pose_check["is_separable"]:
@@ -6102,14 +6365,29 @@ def main():
                         f"[leg-pose] {base_file_prefix}: routing {len(leg_pose_partition_groups)} "
                         "leg-pose buckets through sbNNN partition plumbing"
                     )
-                    partition_units = leg_pose_partition_groups
+                    # leg buckets still over the row cap get a second-stage KMeans split (keeps leg label + multiplier variant)
+                    partition_units = []
+                    for leg_label, leg_df in leg_pose_partition_groups:
+                        if len(leg_df.index) > MAX_ROWS_PER_OUTPUT_CSV:
+                            print(
+                                f"[partition] leg-pose bucket {leg_label} oversized ({len(leg_df.index)} rows); "
+                                "sub-partitioning with KMeans"
+                            )
+                            for sub_df in partition_segment_with_kmeans(
+                                leg_df, MAX_ROWS_PER_OUTPUT_CSV, use_arm_gesture=is_arm_cluster(cluster_no)
+                            ):
+                                partition_units.append((leg_label, sub_df))
+                        else:
+                            partition_units.append((leg_label, leg_df))
                 elif should_partition_before_sort:
                     print(
                         f"[partition] oversized segment detected ({len(df_segment.index)} rows); "
                         "partitioning before process_linear"
                     )
                     partition_start = time.perf_counter()
-                    partition_groups = partition_segment_with_kmeans(df_segment, MAX_ROWS_PER_OUTPUT_CSV)
+                    partition_groups = partition_segment_with_kmeans(
+                        df_segment, MAX_ROWS_PER_OUTPUT_CSV, use_arm_gesture=is_arm_cluster(cluster_no)
+                    )
                     add_mode0_timing("partition", time.perf_counter() - partition_start)
                     partition_units = [(None, group_df) for group_df in partition_groups]
 
