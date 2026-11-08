@@ -13,6 +13,10 @@ from threading import Lock
 
 # WORKS WITH df_sorted format from make_video.py FALL 2025 !!
 
+# to use output from MODE 1 you move from /Volumes/LaCie/output_folder to /Volumes/LaCie/output_folder_tempname
+# you need cd to CSV_FOLDER and "cat */cluster_files.csv > ./combined_cluster_files.csv"
+# paths in that file are hardcoded to /Volumes/LaCie/output_folder/etc/etc.jpg
+
 # if not USE_DF_SORTED then csv format should be <site_name_id>, <local_file_path> this is basic query:
 '''
 SELECT i.site_name_id, i.imagename
@@ -41,18 +45,18 @@ IS_SSD = False  # if True it will use the SSD path, if False it will use the RAI
 # Define the path to the CSV file
 # csv_file = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/test_orig/df_sorted_0_ct9422.csv'
 
-VERBOSE = False
+VERBOSE = True
 # set origin before constructing io
 # ORIGIN_SSD = "/Volumes/OWC52/segment_images_32_sportsball"
-ORIGIN_SSD = "/Volumes/LaCie/segment_images"
+ORIGIN_SSD = "/Volumes/LaCie/output_folder"
 # ORIGIN_SSD = "/Volumes/RAID18/is_not_face18"
 # ORIGIN_SSD = "/Volumes/SSD4_Green/segment_images_detected_63_67"
 if not IS_SSD: ORIGIN_SSD = None
 io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/takingstock_production/moving_objects_to_SSDs/move_this" # for testing
-CSV_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/SegmentHelper_TheOffice/_BODY_handpartitionsort_oct25_d15_pos1_gest25_splitconstzero"
+# CSV_FOLDER = "/Users/michaelmandiberg/Documents/takingstock_production/moving_objects_to_SSDs/move_this" # for testing
+CSV_FOLDER = "/Volumes/LaCie/output_folder/_BODY_Thoma_Nov2"
 USE_DF_SORTED = True  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
@@ -62,14 +66,14 @@ TESTING_PRINT_ONLY = False # if True doesn't move, just prints what it would do
 OUTPUT_INTERVAL = 1000
 
 #############################################################################
-MOVE_ORIGINAL_FILE = False # CAREFUL!!!!!!!!! IF TRUE, DELETES ORIGINAL FILES
+MOVE_ORIGINAL_FILE = True # CAREFUL!!!!!!!!! IF TRUE, DELETES ORIGINAL FILES
 #############################################################################
 
 ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segment_images/images_*
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
 # DEST = "/Volumes/OWC5/segment_images_newbigx"  # for testing
-DEST = "/Volumes/LaCie/segment_images"  # for testing
+DEST = "/Volumes/LaCie/output_folder_nov7"  # for testing
 # DEST = "/Volumes/LaCie/segment_images"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:
@@ -344,6 +348,9 @@ def move_files_from_csv(csv_file, start=0):
 def main():
     global i
     csv_file_list = os.listdir(CSV_FOLDER)
+    if VERBOSE: 
+        print(f"Found {len(csv_file_list)} CSV files in {CSV_FOLDER}")
+        print(f"this is the list {csv_file_list}")
     for csv_file in csv_file_list:
         skip_files = ["leg_pose_separability_log.csv", "full_body_used_image_ids.csv"]
         if not csv_file.endswith('.csv') or csv_file in skip_files:

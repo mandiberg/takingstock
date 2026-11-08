@@ -29,10 +29,12 @@ from sqlalchemy import text
 
 
 from deap import base, creator, tools, algorithms
+from mp_db_io import DataIO
 
 
 class SortPose:
     # """Sort image files based on head pose"""
+    RATIOS_DICT = DataIO.RATIOS_DICT
 
     def __init__(self, motion=None, face_height_output=None, image_edge_multiplier=None, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, LMS_DIMENSIONS=2,TSP_SORT=False, USE_HEAD_POSE=False, IQR_SCALE_FACTOR=1.0, config=None):
 
@@ -250,6 +252,7 @@ class SortPose:
         self.resize_increment = 345
         self.USE_INCREMENTAL_RESIZE = True
         self.image_edge_multiplier = image_edge_multiplier
+        self.canonical_1x1_export_dims = [None, None]
         self.face_height_output = face_height_output
         self.EXPAND = EXPAND
         self.EXPAND_SIZE = (25000,25000) # full body
@@ -3168,6 +3171,14 @@ class SortPose:
 
         return toobig
 
+    def crop_to_canonical_size(self, image):
+        # Access the shared canonical ratio table via self.RATIOS_DICT.
+        aspect_ratio = image.shape[1] / image.shape[0]
+        print(f"crop_to_canonical_size: aspect_ratio {aspect_ratio}")
+        
+        # if aspect_ratio in self.RATIOS_DICT.keys():
+        pass
+
     def auto_edge_crop_from_geometry(self, bbox, image, resize, face_height, image_edge_multiplier=None):
         """Tench's body landmark crop using row-local geometry."""
         if bbox is None or image is None or face_height is None:
@@ -3201,6 +3212,7 @@ class SortPose:
         except Exception as e:
             print(f"auto_edge_crop: error cropping image: {e}")
             cropped = image
+        cropped = self.crop_to_canonical_size(cropped)
         print(f"auto_edge_crop: image edge mult {multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
         return cropped
 
@@ -3220,35 +3232,35 @@ class SortPose:
 
             if self.USE_INCREMENTAL_RESIZE:
                 resize_factor = math.ceil(face_height / self.resize_increment)
-                if self.VERBOSE: print("expand_image resize_factor", str(resize_factor))
+                if self.VERBOSE: print(f"[expand_image_from_geometry] self.resize_increment: {self.resize_increment}, face_height from geometry: {face_height} resize_factor", str(resize_factor))
                 face_incremental_output_size = resize_factor * self.resize_increment
-                if self.VERBOSE: print("expand_image face_incremental_output_size", str(face_incremental_output_size))
+                if self.VERBOSE: print("[expand_image_from_geometry] face_incremental_output_size", str(face_incremental_output_size))
                 resize = face_incremental_output_size / face_height
-                if self.VERBOSE: print("expand_image resize", str(resize))
+                if self.VERBOSE: print("[expand_image_from_geometry] resize", str(resize))
             else:
                 resize_factor = None
                 resize = face_height_output / face_height
                 face_incremental_output_size = None
-            if self.VERBOSE: print("expand_image resize", str(resize))
+            if self.VERBOSE: print("expand_image_from_geometry resize", str(resize))
 
             if resize >= 15:
-                if self.VERBOSE: print("expand_image [-]failed expand loop, with resize", str(resize), "too big, skipping")
+                if self.VERBOSE: print("expand_image_from_geometry [-]failed expand loop, with resize", str(resize), "too big, skipping")
                 return None, resize
 
             resize_dims = (int(image.shape[1] * resize), int(image.shape[0] * resize))
-            if self.VERBOSE: print("expand_image [-] resize", str(resize), "resize_dims", str(resize_dims))
+            if self.VERBOSE: print("expand_image_from_geometry [-] resize", str(resize), "resize_dims", str(resize_dims))
             resize_nose = (int(nose_2d[0] * resize), int(nose_2d[1] * resize))
-            if self.VERBOSE: print(f"expand_image [-] resize_factor {resize_factor} resize_dims {resize_dims}")
+            if self.VERBOSE: print(f"expand_image_from_geometry [-] resize_factor {resize_factor} resize_dims {resize_dims}")
 
             upsized_image = self._upsample_with_model(image, upscale_model)
             resized_image = cv2.resize(upsized_image, resize_dims)
-            print("expand_image [-] resized_image shape after upscale and resize:", resized_image.shape)
+            print("expand_image_from_geometry [-] resized_image shape after upscale and resize:", resized_image.shape)
 
             if face_incremental_output_size:
                 image_incremental_output_ratio = face_incremental_output_size / face_height_output
-                if self.VERBOSE: print("expand_image [-] face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", expand_size, face_incremental_output_size, face_height_output)
+                if self.VERBOSE: print("expand_image_from_geometry [-] face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", expand_size, face_incremental_output_size, face_height_output)
                 this_expand_size = (int(expand_size[0] * image_incremental_output_ratio), int(expand_size[1] * image_incremental_output_ratio))
-                if self.VERBOSE: print("expand_image [-] this_expand_size", image_incremental_output_ratio, this_expand_size)
+                if self.VERBOSE: print("expand_image_from_geometry [-] this_expand_size", image_incremental_output_ratio, this_expand_size)
             else:
                 this_expand_size = (expand_size[0], expand_size[1])
 
@@ -3268,14 +3280,14 @@ class SortPose:
 
             border_list = [top_border, bottom_border, left_border, right_border]
             existing_list = [existing_pixels_above_nose, existing_pixels_below_nose, existing_pixels_left_of_nose, existing_pixels_right_of_nose]
-            if self.VERBOSE: print("expand_image [-] borders to expand to", border_list)
+            if self.VERBOSE: print("expand_image_from_geometry [-] borders to expand to", border_list)
             if self.VERBOSE: print("existing pixels", existing_list)
 
             expand_list = []
             crop_list = []
             if all(x >= 0 for x in border_list):
                 expand_list = border_list
-                if self.VERBOSE: print("expand_image [-] expand is good")
+                if self.VERBOSE: print("expand_image_from_geometry [-] expand is good")
             else:
                 for border in border_list:
                     if border > 0:
@@ -3297,19 +3309,19 @@ class SortPose:
                 None,
                 bg_color,
             )
-            if self.VERBOSE: print("expand_image [-] new_image shape after expanding:", new_image.shape)
+            if self.VERBOSE: print("expand_image_from_geometry [-] new_image shape after expanding:", new_image.shape)
             if any(x != 0 for x in crop_list):
-                if self.VERBOSE: print("expand_image [-]    some borders are negative, cropping")
+                if self.VERBOSE: print("expand_image_from_geometry [-]    some borders are negative, cropping")
                 crop_top = crop_list[0]
                 crop_bottom = crop_list[0] + this_expand_size[1]
                 crop_left = crop_list[2]
                 crop_right = crop_list[2] + this_expand_size[0]
-                if self.VERBOSE: print("expand_image [-] CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", crop_left, crop_right, crop_top, crop_bottom)
+                if self.VERBOSE: print("expand_image_from_geometry [-] CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", crop_left, crop_right, crop_top, crop_bottom)
                 new_image = new_image[crop_top:crop_bottom, crop_left:crop_right]
-                if self.VERBOSE: print("expand_image [-] cropped image to", crop_list)
+                if self.VERBOSE: print("expand_image_from_geometry [-] cropped image to", crop_list)
             return new_image, resize
         except Exception as e:
-            print("not expand_image_from_geometry loop failed")
+            print("not expand_image_from_geometry_from_geometry loop failed")
             print('Error:', str(e))
             return None, None
 
@@ -3432,18 +3444,27 @@ class SortPose:
         self.get_image_face_data(image, faceLms, bbox)    
         print("expand_image just got self.face_height", str(self.face_height))
         try:
-            # print(type(self.image))
+            # print(f"canonical_1x1_export_dims: {self.canonical_1x1_export_dims}")
+            print(f"self.image_edge_multiplier {self.image_edge_multiplier}")
             borderType = cv2.BORDER_CONSTANT
 
 
             if self.USE_INCREMENTAL_RESIZE:
+                # face_height is actual height in px
+                # resize increment is ideal size 345px
                 # increment is for doing output for images, which means the different output sizes
-                resize_factor = math.ceil(self.face_height/self.resize_increment)
-                if self.VERBOSE: print("expand_image resize_factor", str(resize_factor))
-                face_incremental_output_size = resize_factor*self.resize_increment
-                if self.VERBOSE: print("expand_image face_incremental_output_size", str(face_incremental_output_size))
-                resize = face_incremental_output_size/self.face_height
-                if self.VERBOSE: print("expand_image resize", str(resize))
+                if bool(self.canonical_1x1_export_dims):
+                    print("expand_image [-] using canonical_1x1_export_dims", self.canonical_1x1_export_dims)
+                    resize = self.canonical_1x1_export_dims[1]/(self.face_height * (self.image_edge_multiplier[0] + self.image_edge_multiplier[2]))
+                    face_incremental_output_size = self.face_height * resize
+                    resize_factor = None
+                else:
+                    resize_factor = math.ceil(self.face_height/self.resize_increment)
+                    if self.VERBOSE: print("[expand_image] resize_factor", str(resize_factor))
+                    face_incremental_output_size = resize_factor*self.resize_increment
+                    if self.VERBOSE: print("[expand_image] face_incremental_output_size", str(face_incremental_output_size))
+                    resize = face_incremental_output_size/self.face_height
+                    if self.VERBOSE: print("[expand_image] resize", str(resize))
             else:
                 # scale image to match face heights
                 resize_factor = None

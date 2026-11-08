@@ -73,20 +73,20 @@ SegmentHelper_name = 'SegmentHelper_TheOffice'
 # this is MM specific
 # for when I'm using files on my SSD vs RAID
 IS_SSD = True
-SSD_PATH = "/Volumes/OWC52/stub_set/segment_images" # this controls where the source files are located, not cache files
+SSD_PATH = "/Volumes/Lacie/segment_images" # this controls where the source files are located, not cache files
 # SSD_PATH = "/Volumes/LaCie/segment_images_thegym"
 
 # override for cache writes only. this controls where the cached files are written. if not None will override io.ROOT below
-CACHE_ROOT_OVERRIDE = "/Volumes/OWC52/stub_set/segment_images/"  # e.g. None or "/Volumes/LaCie/segment_images_thegym"
+CACHE_ROOT_OVERRIDE = "/Volumes/Lacie/segment_images/"  # e.g. None or "/Volumes/LaCie/segment_images_thegym"
 
-ONLY_SAVE_CACHE = True # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
+ONLY_SAVE_CACHE = False # only save CSVs to cluster folder, not images which are saved in cache folders -- for speed
 # DO_ENRICH_IMAGE_METAS = False ## defaults to true. comment out for installation production runs. uncomment for speed
 USE_PAINTED = True # this may be rewritten below, but putting a default value here. 
 MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face testing
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 1  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -232,13 +232,19 @@ LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
 MODE1_MAX_ROWS_PER_CLUSTER = None # if None, no cap; otherwise process at most this many rows per cluster
 MODE1_MIN_CLUSTER_ROWS = 50 # skip any cluster if there are less than this number of rows
 CROP_MULTIPLIER = 5
-CANONICAL_MULT_1x1_GRID_MODE = "1x1_square"  # when not None, every image uses CANONICAL_MULT_FALLBACKS[this value] as its multiplier; None disables
+CANONICAL_MULT_1x1_GRID_MODE = "1x1_vertical"  # when not None, every image uses CANONICAL_MULT_FALLBACKS[this value] as its multiplier; None disables
 CANONICAL_MULT_FALLBACKS = {
     "1x1_horizontal": resolve_multiplier("9x16_regular_miami"),
     "1x1_square":     resolve_multiplier("sq_medium"),
     "1x1_vertical":   resolve_multiplier("16x9_portrait_torso"),
 }
 canonical_1x1_fallback_pairs = set()  # populated by _mode1_set_multiplier; written to CSV at end of run
+GRID_MODE_DIMS = {
+    "1x1_horizontal": (3840, 2160),
+    "1x1_square":     (2160, 2160),
+    "1x1_vertical":   (2160, 3840),
+}
+canonical_1x1_export_dims = GRID_MODE_DIMS[CANONICAL_MULT_1x1_GRID_MODE] if CANONICAL_MULT_1x1_GRID_MODE else None
 
 image_edge_multiplier = None
 # image_edge_multiplier = [1.3,2,2.9,2] # [top, right, bottom, left] setting a default. not sure if this will mess up places it looks for None
@@ -1133,7 +1139,8 @@ sort.FULL_BODY_DEDUPE = FULL_BODY # dedupe uses resize-tolerant signals instead 
 if USE_BIIIIIG_FULL_BODY_MULTIPLIER: 
     print("MAKING PRINTS: USE_BIIIIIG_FULL_BODY_MULTIPLIER is True, setting image_edge_multiplier to [8, 11, 14, 11]")
     sort.image_edge_multiplier = BIIIIIG_FULL_BODY_MULTIPLIER  # HACK to reset the mult because CLUSTER_TYPE is not available to sortpose
-
+if canonical_1x1_export_dims is not None:
+    sort.canonical_1x1_export_dims = canonical_1x1_export_dims
 # Keep EXPAND background fill consistent with INPAINT_COLOR.
 if INPAINT_COLOR == "black":
     sort.BGCOLOR = [0, 0, 0]

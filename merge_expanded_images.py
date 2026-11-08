@@ -33,8 +33,8 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-# FOLDER_NAME = "GYM_build_life_size_prints"
-FOLDER_NAME = "output_folder/_ARMS_Thoma_Nov5v2"
+FOLDER_NAME = "segment_images/test"
+# FOLDER_NAME = "output_folder/_ARMS_Thoma_Nov5v2"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -208,81 +208,6 @@ if USE_CANONICAL_RATIOS: LOWEST_DIMS = True
 ############################
 
 ADD_TO_EXISTING_INSTALLATION_CSV = True  # if True, append new rows to existing installation.csv instead of overwriting
-
-RATIOS_DICT = {
-    720 : [ {0.500 : [360, 720]}, {0.563 : [408, 720]}, 
-{0.600 : [432, 720]}, {0.665 : [480, 720]}, 
-{0.750 : [540, 720]}, {0.798 : [576, 720]}, 
-{0.856 : [612, 720]}, {1.000 : [720, 720]}, 
-{1.169 : [840, 720]}, {1.253 : [900, 720]}, 
-{1.337 : [960, 720]}, {1.504: [1080 ,720]},
-{1.665: [1200, 720]}, {1.750 : [1260, 720]}, 
-    ],
-
-    1000 : [
-        {0.333 : [333, 1000]},
-        {0.400 : [400, 1000]},
-        {0.500 : [500, 1000]},
-        {0.563 : [563, 1000]},
-        {0.600 : [600, 1000]},
-        {0.665 : [665, 1000]},
-        {0.750 : [750, 1000]},
-        {0.798 : [798, 1000]},
-        {0.856 : [856, 1000]},
-        {1.000 : [1000, 1000]},
-        {1.169 : [1169, 1000]},
-        {1.253 : [1253, 1000]},
-        {1.337 : [1337, 1000]},
-        {1.504: [1504, 1000]},
-        {1.665: [1665, 1000]},
-        {1.750: [1750, 1000]},
-        {1.825: [1825, 1000]},
-        {1.900: [1900, 1000]},
-        {2.000: [2000, 1000]},
-        {2.100: [2100, 1000]},
-        {2.250: [2250, 1000]},
-        {2.375: [2375, 1000]},
-        {2.500: [2500, 1000]},
-        {2.750: [2750, 1000]},
-        {3.000: [3000, 1000]},
-    ],
-
-    1080 : [ {0.500 : [540, 1080]}, {0.563 : [612, 1080]}, 
-{0.600 : [648, 1080]}, {0.665 : [718, 1080]}, 
-{0.750 : [810,1080]}, {0.798 : [862,1080]}, 
-{0.856 : [924, 1080]}, {1.000 : [1080, 1080]}, 
-{1.169 : [1263, 1080]}, {1.253 : [1354, 1080]}, 
-{1.337 : [1444, 1080]}, {1.504: [1625 ,1080]},
-{1.665: [1725, 1080]}, {1.750: [1890, 1080]},
-], 
-
-    1785 : [
-        {0.500 : [892, 1785]}, 
-        {0.563 : [1071, 1785]}, 
-        {0.600 : [1071, 1785]},
-        {0.665 : [1284, 1785]}, 
-        {0.750 : [1485, 1785]}, 
-        {0.798 : [1584, 1785]}, 
-        {0.856 : [1692, 1785]}, 
-        {1.000 : [1785, 1785]}, 
-        {1.169 : [2083, 1785]}, 
-        {1.253 : [2234, 1785]}, 
-        {1.337 : [2394, 1785]}, 
-        {1.504: [2693, 1785]}, 
-        {1.665: [2888, 1785]},
-        {1.750: [3084, 1785]}
-    ],
-
-    2160 : [{0.500 : [1080, 2160]}, {0.563 : [1216, 2160]},
-        {0.665 : [1436, 2160]}, 
-{0.750 : [1620,2160]}, {0.798 : [1724,2160]}, 
-{0.856 : [1848, 2160]}, {1.000 : [2160, 2160]}, 
-{1.169 : [2526,2160]}, {1.253 : [2707,2160]}, 
-{1.337 : [2888,2160]}, {1.504: [3249 ,2160]},
-{1.665: [3590, 2160]}
-    ]
-    
-}
 
 LIMIT_DICT = {
     720: [1280, 720],
@@ -533,7 +458,7 @@ def crop_scale_giga(img1, DIMS=GIGA_DIMS):
 def crop_scale_canonical(img1, ratios_table=None, limit=None):
     """This function is used to crop and scale images to a canonical ratio, it is enabled by setting USE_CANONICAL_RATIOS to True in the top of merge_expanded_images.py file.
     It uses a table of ratios and limits to determine the appropriate ratio and limit to use.
-    The table of ratios and limits is stored in the RATIOS_1080 and RATIOS_2160 dictionaries in the top of merge_expanded_images.py file.
+    The ratio table is stored on the shared DataIO instance as io.RATIOS_DICT.
     The limit is the maximum width and height of the image.
     The ratio is the aspect ratio of the image.
     The function returns the cropped and scaled image.
@@ -544,7 +469,7 @@ def crop_scale_canonical(img1, ratios_table=None, limit=None):
     if ratios_table is None and VID_DIMS_TEST[0] is not None:
         this_dim = VID_DIMS_TEST[0]
         try: 
-            ratio_list = RATIOS_DICT[this_dim]
+            ratio_list = io.RATIOS_DICT[this_dim]
             limit = LIMIT_DICT[this_dim]
             # ratios_table = eval("RATIOS_"+this_dim)
             # limit = eval("LIMIT_"+this_dim)
@@ -2801,7 +2726,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
 
 
