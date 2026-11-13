@@ -29,10 +29,12 @@ from sqlalchemy import text
 
 
 from deap import base, creator, tools, algorithms
+from mp_db_io import DataIO
 
 
 class SortPose:
     # """Sort image files based on head pose"""
+    RATIOS_DICT = DataIO.RATIOS_DICT
 
     def __init__(self, motion=None, face_height_output=None, image_edge_multiplier=None, EXPAND=False, ONE_SHOT=False, JUMP_SHOT=False, HSV_CONTROL=None, VERBOSE=True,INPAINT=False, SORT_TYPE="128d", OBJ_CLS_ID = None,UPSCALE_MODEL_PATH=None, LMS_DIMENSIONS=2,TSP_SORT=False, USE_HEAD_POSE=False, IQR_SCALE_FACTOR=1.0, config=None):
 
@@ -119,8 +121,39 @@ class SortPose:
             "hand_signal": 2.0,
             "bbox": 1.0,
             # body3D/ArmsPoses3D hand blocks (only used when ARM_HAND_BLOCKS is on)
-            "hand_position": 1.0,
+            "hand_position": 0.001,
             "hand_gesture": 30.0, # world landmarks are ~0.03-0.06 vs ~1-3 for positions, so bump up
+        }
+        # FULL_BODY dedupe: set from make_video. Uses resize-tolerant image signals instead of pixel bbox + selfie SSIM
+        self.FULL_BODY_DEDUPE = False
+        self.SAVE_CROPS = False # full-body dedupe: also save the SSIM comparison crops next to each review pair
+        self.FB_DEDUPE = {
+            "dhash_max": 24,          # of 64 bits, whole-image dHash hamming distance
+            "face_bbox_max": 0.02,    # distance of face bbox normalized by image size [left/w, top/h, height/h]
+            "orb_gate": 0.25,         # pass-1 candidate if ORB good-match fraction >= this
+            "orb_confirm": 0.40,      # confirm dupe if ORB frac >= this (and dhash ok)
+            "orb_confirm_same_face": 0.20,  # confirm dupe if ORB frac >= this AND face bbox matches AND dhash ok
+            "orb_compute_dhash_max": 30,    # only run ORB matching if dhash <= this and
+            "orb_compute_face_bbox_max": 0.35,  # face bbox dist <= this (saves time)
+            "orb_match_distance": 40, # hamming distance for a "good" ORB match
+            # PROVISIONAL cheap-signal gates/tiers (normalized: face_xyz / 15, face_encodings68 / .5, body lms / 1). Tune from [DEDUPE TIER] logs
+            "xyz_gate": 0.75,         # pass 1: face_xyz (pitch/yaw/roll) normalized distance must be <= this
+            "enc_gate": 1.2,          # pass 2: face encoding normalized distance must be < this - was set to .65. setting to 1, because I think this is only used in normalizing to a 0-1 based on threshold_dict which is .5
+            "body_max": 1.0,          # normalized body distance must be <= this (raw = body_max * world_threshold when world lms are used)
+            "bd_low": 0.3,              # normalized body distance below this -> high; between bd_low and body_max -> medium. No auto-dupe tier.
+            "bd_high": 0.6,             # normalized body distance above this -> high; between bd_low and body_max -> medium. No auto-dupe tier.
+            "sw_max": 0.85,             # threshold for whole-image SSIM to be considered a dupe (high or medium)
+            "sf_min": 0.40,           # figure-box SSIM below this is tossed (nearly all false positives)
+            "sf_high": 0.7,          # figure-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
+            "st_min": 0.40,           # torso-box SSIM below this is tossed (nearly all false positives)
+            "st_high": 0.7,          # torse-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
+            # crop boxes as multiples of the face bbox (width mults x face width; vertical mults x face height, down from face top)
+            "fig_width_mult": 2.0,    # figure box total width
+            "fig_down_mult": 5.0,     # figure box extends this many face-heights down from the top of the face
+            "torso_width_mult": 1.2,  # torso (clothes sample) box total width, centred on the face
+            "torso_y_range": (2.0, 4.0),  # torso box top/bottom, in face-heights below the face top
+            "scombo_min": 1.0,          # combo-box SSIM above this -> high; between sf_min and sf_high -> medium. No auto-dupe tier.
+
         }
         self.ARM_HAND_BLOCKS = False # set from make_video; last 2*ARM_HAND_BLOCK_DIMS dims of body vectors are hand_position + hand_gesture
         self.ARM_HAND_BLOCK_DIMS = 126 # 2 hands * 21 points * 3 dims
@@ -188,7 +221,7 @@ class SortPose:
             self.CHECK_DESC_DIST = -1
             self.HSV_DELTA_MAX = 1000            
             self.FACE_DUPE_DIST = -1
-            self.BODY_DUPE_DIST = -1
+            self.BODY_DUPE_DIST = -1            
         else: 
             self.MIND = self.MINBODYDIST
             self.MAXD = self.MAXBODYDIST * 4
@@ -198,6 +231,11 @@ class SortPose:
             self.CHECK_DESC_DIST = 45
             if self.SORT_TYPE == "ArmsPoses3D":
                 self.MAXD = self.MAXBODYDIST * 300
+            elif self.SORT_TYPE == "object_fusion":
+                self.MIND = self.MINBODYDIST * 10
+                self.MAXD = self.MAXBODYDIST * 20
+
+
     
 
         self.INPAINT=INPAINT
@@ -214,6 +252,7 @@ class SortPose:
         self.resize_increment = 345
         self.USE_INCREMENTAL_RESIZE = True
         self.image_edge_multiplier = image_edge_multiplier
+        self.canonical_1x1_export_dims = [None, None]
         self.face_height_output = face_height_output
         self.EXPAND = EXPAND
         self.EXPAND_SIZE = (25000,25000) # full body
@@ -547,6 +586,18 @@ class SortPose:
 
         if sort_type not in ("object_fusion", "obj_bbox"):
             return None
+
+        # Fusion vectors with appended hand blocks: [core..., hand_position(n), hand_gesture(n)].
+        # Weight the tail separately and lay out the core exactly as before.
+        n = self.ARM_HAND_BLOCK_DIMS
+        if self.ARM_HAND_BLOCKS and vector_len > 2 * n + 8:
+            core_slices = self._fusion_weight_slices_core(vector_len - 2 * n) or {}
+            core_slices["hand_position"] = slice(vector_len - 2 * n, vector_len - n)
+            core_slices["hand_gesture"] = slice(vector_len - n, vector_len)
+            return core_slices
+        return self._fusion_weight_slices_core(vector_len, sort_type)
+
+    def _fusion_weight_slices_core(self, vector_len, sort_type="object_fusion"):
 
         # Non-fusion obj_bbox is a plain 4D box and should remain unweighted here.
         if sort_type == "obj_bbox" and vector_len <= 8:
@@ -1410,6 +1461,15 @@ class SortPose:
         score, _ = ssim(gray1, gray2, full=True)
         return score  # Return the SSIM score
 
+    def calculate_ssim_color(self, image1, image2, size=None):
+        """SSIM over the B, G, R channels (averaged), so hue differences count. Both images are resized to `size` (default TARGET_SIZE)."""
+        size = size or self.TARGET_SIZE
+        image1, image2 = cv2.resize(image1, size), cv2.resize(image2, size)
+        try:
+            return float(ssim(image1, image2, channel_axis=2))
+        except TypeError: # skimage < 0.19
+            return float(ssim(image1, image2, multichannel=True))
+
     def remove_duplicates(self, folder_list, df: pd.DataFrame, not_dupe_list, PURGING_DUPES=False, timing_callback=None) -> pd.DataFrame:
         """
         Main method to remove duplicates from the dataframe.
@@ -1441,7 +1501,19 @@ class SortPose:
         # df = self.split_landmarks_to_columns_or_list(df, first_col="left_hand_world_landmarks", second_col="right_hand_world_landmarks", structure="list")
 
         if self.VERBOSE: print(f"Processing {n_rows} images for duplicate detection...")
+        # DEDUPE_DEBUG_IDS="id1,id2,..." logs every pass-1 pair where both image_ids are listed
+        debug_ids = {x.strip() for x in os.environ.get("DEDUPE_DEBUG_IDS", "").split(",") if x.strip()}
+        if debug_ids:
+            present = {str(x) for x in df['image_id']}
+            print(f"[DEDUPE DEBUG] rows_in={n_rows} debug ids present in df: {sorted(debug_ids & present)} missing: {sorted(debug_ids - present)}")
+            print("[DEDUPE DEBUG] row index -> image_id: " + ", ".join(f"{k}:{df.iloc[k]['image_id']}" for k in range(n_rows) if str(df.iloc[k]['image_id']) in debug_ids))
+        full_body = bool(getattr(self, "FULL_BODY_DEDUPE", False))
+        fbp = self.FB_DEDUPE
+        feature_cache = {}
+        pair_signal_cache = {}
         look_closer_dict = {}
+        fb_counts = {"pairs": 0, "candidates": 0, "old_gate_candidates": 0, "orb_computed": 0, "pose_gate_candidates": 0, "tier_dupe": 0, "tier_high": 0, "tier_medium": 0, "tier_none": 0}
+        if self.VERBOSE or full_body: print(f"[DEDUPE] mode={'FULL_BODY signals' if full_body else 'standard (SSIM/selfie)'}")
         AUTO_CHECK = .2
         THRESH1 = 2
         SITE_NAME_ID_THRESH = 100000
@@ -1468,6 +1540,201 @@ class SortPose:
             site_name_id = df.iloc[key]['site_name_id']
             return os.path.join(folder_list[site_name_id], filename)
         
+        def iid(key):
+            # image_id for a positional row index, for log output
+            return df.iloc[key].get('image_id')
+
+        def image_features(k):
+            # per-image resize-tolerant features, computed once per row
+            if k in feature_cache: return feature_cache[k]
+            feat = None
+            try:
+                img = open_and_crop(k, df)
+                if img is not None:
+                    h, w = img.shape[:2]
+                    b = df.iloc[k]['bbox']
+                    fh = max(b['bottom'] - b['top'], 1)
+                    face_norm = np.array([b['left']/w, b['top']/h, fh/h])
+                    g8 = cv2.cvtColor(cv2.resize(img, (9, 8)), cv2.COLOR_BGR2GRAY)
+                    dhash = (g8[:, 1:] > g8[:, :-1]).flatten()
+                    g512 = cv2.cvtColor(cv2.resize(img, (512, 512)), cv2.COLOR_BGR2GRAY)
+                    _, desc = cv2.ORB_create(1000).detectAndCompute(g512, None)
+                    feat = {"shape": (h, w), "face_norm": face_norm, "dhash": dhash, "orb": desc}
+            except Exception as e:
+                print(f"[DEDUPE SIGNALS] feature error row {k} image_id {iid(k)}: {e}")
+            feature_cache[k] = feat
+            return feat
+
+        def pair_signals(i, j, force_orb=False):
+            if (i, j) in pair_signal_cache: return pair_signal_cache[(i, j)]
+            fi, fj = image_features(i), image_features(j)
+            if fi is None or fj is None:
+                out = None
+            else:
+                out = {
+                    "face_bbox_dist": round(float(np.linalg.norm(fi["face_norm"] - fj["face_norm"])), 3),
+                    "dhash": int(np.sum(fi["dhash"] != fj["dhash"])),
+                    "orb_matches": None,
+                    "orb_frac": None,
+                }
+                if force_orb or (out["dhash"] <= fbp["orb_compute_dhash_max"] and out["face_bbox_dist"] <= fbp["orb_compute_face_bbox_max"]):
+                    if fi["orb"] is not None and fj["orb"] is not None:
+                        matches = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(fi["orb"], fj["orb"])
+                        n_good = sum(1 for m in matches if m.distance < fbp["orb_match_distance"])
+                        out["orb_matches"] = n_good
+                        out["orb_frac"] = round(n_good / max(min(len(fi["orb"]), len(fj["orb"])), 1), 3)
+            pair_signal_cache[(i, j)] = out
+            return out
+
+        def fb_is_candidate(sig):
+            if sig is None: return False
+            if sig["orb_frac"] is not None and sig["orb_frac"] >= fbp["orb_gate"]: return True
+            return sig["face_bbox_dist"] <= fbp["face_bbox_max"] and sig["dhash"] <= fbp["dhash_max"]
+
+        def fb_is_dupe(sig):
+            if sig is None or sig["orb_frac"] is None or sig["dhash"] > fbp["dhash_max"]: return False
+            if sig["orb_frac"] >= fbp["orb_confirm"]: return True
+            return sig["orb_frac"] >= fbp["orb_confirm_same_face"] and sig["face_bbox_dist"] <= fbp["face_bbox_max"]
+
+        pose_cache = {}
+        pose_px_check = {"n": 0, "out_of_image": 0, "range_max": 0.0}
+        pose_box_cache = {}
+        pose_img_cache = {}
+
+        def pose_features(k):
+            # body_landmarks_normalized: nose-origin, in face-height units, so already scale-comparable across images.
+            # rel = pose relative to hip midpoint in torso-length units; xy_px = body_landmarks (0-1 image coords) x image dims (crop boxes only)
+            if k in pose_cache: return pose_cache[k]
+            out = None
+            try:
+                lms = df.iloc[k]['body_landmarks_normalized'].landmark
+                pts = np.array([[l.x, l.y, l.visibility] for l in lms], dtype=float)
+                xy, vis = pts[:, :2], pts[:, 2]
+                hip, sh = (xy[23] + xy[24]) / 2, (xy[11] + xy[12]) / 2
+                scale = float(np.linalg.norm(sh - hip))
+                if scale > 0 and (vis >= 0.5).sum() >= 8:
+                    # pixel positions come from body_landmarks (image-normalized 0-1), scaled by the image dims
+                    raw = self.str_to_landmarks(df.iloc[k]['body_landmarks'])
+                    px = np.array([[l.x, l.y, l.visibility] for l in raw.landmark], dtype=float)
+                    if k not in pose_img_cache: pose_img_cache[k] = open_and_crop(k, df)
+                    h, w = pose_img_cache[k].shape[:2]
+                    trim = {2: 100, 9: 90}.get(df.iloc[k]['site_name_id'], 0) # trim_bottom removes rows after the landmarks were computed
+                    xy_px = px[:, :2] * np.array([w, h + trim])
+                    seen = px[:, 2] >= 0.5
+                    pose_px_check["n"] += int(seen.sum())
+                    pose_px_check["out_of_image"] += int((seen & ((xy_px[:, 0] < 0) | (xy_px[:, 0] > w) | (xy_px[:, 1] < 0) | (xy_px[:, 1] > h))).sum())
+                    pose_px_check["range_max"] = max(pose_px_check["range_max"], float(np.abs(px[:, :2]).max()))
+                    out = {"rel": (xy - hip) / scale, "vis": vis, "xy_px": xy_px}
+            except Exception as e:
+                print(f"[DEDUPE POSE] feature error row {k} image_id {iid(k)}: {e}")
+            pose_cache[k] = out
+            return out
+
+        def pose_boxes(k):
+            # figure and torso crop boxes as fixed multiples of the face bbox (no landmarks), in pixels.
+            # widths are multiples of face width, vertical extents multiples of face height, measured down from the face top.
+            if k in pose_box_cache: return pose_box_cache[k]
+            out = None
+            try:
+                if k not in pose_img_cache: pose_img_cache[k] = open_and_crop(k, df)
+                img = pose_img_cache[k]
+                h, w = img.shape[:2]
+                b = df.iloc[k]['bbox']
+                fw, fh = max(b['right'] - b['left'], 1), max(b['bottom'] - b['top'], 1)
+                cx = (b['left'] + b['right']) / 2
+                def clip_box(x0, y0, x1, y1):
+                    x0, x1 = max(int(x0), 0), min(int(x1), w)
+                    y0, y1 = max(int(y0), 0), min(int(y1), h)
+                    return (x0, y0, x1, y1) if x1 - x0 >= 8 and y1 - y0 >= 8 else None
+                half_fig = fbp["fig_width_mult"] * fw / 2
+                half_torso = fbp["torso_width_mult"] * fw / 2
+                t0, t1 = fbp["torso_y_range"]
+                out = {"img": img,
+                       "figure_box": clip_box(cx - half_fig, b['top'], cx + half_fig, b['top'] + fbp["fig_down_mult"] * fh),
+                       "torso_box": clip_box(cx - half_torso, b['top'] + t0 * fh, cx + half_torso, b['top'] + t1 * fh)}
+            except Exception as e:
+                print(f"[DEDUPE POSE] box error row {k} image_id {iid(k)}: {e}")
+            pose_box_cache[k] = out
+            return out
+
+        def pose_dist(i, j):
+            # cheap (no image access): returns (shared_count, mean, max) of scale-normalized landmark distances, or None
+            fi, fj = pose_features(i), pose_features(j)
+            if fi is None or fj is None: return None
+            shared = (fi["vis"] >= 0.5) & (fj["vis"] >= 0.5)
+            if shared.sum() < 8: return None
+            d = np.linalg.norm(fi["rel"][shared] - fj["rel"][shared], axis=1)
+            return int(shared.sum()), round(float(d.mean()), 3), round(float(d.max()), 3)
+
+        def crop_signals(fi, fj, box_key, size=(128, 256)):
+            bi, bj = fi[box_key], fj[box_key]
+            if bi is None or bj is None: return None
+            def crop(f, b):
+                x0, y0, x1, y1 = b
+                return cv2.cvtColor(cv2.resize(f["img"][y0:y1, x0:x1], size), cv2.COLOR_BGR2GRAY)
+            gi, gj = crop(fi, bi), crop(fj, bj)
+            ci, cj = (cv2.resize(f["img"][b[1]:b[3], b[0]:b[2]], size) for f, b in ((fi, bi), (fj, bj)))
+            out = {"ssim": round(self.calculate_ssim_color(ci, cj, size), 3), "ssim_gray": round(float(ssim(gi, gj)), 3)}
+            hi = cv2.resize(gi, (17, 16)); hj = cv2.resize(gj, (17, 16))
+            out["dhash_frac"] = round(float(np.mean((hi[:, 1:] > hi[:, :-1]) != (hj[:, 1:] > hj[:, :-1]))), 3)
+            orb = cv2.ORB_create(500)
+            _, di = orb.detectAndCompute(cv2.resize(gi, (size[0] * 2, size[1] * 2)), None)
+            _, dj = orb.detectAndCompute(cv2.resize(gj, (size[0] * 2, size[1] * 2)), None)
+            if di is not None and dj is not None:
+                good = [m for m in cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(di, dj) if m.distance < fbp["orb_match_distance"]]
+                out["orb_frac"] = round(len(good) / max(min(len(di), len(dj)), 1), 3)
+            return out
+
+        def pose_box_signals(i, j):
+            pd_ = pose_dist(i, j)
+            if pd_ is None: return "pose unavailable"
+            out = {"shared_lms": pd_[0], "pose_dist_mean": pd_[1], "pose_dist_max": pd_[2]}
+            try:
+                out["face_enc_dist"] = round(float(self.dupe_comparison(i, j, 'face_encodings68', df)), 3)
+            except Exception:
+                out["face_enc_dist"] = None
+            bi, bj = pose_boxes(i), pose_boxes(j)
+            out["figure_box"] = crop_signals(bi, bj, "figure_box") if bi and bj else None
+            out["torso_box"] = crop_signals(bi, bj, "torso_box") if bi and bj else None
+            return out
+
+        def comparison_crops(i, j):
+            # the exact regions fed to the SSIM signals: whole image (384x384), torso and figure boxes (128x256 shown 2x), colour
+            out = {}
+            if not self.SAVE_CROPS: return out
+            try:
+                for k in (i, j):
+                    out[f"crop_whole_{iid(k)}.jpg"] = cv2.resize(open_and_crop(k, df), self.TARGET_SIZE)
+            except Exception as e:
+                print(f"[DEDUPE TIER] whole crop error {i},{j}: {e}")
+            bi, bj = pose_boxes(i), pose_boxes(j)
+            if not bi or not bj: return out
+            for box_key in ("figure_box", "torso_box"):
+                if bi[box_key] is None or bj[box_key] is None: continue
+                for k, b in ((i, bi), (j, bj)):
+                    x0, y0, x1, y1 = b[box_key]
+                    out[f"crop_{box_key.split('_')[0]}_{iid(k)}.jpg"] = cv2.resize(b["img"][y0:y1, x0:x1], (256, 512))
+            return out
+
+        def fb_tier(sig, pose):
+            # returns "dupe" | "high" | "medium" | None. pose is the pose_box_signals dict (or a string / None if unavailable)
+            if sig is None: return None
+            orb, dh = sig["orb_frac"], sig["dhash"]
+            if orb is not None and dh <= fbp["dhash_max"] and orb >= fbp["orb_confirm"]:
+                return "dupe"
+            same_face_box = sig["face_bbox_dist"] <= fbp["face_bbox_max"]
+            if orb is not None and dh <= fbp["dhash_max"] and orb >= fbp["orb_confirm_same_face"] and same_face_box:
+                return "high"
+            if isinstance(pose, dict) and "pose_dist_mean" in pose and pose["pose_dist_mean"] <= fbp["pose_medium"]:
+                torso = pose.get("torso_box") or {}
+                fig = pose.get("figure_box") or {}
+                tssim, torb = torso.get("ssim", 0), torso.get("orb_frac", 0) or 0
+                if pose["pose_dist_mean"] <= fbp["pose_high"] and (tssim >= fbp["torso_ssim_high"] or torb >= fbp["torso_orb_high"]):
+                    return "high"
+                if tssim >= fbp["torso_ssim_medium"] or torb >= fbp["torso_orb_medium"] or fig.get("dhash_frac", 1) <= fbp["figure_dhash_medium"]:
+                    return "medium"
+            return None
+
         def open_and_crop(key,df):
             img = cv2.imread(construct_filepath(key, df))
             dfrow = df.iloc[key]
@@ -1511,17 +1778,18 @@ class SortPose:
             #         sort_folder += "sameSHOOT"
             return sort_folder
         
-        def save_dupes_look_closer(i, j, ssim_score, this_dist_list, df):
+        def save_dupes_look_closer(i, j, ssim_score, this_dist_list, df, force_folder=None, foldername_override=None, extra_images=None):
             # Treat True as 1 and False as 0 for summing
             sum_this_dist_list = round(sum(this_dist_list[:3]), 2)
             rounded_dist_list = [f"{x:.2f}" if isinstance(x, (float, int)) else str(x) for x in this_dist_list]
             foldername = f"{sum_this_dist_list}_{ssim_score:.2f}_{i}_{j}" + "_" + "_".join(rounded_dist_list)
+            if foldername_override: foldername = foldername_override
             is_dupe = False # default to not dupe
                         
             # copy images to folder to look closer
             for key in [i,j]:
                 filepath = construct_filepath(key, df)
-                sort_folder = sort_on_score(ssim_score, this_dist_list)
+                sort_folder = force_folder or sort_on_score(ssim_score, this_dist_list)
                 # print(f"Saving duplicate look closer images to {save_folder} for {filepath} from site {site_name_id}")
                 # save the images to the folder
                 if sort_folder not in ["nope", "dupe"]:
@@ -1537,7 +1805,7 @@ class SortPose:
                     is_dupe = True
                     save_folder = os.path.join(os.path.dirname(self.outfolder),"dupe_sorting", sort_folder, foldername)
                     os.makedirs(save_folder, exist_ok=True)
-                    # print(f"made SQL {save_folder}")
+                    if force_folder: shutil.copy(filepath, save_folder) # full-body debugging: keep dupe images for review
                 # else:
                 #     save_folder = os.path.join(os.path.dirname(self.outfolder), "dupe_sorting", os.path.basename(self.outfolder), sort_folder, foldername)
             if sort_folder != "nope":
@@ -1549,6 +1817,8 @@ class SortPose:
                 sql = f"UPDATE Encodings SET is_dupe_of = {image_id_i} WHERE image_id = {image_id_j}; \n -- image_id_i is {image_id_i} with filename {imagename_i}"
                 with open(os.path.join(save_folder, f"dupe_{image_id_j}.sql"), "a") as f:
                     f.write(sql + "\n")
+                for name, crop_img in (extra_images or {}).items():
+                    cv2.imwrite(os.path.join(save_folder, name), crop_img)
             return is_dupe
         # i is to be kept, j is to be removed if dupe
         # Pass 1: Fast screening, if it sum(norm_dist) < threshold, add it into the look_closer list to be checked in pass 2
@@ -1596,6 +1866,15 @@ class SortPose:
             for j in range(i + 1, n_rows):
                 if abs(i - j) > check_range: continue
                 this_dist_list = []
+                if full_body:
+                    # cheap pass 1: head pose (face_xyz) only; face encoding is pass 2, body landmarks pass 3
+                    xyz = self.dupe_comparison(i, j, 'face_xyz', df)
+                    xyz_n = norm_dist(xyz, threshold_dict['face_xyz'][0]) if xyz not in (None, False) else float('inf')
+                    fb_counts["pairs"] += 1
+                    if xyz_n <= fbp["xyz_gate"]:
+                        fb_counts["candidates"] += 1
+                        look_closer_dict[(i, j)] = [xyz_n]
+                    continue
                 keys_to_check = ['wrist_ankle_landmarks_normalized_array', 'face_xyz', 'bbox_array']
                 # check to see if there are any where 'wrist_ankle_landmarks_normalized_array' is None, if so, skip it
                 # print(" ankle lists")
@@ -1613,27 +1892,53 @@ class SortPose:
                     normed_dist = norm_dist(this_dist, threshold)
                     this_dist_list.append(normed_dist)
                 
-                if sum(this_dist_list) <= THRESH1 or any(d < AUTO_CHECK for d in this_dist_list):
+                if debug_ids and str(df.iloc[i]['image_id']) in debug_ids and str(df.iloc[j]['image_id']) in debug_ids:
+                    passed = sum(this_dist_list) <= THRESH1 or any(d < AUTO_CHECK for d in this_dist_list)
+                    print(f"[DEDUPE DEBUG] pass1 {i},{j} image_ids {df.iloc[i]['image_id']},{df.iloc[j]['image_id']} keys {keys_to_check} normed {[round(float(d), 3) for d in this_dist_list]} sum={sum(this_dist_list):.3f} passed={passed} signals={pair_signals(i, j, force_orb=True)}")
+                    print(f"[DEDUPE POSE] {i},{j} image_ids {df.iloc[i]['image_id']},{df.iloc[j]['image_id']} {pose_box_signals(i, j)}")
+                old_gate = sum(this_dist_list) <= THRESH1 or any(d < AUTO_CHECK for d in this_dist_list)
+                if full_body:
+                    sig = pair_signals(i, j)
+                    gate = fb_is_candidate(sig)
+                    if not gate:
+                        pd_ = pose_dist(i, j)
+                        if pd_ is not None and pd_[1] <= fbp["pose_gate"]:
+                            gate = True
+                            fb_counts["pose_gate_candidates"] += 1
+                    fb_counts["pairs"] += 1
+                    fb_counts["candidates"] += int(gate)
+                    fb_counts["old_gate_candidates"] += int(old_gate)
+                    fb_counts["orb_computed"] += int(sig is not None and sig["orb_frac"] is not None)
+                    if self.VERBOSE: print(f"[DEDUPE SIGNALS] {i},{j} image_ids {iid(i)},{iid(j)} signals={sig} fb_candidate={gate} old_gate={old_gate} old_normed={[round(float(d), 3) for d in this_dist_list]}")
+                else:
+                    gate = old_gate
+                if gate:
                     # if the normed dist is low enough, look closer
                     look_closer_dict[(i,j)] = this_dist_list
                     if self.VERBOSE: 
-                        print(f"dupe_detection_pass_1 triggered at {i},{j}. with NORMED distances {this_dist_list}")
+                        print(f"dupe_detection_pass_1 triggered at {i},{j} (image_ids {iid(i)},{iid(j)}). with NORMED distances {this_dist_list}")
                 else:
                     #print(f"tossing {i},{j}. with n_d {this_dist_list}")
                     
                     continue
                       # If only one of the checks passed, skip to next pair
+        if full_body: print(f"[DEDUPE] pass1 summary {fb_counts}")
         add_remove_timing("pass1", time.perf_counter() - pass1_start)
         dedupe_stats["look_closer_candidates"] = len(look_closer_dict)
 
         notdupe_filter_start = time.perf_counter()
         if not_dupes is not None:
+            # print(f"there are {len(not_dupes)} not_dupes")
             #interlude 1, check to see if any are in not_dupes list, if so, remove from look_closer_dic
             not_dupes_to_remove = []
+            # not_dupes holds image_id pairs; i,j are row positions, so map to image_ids first
+            not_dupes_canon = {tuple(sorted((int(a), int(b)))) for (a, b) in not_dupes}
             for (i,j), this_dist_list in look_closer_dict.items():
-                if (i,j) in not_dupes or (j,i) in not_dupes:
+                if tuple(sorted((int(iid(i)), int(iid(j))))) in not_dupes_canon:
+                    if self.VERBOSE:
+                        print(f" removing {iid(i)}, {iid(j)} (rows {i},{j}) found in not_dupes")
                     not_dupes_to_remove.append((i,j))
-                    continue
+            print(f"[DEDUPE] not_dupes loaded={len(not_dupes_canon)} removed={len(not_dupes_to_remove)}")
             pop_look_closer_dict(look_closer_dict, not_dupes_to_remove)
             dedupe_stats["removed_by_notdupe_cache"] = len(not_dupes_to_remove)
         add_remove_timing("notdupe_filter", time.perf_counter() - notdupe_filter_start)
@@ -1645,14 +1950,16 @@ class SortPose:
             key = "face_encodings68"
             threshold, _ = threshold_dict[key]
             this_dist = self.dupe_comparison(i, j, key, df)
-            normed_dist = norm_dist(this_dist, threshold)
+            if full_body and this_dist in (None, False): this_dist = float('inf')
+            normed_dist = norm_dist(this_dist, fbp["enc_gate"] * threshold if full_body else threshold)
             if normed_dist < 1:
+                if full_body: normed_dist = norm_dist(this_dist, threshold)
                 this_dist_list.append(normed_dist)
                 # update look_closer_dict
                 look_closer_dict[(i,j)] = this_dist_list
-                if self.VERBOSE: print(f"{normed_dist}   >>  so FACEMATCH {i},{j}. this_dist_list {this_dist_list}")
+                if self.VERBOSE: print(f"{normed_dist}   >>  so FACEMATCH {i},{j} (image_ids {iid(i)},{iid(j)}). raw_face_dist {this_dist} this_dist_list {this_dist_list}")
             else:
-                if self.VERBOSE: print(f"{normed_dist} noface {i},{j}. this_dist_list {this_dist_list}")
+                if self.VERBOSE: print(f"{normed_dist} noface {i},{j} (image_ids {iid(i)},{iid(j)}). raw_face_dist {this_dist} this_dist_list {this_dist_list}")
                 # mark for removal after iteration
                 keys_to_remove_prob_not_dupes.append((i,j))
                 continue
@@ -1667,9 +1974,14 @@ class SortPose:
             key = "body_landmarks_normalized_array"
             threshold, operator = threshold_dict[key]
             body_dist = self.dupe_comparison(i, j, key, df)
+            if full_body and body_dist in (None, False): body_dist = float('inf')
             normed_body_dist = norm_dist(body_dist, threshold)
-            # replace the exising hands/ankles with full body lms
-            this_dist_list[0] = normed_body_dist
+            if full_body:
+                # [xyz, enc] + body; the old path replaces its hands/ankles slot instead
+                this_dist_list.append(normed_body_dist)
+            else:
+                # replace the exising hands/ankles with full body lms
+                this_dist_list[0] = normed_body_dist
 
             # calculate hand dist
             key = "hand_landmarks"
@@ -1712,8 +2024,74 @@ class SortPose:
             if i in confirmed_dupes:
                 if self.VERBOSE: print(f"  >>> skipping {i},{j} because {i} is already confirmed dupe")
                 continue
-            if self.VERBOSE: print(f"  >>> closest_look {i},{j} with distances {this_dist_list}")
+            print(f"[DEDUPE LOG] closest_look {i},{j} image_ids {iid(i)},{iid(j)} dists [body_lms, face_xyz, bbox, face_enc, hands, desc, site_id]: {this_dist_list}")
             dedupe_stats["ssim_pairs_tested"] += 1
+
+            if full_body:
+                # tiers come from the cheap signals only: [face_xyz, face_enc, body_lms, ...] (all normalized)
+                xyz_n, enc_n, body_n = this_dist_list[0], this_dist_list[1], this_dist_list[2]
+                body_ok = body_n is not None and body_n is not False and body_n <= fbp["body_max"]
+                if not body_ok or xyz_n > fbp["xyz_gate"] or enc_n > fbp["enc_gate"]:
+                    fb_counts["tier_none"] += 1
+                    continue
+                # figure-box SSIM decides the tier; whole and torso SSIM are logged and named only
+                ssim_whole = ssim_whole_gray = ssim_torso = ssim_fig = ssim_torso_gray = ssim_fig_gray = None
+                try:
+                    img_i, img_j = open_and_crop(i, df), open_and_crop(j, df)
+                    ssim_whole = round(self.calculate_ssim_color(img_i, img_j), 3)
+                    ssim_whole_gray = round(float(self.calculate_ssim(img_i, img_j)), 3)
+                    bi, bj = pose_boxes(i), pose_boxes(j)
+                    if bi and bj:
+                        ct, cf = crop_signals(bi, bj, "torso_box"), crop_signals(bi, bj, "figure_box")
+                        ssim_torso = ct["ssim"] if ct else None
+                        ssim_fig = cf["ssim"] if cf else None
+                        ssim_torso_gray = ct["ssim_gray"] if ct else None
+                        ssim_fig_gray = cf["ssim_gray"] if cf else None
+                except Exception as e:
+                    print(f"[DEDUPE TIER] ssim error {i},{j}: {e}")
+                # no auto-dupes: everything goes to manual review. An unavailable figure SSIM goes to missing.
+                
+                # bd_avg = (fbp["bd_high"]+ fbp["body_max"])/2
+                sf_avg = (fbp["sf_high"]+fbp["sf_min"])/2
+                st_avg = (fbp["st_high"]+fbp["st_min"])/2
+                small_slice = 0
+                if ssim_fig is not None and ssim_torso is not None:
+                    if (ssim_fig+ssim_torso) > fbp["scombo_min"] and ssim_fig > fbp["sf_min"] and ssim_torso > fbp["st_min"]:
+                        # if it meets the combo threshold, and both individual thresholds, it is probably some kind of dupe
+                        if body_n > (fbp["body_max"]-small_slice) and ssim_fig < sf_avg and ssim_torso < st_avg and ssim_whole < fbp["st_min"]:
+                            # if body is greater than the avg between high and max, and lower than the avg for SSIM, toss it
+                            print(f" YYY BODY LMS low tier None with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
+                            tier = None
+                        elif ssim_fig > fbp["sf_high"] and ssim_torso > fbp["sf_high"]:
+                            print(f" YYY SSIM high tier with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
+                            # figure and torse SSIM meets higher threshold -> high probability dupe
+                            tier = "high"
+                        elif body_n < fbp["bd_low"]:
+                            print(f" YYY BODY LMS high tier with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
+                            #  body 3D lms are very similar -> high probability dupe
+                            tier = "high"
+                        elif body_n < fbp["bd_high"] and ssim_fig > sf_avg and ssim_torso > st_avg:
+                            # both body 3D lms and SSIM are pretty similar -> high probability dupe
+                            print(f" YYY COMBO high tier with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
+                            bd = fbp["bd_high"]
+                            print(f" thresholds to clear are {bd} and {sf_avg} and {st_avg}")
+                            tier = "high"
+                        else:
+                            print(f" ZZZZ MEDIUM tier with ssim_fig {ssim_fig} and ssim_torso {ssim_torso} and body_n {body_n}")
+                            tier = "medium"
+                            # print(f"tier: {tier}")
+                    else:
+                        tier = None
+                else:
+                    tier = "missing"
+                    print(f" ⚠️⚠️⚠️ NO SSIM RESULTS for {i},{j} image_ids {iid(i)},{iid(j)}. ssim_whole={ssim_whole} ssim_torso={ssim_torso} ssim_fig={ssim_fig} (gray: whole={ssim_whole_gray} torso={ssim_torso_gray} figure={ssim_fig_gray}) ⚠️⚠️⚠️")
+                fb_counts["tier_" + (tier or "none")] += 1
+                print(f"[DEDUPE TIER] {tier} {i},{j} image_ids {iid(i)},{iid(j)} xyz={xyz_n:.3f} enc={enc_n:.3f} body={round(float(body_n), 3)} (raw {body_n}) whole={ssim_whole} torso={ssim_torso} figure={ssim_fig} (gray: whole={ssim_whole_gray} torso={ssim_torso_gray} figure={ssim_fig_gray})")
+                if tier is None:
+                    continue
+                tier_name = f"{tier}_{iid(i)}_{iid(j)}_xyz{xyz_n:.2f}_enc{enc_n:.2f}_body_n{body_n:.2f}_sw{ssim_whole}_st{ssim_torso}_sf{ssim_fig}"
+                save_dupes_look_closer(i, j, {"high": 0.85, "medium": 0.70}[tier], this_dist_list, df, force_folder=tier, foldername_override=tier_name, extra_images=comparison_crops(i, j))
+                continue
 
             # open images i and j, crop to bbox. if can't open, remove from df and continue
             image_i = open_image_remove_if_error(i, df)
@@ -1724,7 +2102,8 @@ class SortPose:
             if image_i is not None and image_j is not None:
  
                 
-                ssim_score = self.calculate_ssim(image_i, image_j)
+                full_ssim_score = self.calculate_ssim(image_i, image_j)
+                ssim_score = full_ssim_score
 
 
                 if round(image_i.shape[0]/image_i.shape[1], 2) == round(image_j.shape[0]/image_j.shape[1], 2):
@@ -1774,17 +2153,17 @@ class SortPose:
                         selfie_j = cv2.resize(selfie_j, (selfie_i.shape[1], selfie_i.shape[0]))
                     print(f'selfie sizes after cropping to bbox: {selfie_i.shape}, {selfie_j.shape}')
                     ssim_score = self.calculate_ssim(selfie_i, selfie_j)
-                    print(f"SSIM score for selfies of {i} and {j} is {ssim_score}")
+                    print(f"[DEDUPE LOG] SSIM {i},{j} image_ids {iid(i)},{iid(j)} full_image={full_ssim_score:.3f} selfie={ssim_score:.3f} same_shape={same_shape}")
                     is_dupe = save_dupes_look_closer(i, j, ssim_score, this_dist_list, df)
                     if is_dupe:
                         if self.VERBOSE: print(f"remove_duplicates: confirmed duplicate {j} of {i} with SSIM {ssim_score} and distances {this_dist_list}")
                         confirmed_dupes.add(j)
                         dedupe_stats["confirmed_dupes"] += 1
-                    else:
-                        # if it passess SSIM, save isnotdupe pair to sql to avoid future work
-                        write_is_not_dupe_sql(i, j, df)
+                    # else:
+                    #     # if it passess SSIM, save isnotdupe pair to sql to avoid future work
+                    #     write_is_not_dupe_sql(i, j, df)
                 except Exception as e:
-                    print(f"Error processing segmentation masks for images {i} and {j}: {e}")
+                    print(f"[DEDUPE LOG] selfie SSIM error {i},{j} image_ids {iid(i)},{iid(j)} full_image={full_ssim_score:.3f}: {e}")
                     ssim_score = 0
                     selfie_ssim_score = 0
                     continue
@@ -1824,6 +2203,7 @@ class SortPose:
         print(sorted_df.head())
         add_remove_timing("finalize", time.perf_counter() - finalize_start)
         add_remove_timing("total", time.perf_counter() - remove_total_start)
+        if full_body: print(f"[DEDUPE TIER] summary {fb_counts}")
         print(
             "[DEDUPE] remove_duplicates summary "
             f"rows_in={n_rows} rows_out={sorted_df.shape[0]} "
@@ -2319,6 +2699,7 @@ class SortPose:
         except Exception as e:
             print(f"auto_edge_crop: error cropping image: {e}")
             cropped = image
+        cropped = self.crop_to_canonical_size(cropped)
         # # display the cropped image for debugging
         # cv2.imshow("Cropped Image", cropped)
         # cv2.waitKey(1)  # Display the window for 1 ms
@@ -2791,40 +3172,67 @@ class SortPose:
 
         return toobig
 
+    def crop_to_canonical_size(self, image):
+        diff_threshold = .05
+        image_h, image_w = image.shape[:2]
+        print(f"crop_to_canonical_size: image shape {image.shape}")
+        target_dims = self.canonical_1x1_export_dims
+        if not target_dims or not all(target_dims):
+            return image
+        target_w, target_h = target_dims
+        aspect_ratio = image_w / image_h
+        print(f"crop_to_canonical_size: current aspect_ratio {aspect_ratio}")
+        target_aspect_ratio = target_w / target_h
+        print(f"crop_to_canonical_size: target_aspect_ratio {target_aspect_ratio}")
+
+        # if the difference between the ratios is less than the threshold, we can consider them equal
+        if abs(aspect_ratio - target_aspect_ratio) < diff_threshold:
+            if aspect_ratio > target_aspect_ratio:
+                crop_width = min(image_w, round(image_h * target_aspect_ratio))
+                crop_left = (image_w - crop_width) // 2
+                image = image[:, crop_left:crop_left + crop_width]
+                print(f"crop_to_canonical_size: cropped width to {image.shape}")
+            elif aspect_ratio < target_aspect_ratio:
+                crop_height = min(image_h, round(image_w / target_aspect_ratio))
+                crop_top = (image_h - crop_height) // 2
+                image = image[crop_top:crop_top + crop_height, :]
+                print(f"crop_to_canonical_size: cropped height to {image.shape}")
+        return image
+
     def auto_edge_crop_from_geometry(self, bbox, image, resize, face_height, image_edge_multiplier=None):
         """Tench's body landmark crop using row-local geometry."""
         if bbox is None or image is None or face_height is None:
             return image
 
         multiplier = image_edge_multiplier or self.image_edge_multiplier
-        print(f"auto_edge_crop: image edge multiplier {multiplier}")
+        print(f"auto_edge_crop_from_geometry: image edge multiplier {multiplier}")
         top, right, bottom, left = multiplier
         bbox_dimensions = self.bbox_to_pixel_conversion(bbox)
-        print(f"auto_edge_crop: initial bbox dimensions {bbox_dimensions} x {resize} == {bbox_dimensions['horizontal']*resize}, {bbox_dimensions['vertical']*resize}")
+        print(f"auto_edge_crop_from_geometry: initial bbox dimensions {bbox_dimensions} x {resize} == {bbox_dimensions['horizontal']*resize}, {bbox_dimensions['vertical']*resize}")
         bbox_dimensions["horizontal"] = bbox_dimensions["horizontal"] * resize
         bbox_dimensions["vertical"] = bbox_dimensions["vertical"] * resize
 
         scaled_face_height = face_height * resize
-        print(f"auto_edge_crop: should multiply/crop w/ scaled_face_height {face_height} x {resize}: {scaled_face_height}")
-        print(f"auto_edge_crop: we {bbox_dimensions}")
-        print("auto_edge_crop: current image shape", image.shape)
-        print("auto_edge_crop: resize factor", resize)
+        print(f"auto_edge_crop_from_geometry: should multiply/crop w/ scaled_face_height {face_height} x {resize}: {scaled_face_height}")
+        print(f"auto_edge_crop_from_geometry: we {bbox_dimensions}")
+        print("auto_edge_crop_from_geometry: current image shape", image.shape)
+        print("auto_edge_crop_from_geometry: resize factor", resize)
         print("top, right, bottom, left", top, right, bottom, left)
         factor = 1.0 if self.DYN_BBOX_FROM_IMAGE_DIMS else 1.3
-        print(f"auto_edge_crop: multiplier factor={factor} (DYN_BBOX_FROM_IMAGE_DIMS={self.DYN_BBOX_FROM_IMAGE_DIMS})")
+        print(f"auto_edge_crop_from_geometry: multiplier factor={factor} (DYN_BBOX_FROM_IMAGE_DIMS={self.DYN_BBOX_FROM_IMAGE_DIMS})")
         top = int((image.shape[0] / 2) - abs(scaled_face_height * (top * factor)))
         right = int((image.shape[1] / 2) + abs(scaled_face_height * (right * factor)))
         bottom = int((image.shape[0] / 2) + abs(scaled_face_height * (bottom * factor)))
         left = int((image.shape[1] / 2) - abs(scaled_face_height * (left * factor)))
 
-        print(f"auto_edge_crop: calculated crop coords before bounds check: top:{top}, right:{right}, bottom:{bottom}, left:{left}")
+        print(f"auto_edge_crop_from_geometry: calculated crop coords before bounds check: top:{top}, right:{right}, bottom:{bottom}, left:{left}")
         try:
             cropped = image[top:bottom, left:right]
-            print(f"auto_edge_crop: cropped image shape {cropped.shape}")
+            print(f"auto_edge_crop_from_geometry: cropped image shape {cropped.shape}")
         except Exception as e:
-            print(f"auto_edge_crop: error cropping image: {e}")
+            print(f"auto_edge_crop_from_geometry: error cropping image: {e}")
             cropped = image
-        print(f"auto_edge_crop: image edge mult {multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
+        print(f"auto_edge_crop_from_geometry: image edge mult {multiplier}, bbox dimensions:{bbox_dimensions}, cropped to ({left},{top}),({right},{bottom})")
         return cropped
 
     def expand_image_from_geometry(self, geometry, expand_size=None, face_height_output=None, bg_color=None, upscale_model=None):
@@ -2843,35 +3251,35 @@ class SortPose:
 
             if self.USE_INCREMENTAL_RESIZE:
                 resize_factor = math.ceil(face_height / self.resize_increment)
-                if self.VERBOSE: print("expand_image resize_factor", str(resize_factor))
+                if self.VERBOSE: print(f"[expand_image_from_geometry] self.resize_increment: {self.resize_increment}, face_height from geometry: {face_height} resize_factor", str(resize_factor))
                 face_incremental_output_size = resize_factor * self.resize_increment
-                if self.VERBOSE: print("expand_image face_incremental_output_size", str(face_incremental_output_size))
+                if self.VERBOSE: print("[expand_image_from_geometry] face_incremental_output_size", str(face_incremental_output_size))
                 resize = face_incremental_output_size / face_height
-                if self.VERBOSE: print("expand_image resize", str(resize))
+                if self.VERBOSE: print("[expand_image_from_geometry] resize", str(resize))
             else:
                 resize_factor = None
                 resize = face_height_output / face_height
                 face_incremental_output_size = None
-            if self.VERBOSE: print("expand_image resize", str(resize))
+            if self.VERBOSE: print("expand_image_from_geometry resize", str(resize))
 
             if resize >= 15:
-                if self.VERBOSE: print("expand_image [-]failed expand loop, with resize", str(resize), "too big, skipping")
+                if self.VERBOSE: print("expand_image_from_geometry [-]failed expand loop, with resize", str(resize), "too big, skipping")
                 return None, resize
 
             resize_dims = (int(image.shape[1] * resize), int(image.shape[0] * resize))
-            if self.VERBOSE: print("expand_image [-] resize", str(resize), "resize_dims", str(resize_dims))
+            if self.VERBOSE: print("expand_image_from_geometry [-] resize", str(resize), "resize_dims", str(resize_dims))
             resize_nose = (int(nose_2d[0] * resize), int(nose_2d[1] * resize))
-            if self.VERBOSE: print(f"expand_image [-] resize_factor {resize_factor} resize_dims {resize_dims}")
+            if self.VERBOSE: print(f"expand_image_from_geometry [-] resize_factor {resize_factor} resize_dims {resize_dims}")
 
             upsized_image = self._upsample_with_model(image, upscale_model)
             resized_image = cv2.resize(upsized_image, resize_dims)
-            print("expand_image [-] resized_image shape after upscale and resize:", resized_image.shape)
+            print("expand_image_from_geometry [-] resized_image shape after upscale and resize:", resized_image.shape)
 
             if face_incremental_output_size:
                 image_incremental_output_ratio = face_incremental_output_size / face_height_output
-                if self.VERBOSE: print("expand_image [-] face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", expand_size, face_incremental_output_size, face_height_output)
+                if self.VERBOSE: print("expand_image_from_geometry [-] face_incremental_output_size self.EXPAND_SIZE, face_incremental_output_size, self.face_height_output", expand_size, face_incremental_output_size, face_height_output)
                 this_expand_size = (int(expand_size[0] * image_incremental_output_ratio), int(expand_size[1] * image_incremental_output_ratio))
-                if self.VERBOSE: print("expand_image [-] this_expand_size", image_incremental_output_ratio, this_expand_size)
+                if self.VERBOSE: print("expand_image_from_geometry [-] this_expand_size", image_incremental_output_ratio, this_expand_size)
             else:
                 this_expand_size = (expand_size[0], expand_size[1])
 
@@ -2891,14 +3299,14 @@ class SortPose:
 
             border_list = [top_border, bottom_border, left_border, right_border]
             existing_list = [existing_pixels_above_nose, existing_pixels_below_nose, existing_pixels_left_of_nose, existing_pixels_right_of_nose]
-            if self.VERBOSE: print("expand_image [-] borders to expand to", border_list)
+            if self.VERBOSE: print("expand_image_from_geometry [-] borders to expand to", border_list)
             if self.VERBOSE: print("existing pixels", existing_list)
 
             expand_list = []
             crop_list = []
             if all(x >= 0 for x in border_list):
                 expand_list = border_list
-                if self.VERBOSE: print("expand_image [-] expand is good")
+                if self.VERBOSE: print("expand_image_from_geometry [-] expand is good")
             else:
                 for border in border_list:
                     if border > 0:
@@ -2920,19 +3328,19 @@ class SortPose:
                 None,
                 bg_color,
             )
-            if self.VERBOSE: print("expand_image [-] new_image shape after expanding:", new_image.shape)
+            if self.VERBOSE: print("expand_image_from_geometry [-] new_image shape after expanding:", new_image.shape)
             if any(x != 0 for x in crop_list):
-                if self.VERBOSE: print("expand_image [-]    some borders are negative, cropping")
+                if self.VERBOSE: print("expand_image_from_geometry [-]    some borders are negative, cropping")
                 crop_top = crop_list[0]
                 crop_bottom = crop_list[0] + this_expand_size[1]
                 crop_left = crop_list[2]
                 crop_right = crop_list[2] + this_expand_size[0]
-                if self.VERBOSE: print("expand_image [-] CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", crop_left, crop_right, crop_top, crop_bottom)
+                if self.VERBOSE: print("expand_image_from_geometry [-] CROP_LEFT, CROP_RIGHT, CROP_TOP, CROP_BOTTOM", crop_left, crop_right, crop_top, crop_bottom)
                 new_image = new_image[crop_top:crop_bottom, crop_left:crop_right]
-                if self.VERBOSE: print("expand_image [-] cropped image to", crop_list)
+                if self.VERBOSE: print("expand_image_from_geometry [-] cropped image to", crop_list)
             return new_image, resize
         except Exception as e:
-            print("not expand_image_from_geometry loop failed")
+            print("not expand_image_from_geometry_from_geometry loop failed")
             print('Error:', str(e))
             return None, None
 
@@ -3055,18 +3463,27 @@ class SortPose:
         self.get_image_face_data(image, faceLms, bbox)    
         print("expand_image just got self.face_height", str(self.face_height))
         try:
-            # print(type(self.image))
+            # print(f"canonical_1x1_export_dims: {self.canonical_1x1_export_dims}")
+            print(f"self.image_edge_multiplier {self.image_edge_multiplier}")
             borderType = cv2.BORDER_CONSTANT
 
 
             if self.USE_INCREMENTAL_RESIZE:
+                # face_height is actual height in px
+                # resize increment is ideal size 345px
                 # increment is for doing output for images, which means the different output sizes
-                resize_factor = math.ceil(self.face_height/self.resize_increment)
-                if self.VERBOSE: print("expand_image resize_factor", str(resize_factor))
-                face_incremental_output_size = resize_factor*self.resize_increment
-                if self.VERBOSE: print("expand_image face_incremental_output_size", str(face_incremental_output_size))
-                resize = face_incremental_output_size/self.face_height
-                if self.VERBOSE: print("expand_image resize", str(resize))
+                if bool(self.canonical_1x1_export_dims):
+                    print("expand_image [-] using canonical_1x1_export_dims", self.canonical_1x1_export_dims)
+                    resize = self.canonical_1x1_export_dims[1]/(self.face_height * (self.image_edge_multiplier[0] + self.image_edge_multiplier[2]))
+                    face_incremental_output_size = self.face_height * resize
+                    resize_factor = None
+                else:
+                    resize_factor = math.ceil(self.face_height/self.resize_increment)
+                    if self.VERBOSE: print("[expand_image] resize_factor", str(resize_factor))
+                    face_incremental_output_size = resize_factor*self.resize_increment
+                    if self.VERBOSE: print("[expand_image] face_incremental_output_size", str(face_incremental_output_size))
+                    resize = face_incremental_output_size/self.face_height
+                    if self.VERBOSE: print("[expand_image] resize", str(resize))
             else:
                 # scale image to match face heights
                 resize_factor = None

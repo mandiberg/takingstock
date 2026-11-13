@@ -4518,8 +4518,14 @@ class ToolsClustering:
         min_bucket_size=20,
         min_gap_ratio=0.35,
         cluster_label=None,
+        presence_min_pct=None,
     ):
         """
+        If presence_min_pct is set, a first-stage test runs before the valley test: when both the legless
+        rows (visible_leg_count == 0) and the leg-visible rows are each >= presence_min_pct of the cluster
+        and >= min_bucket_size rows, the cluster is separable with split_mode='presence'
+        (labels from label_by_leg_presence).
+
         Gap-based heuristic: does this cluster contain two visually distinct
         leg configurations (e.g. seated vs. standing) that should be split?
 
@@ -4549,6 +4555,7 @@ class ToolsClustering:
             "gap_ratio": None,
             "low_bucket_size": None,
             "high_bucket_size": None,
+            "split_mode": None,
         }
 
         required_cols = {"visible_leg_count", "leg_extension_max"}
@@ -4561,6 +4568,23 @@ class ToolsClustering:
         visible_pct = (visible_rows / total_rows) * 100.0
         result["visible_leg_rows"] = visible_rows
         result["visible_leg_pct"] = round(visible_pct, 2)
+
+        if presence_min_pct is not None:
+            legless_rows = total_rows - visible_rows
+            legless_pct = 100.0 - visible_pct
+            if (
+                visible_rows >= min_bucket_size and legless_rows >= min_bucket_size
+                and visible_pct >= presence_min_pct and legless_pct >= presence_min_pct
+            ):
+                result["is_separable"] = True
+                result["split_mode"] = "presence"
+                result["low_bucket_size"] = legless_rows
+                result["high_bucket_size"] = visible_rows
+                result["reason"] = (
+                    f"leg presence split: {legless_rows} legless ({legless_pct:.1f}%) vs "
+                    f"{visible_rows} leg-visible ({visible_pct:.1f}%)"
+                )
+                return result
 
         if visible_pct < floor_pct:
             result["reason"] = f"visible_leg_pct {visible_pct:.1f}% below floor {floor_pct}%"
@@ -4700,6 +4724,11 @@ class ToolsClustering:
 
         modal_leg_length = float(np.median(values.to_numpy(dtype=float)))
         return int(math.ceil(modal_leg_length))
+
+    def label_by_leg_presence(self, df):
+        """'not_visible' (no leg landmarks) vs 'legs_visible', aligned to df.index."""
+        visible = pd.to_numeric(df["visible_leg_count"], errors="coerce").fillna(0) > 0
+        return pd.Series(np.where(visible, "legs_visible", "not_visible"), index=df.index)
 
     def label_by_leg_pose(self, df, boundary, asymmetry_threshold=0.15):
         """
