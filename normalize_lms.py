@@ -41,7 +41,7 @@ IS_SSD = False
 SSD_PATH = "/Volumes/OWC5/segment_images_newbig"
 
 ### this code is set up you can only REPROCESS_HANDS OR USE_OBJ in one run ###
-USE_OBJ = False # do objet detections?
+USE_OBJ = True # do objet detections?
 HANDS_OR_BODY = "body" # "body" or "hands"
 
 if USE_OBJ: 
@@ -113,8 +113,8 @@ if class_token:
     # SORT_TYPE = "obj_bbox_fusion"
 else: 
     # overrides THIS_CLASS_ID
-    SegmentHelper_name = 'SegmentHelper_TheGym'
-    # SegmentHelper_name = "SegmentBig_isface"
+    # SegmentHelper_name = 'SegmentHelper_TheGym'
+    SegmentHelper_name = "SegmentBig_isface"
     # SegmentFolder = SSD_PATH
     SegmentFolder = None
     # SegmentHelper_name = 'SegmentHelper_T11_Oct20_COCO_Custom'

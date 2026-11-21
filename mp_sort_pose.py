@@ -3472,7 +3472,7 @@ class SortPose:
                 # face_height is actual height in px
                 # resize increment is ideal size 345px
                 # increment is for doing output for images, which means the different output sizes
-                if bool(self.canonical_1x1_export_dims):
+                if self.canonical_1x1_export_dims and all(self.canonical_1x1_export_dims):
                     print("expand_image [-] using canonical_1x1_export_dims", self.canonical_1x1_export_dims)
                     resize = self.canonical_1x1_export_dims[1]/(self.face_height * (self.image_edge_multiplier[0] + self.image_edge_multiplier[2]))
                     face_incremental_output_size = self.face_height * resize

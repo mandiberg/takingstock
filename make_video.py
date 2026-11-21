@@ -86,7 +86,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 20  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -125,10 +125,10 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_ARMS_Thoma_Nov5"
-### >>> go check FULL_BODY_SWITCH, INCLUDE_LEG_POSE_FEATURES, /data manifest,  multiplier, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
-
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_Thoma_Nov2" # canonical full_body goes here, so I don't reuse for ARMS
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_ARMS_Thoma_1x1"
+### >>> go check FULL_BODY_SWITCH, 1x1, /data manifest,  multiplier, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
+# if full body, INCLUDE_LEG_POSE_FEATURES is overriden below and turned off
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_None" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -211,6 +211,7 @@ MULTIPOLICY = False
 
 # CONTROL LEG STUFF FOR ARMS CLUSTERS
 INCLUDE_LEG_POSE_FEATURES = True  # join LocationHandsFeet for leg-shape cluster separability testing
+                                    # turns off if full body is true
 LEG_POSE_FLOOR_PCT = 5.0             # minimum visible-leg percentage required before split test
 LEG_POSE_MIN_BUCKET_SIZE = 20        # minimum rows required on each side of the candidate valley
 LEG_POSE_MIN_GAP_RATIO = 0.35        # valley-to-peak ratio for a real split; not a literal empty-gap width
@@ -236,7 +237,8 @@ CANONICAL_MULT_1x1_GRID_MODE = "1x1_vertical"  # when not None, every image uses
 CANONICAL_MULT_FALLBACKS = {
     "1x1_horizontal": resolve_multiplier("9x16_regular_miami"),
     "1x1_square":     resolve_multiplier("sq_medium"),
-    "1x1_vertical":   resolve_multiplier("16x9_portrait_torso"),
+    "1x1_vertical":   resolve_multiplier("16x9_portrait_torso"), # use this for arms
+    # "1x1_vertical":   resolve_multiplier("16x9_fullbody"), # use this for full_body
 }
 canonical_1x1_fallback_pairs = set()  # populated by _mode1_set_multiplier; written to CSV at end of run
 GRID_MODE_DIMS = {
@@ -364,6 +366,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     if FULL_BODY: 
         matrix_family = "BodyPoses3D" 
         MULTIPLIER_PADDING = MULTIPLIER_PADDING+.5 # if body, add to the padding
+        INCLUDE_LEG_POSE_FEATURES = False # override for body to turn this off
     else: 
         matrix_family = "ArmsPoses3D"
 
@@ -482,8 +485,8 @@ elif CURRENT_MODE == 'heft_torso_keywords':
             FORCE_CANONICAL_MULT_CREATION = True # GENERATE_FUSION_PAIRS = False disables canonical creation. this turns it back on. 
             RECALCULATE_CANONICALS = True # When this is True, and FORCE_CANONICAL_MULT_CREATION is true it ignores existing canonicals and recalcs and overwrites them
             USE_BIIIIIG_FULL_BODY_MULTIPLIER = False # this is an override to force consistent very large expansions for making prints. it conflicts with FORCE_CANONICAL_MULT_CREATION
-            BIIIIIG_FULL_BODY_MULTIPLIER = [8, 11, 14, 11] # for mural prints
-            # BIIIIIG_FULL_BODY_MULTIPLIER = [4, 6, 12, 6] # for life-sized prints
+            # BIIIIIG_FULL_BODY_MULTIPLIER = [8, 11, 14, 11] # for mural prints
+            BIIIIIG_FULL_BODY_MULTIPLIER = [4, 6, 12, 6] # for life-sized prints
 
             # # temp hack for T45 Nature
             # USE_POSE_CROP_DICT = True # override canonical multipliers for production
@@ -1303,6 +1306,7 @@ if not (io.IS_TENCH or io.IS_MICHELLE):
         c_id = Column(Integer)
         p_id = Column(Integer)
         looping_only = Column(Boolean)
+        is_good = Column(Boolean)
 
     # not currently in use
     if IS_HAND_POSE_FUSION and CLUSTER2:
@@ -2514,7 +2518,7 @@ def generate_cropped_image(img, context):
             if cropped_image is None:
                 return None, "failed"
             if FULL_BODY or AUTO_EDGE_CROP:
-                print('running AUTO_EDGE_CROP')
+                print(f'[generate_cropped_image] use_pure_geometry: running AUTO_EDGE_CROP because FULL_BODY {FULL_BODY} or AUTO_EDGE_CROP {AUTO_EDGE_CROP} is True')
                 cropped_image = sort.auto_edge_crop_from_geometry(
                     bbox,
                     cropped_image,
@@ -2544,7 +2548,7 @@ def generate_cropped_image(img, context):
         if cropped_image is None:
             return None, "failed"
         if FULL_BODY or AUTO_EDGE_CROP:
-            print('running AUTO_EDGE_CROP')
+            print(f'[generate_cropped_image] if sort.EXPAND: running AUTO_EDGE_CROP because FULL_BODY {FULL_BODY} or AUTO_EDGE_CROP {AUTO_EDGE_CROP} is True')
             cropped_image = sort.auto_edge_crop(bbox, cropped_image, resize)
         else:
             # crop the expanded image back down based on incremental dimensions

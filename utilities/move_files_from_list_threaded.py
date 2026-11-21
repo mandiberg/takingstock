@@ -56,7 +56,7 @@ io = DataIO(IS_SSD, VERBOSE, ORIGIN_SSD)
 
 CSV_FOLDER = os.path.join(io.ROOT_DBx, "NML_transition")
 # CSV_FOLDER = "/Users/michaelmandiberg/Documents/takingstock_production/moving_objects_to_SSDs/move_this" # for testing
-CSV_FOLDER = "/Volumes/LaCie/output_folder/_BODY_Thoma_Nov2"
+CSV_FOLDER = "/Volumes/LaCie/output_folder/move"
 USE_DF_SORTED = True  # if True it will use the df_sorted format from make_video.py, false expects output from SQL query above
 USE_RAW_PATHS = False # this skips the site_name_id and joins the ORIGIN to the filename in the CSV directly
 USE_HASH_FOLDERS = True  # if True it will create hash folders in the destination folder
@@ -73,7 +73,7 @@ ORIGIN = "segment_images_COCO" # if USE_RAW_PATHS this needs to be path to segme
 # DEST = os.path.join(io.ROOT_DBx, "NMLdeshard")
 # DEST = "/Volumes/RAID18" 
 # DEST = "/Volumes/OWC5/segment_images_newbigx"  # for testing
-DEST = "/Volumes/LaCie/output_folder_nov7"  # for testing
+DEST = "/Volumes/LaCie/output_folder_gym_nov7_2026"  # for testing
 # DEST = "/Volumes/LaCie/segment_images"  # 250k for headphones
 # DEST = "/Volumes/SSD4_Green/segment_images_67_phone_undetected"  # for testing
 if IS_TEST:

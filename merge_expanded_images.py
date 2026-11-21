@@ -3,6 +3,7 @@ import cv2
 import os
 import random
 import json
+import tempfile
 import numpy as np
 import pandas as pd
 
@@ -20,7 +21,7 @@ io = DataIO()
 db = io.db
 
 MODES = ["merge_images_paris_photo", "merge_images_body_autocrop", "make_video", "make_video_smooth_osc", "make_video_smooth_linear"]
-MODE_CHOICE = 1
+MODE_CHOICE = 3
 CURRENT_MODE = MODES[MODE_CHOICE]
 
 DEBUG = False
@@ -28,13 +29,13 @@ SHOW_BLEND_POSITION = False # this draws image i count on the frame
 
 # Provide the path to the folder containing the images
 ROOT_FOLDER_PATH = '/Volumes/LaCie/'
-# ROOT_FOLDER_PATH = '/Volumes/LaCie/segment_images_theoffice'
+# ROOT_FOLDER_PATH = '/Volumes/OWC4'
 # ROOT_FOLDER_PATH = '/Users/michaelmandiberg/Documents/projects-active/facemap_production/'
 # if IS_CLUSTER this should be the folder holding all the cluster folders
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
-FOLDER_NAME = "segment_images/test"
-# FOLDER_NAME = "output_folder/_ARMS_Thoma_Nov5v2"
+# FOLDER_NAME = "2026_November_print_production/sports"
+FOLDER_NAME = "output_folder/_ARMS_Thoma_1x1_vt"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -43,10 +44,15 @@ if io.IS_TENCH:
 
 # iterate through folders? 
 IS_CLUSTER = True
-PARALLEL_MERGE_WORKERS = 10  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+PARALLEL_MERGE_WORKERS = 20  # set > 1 to parallelize per-subfolder work with multiprocessing.Pool
+STILL_MERGE_MAX_IMAGES = 64
+# Stills retain the legacy pairwise behavior: unpaired images are dropped at each
+# round, so only the largest power-of-two prefix contributes to the final image.
+# Intermediates are uncompressed; allow space for up to six full-size images per worker.
+STILL_MERGE_TEMP_DIR = None  # None uses the system temporary directory
 
 # if None, won't crop. else if int, will crop output to that count
-CROP_AFTER_COUNT = 80
+CROP_AFTER_COUNT = None
 
 # minimum-image cutoff. Set to None or 0 to disable entirely.
 # This applies to the actual mp4 build, not the GIF preview export path.
@@ -177,7 +183,7 @@ SAVE_METAS_AUDIO = False
 SAVE_INSTALLATION_METAS = True
 BUILD_WITH_AUDIO = False
 ALL_ONE_VIDEO = False
-USE_CURRENT_DIMS = False # don't do any scaling
+USE_CURRENT_DIMS = True # don't do any scaling
 LOWEST_DIMS = True # make this False if assembling big images eg full body # False if doing Paris Photo faces
 FULLBODY = True # this is for full body images, will change GIGA_DIMS to FULLBODY_DIMS
 SORT_ORDER = "Chronological"
@@ -546,7 +552,7 @@ def crop_scale_canonical(img1, ratios_table=None, limit=None):
 
     return img1
 
-def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
+def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None, reuse_first=False):
 
     def handle_giga_dims(img1, output_dims=None):
         # Always resize img1 to GIGA_DIMS
@@ -554,7 +560,8 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
             print("resizing to output_dims", output_dims)
             output_height, output_width = output_dims
             # need to flip these for cv2
-            img1 = cv2.resize(img1, (output_width, output_height), interpolation=cv2.INTER_AREA)
+            if img1.shape[:2] != (output_height, output_width):
+                img1 = cv2.resize(img1, (output_width, output_height), interpolation=cv2.INTER_AREA)
             print("img1.shape after resize to output_dims", img1.shape)
         elif img1.shape[0] > TEST_DIMS[0] or img1.shape[1] > TEST_DIMS[1]:
             # if VERBOSE: print("image shape >", img1.shape, image_files[i])
@@ -574,7 +581,8 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
             print("handle_canonical_dims: output_dims provided, resizing directly to", output_dims)
             output_height, output_width = output_dims
             # need to flip these for cv2
-            img1 = cv2.resize(img1, (output_width, output_height), interpolation=cv2.INTER_AREA)
+            if img1.shape[:2] != (output_height, output_width):
+                img1 = cv2.resize(img1, (output_width, output_height), interpolation=cv2.INTER_AREA)
             print("handle_canonical_dims: img shape after resize to output_dims", img1.shape)
         else:
             print("handle_canonical_dims: no output_dims, delegating to crop_scale_canonical")
@@ -620,12 +628,12 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
             print(i, img1.shape, img2.shape)
 
             # Merge the pair of images 50/50
-            try:
+            if reuse_first and img1.flags.c_contiguous and img1.flags.writeable:
+                blend = cv2.addWeighted(img1, 0.5, img2, 0.5, 0.0, dst=img1)
+            else:
                 blend = cv2.addWeighted(img1, 0.5, img2, 0.5, 0.0)
-                merged_pairs.append(blend)
-                successes += 1
-            except:
-                print("failed to merge", image_files[i], image_files[i+1])
+            merged_pairs.append(blend)
+            successes += 1
         else:
             if IS_VIDEO and IS_VIDEO_MERGE:
                 merged_pairs.append(img1)
@@ -638,15 +646,60 @@ def iterate_image_list(FOLDER_PATH,image_files, successes, output_dims=None):
     # quit()
     return merged_pairs, successes
 
+def merge_still_streaming(image_paths, folder_path, output_dims=None):
+    """Reproduce the pairwise still merge while keeping intermediate images on disk."""
+    pending = {}
+    successes = 0
+    readable_count = 0
+    reference_shape = None
+
+    with tempfile.TemporaryDirectory(prefix="takingstock-merge-", dir=STILL_MERGE_TEMP_DIR) as temp_dir:
+        print(f"Still merge temporary files: {temp_dir}")
+        for image_path in image_paths[:STILL_MERGE_MAX_IMAGES]:
+            path = os.path.join(folder_path, image_path)
+            image = safe_imread(path)
+            if image is None:
+                print(f"Skipping unreadable image: {path}")
+                continue
+            readable_count += 1
+            if reference_shape is None:
+                reference_shape = image.shape
+            elif image.shape != reference_shape:
+                image = cv2.resize(image, (reference_shape[1], reference_shape[0]), interpolation=cv2.INTER_AREA)
+
+            level = 0
+            while level in pending:
+                previous_path = pending.pop(level)
+                previous = np.load(previous_path, allow_pickle=False)
+                os.remove(previous_path)
+                merged, successes = iterate_image_list(
+                    folder_path, [previous, image], successes, output_dims, reuse_first=True
+                )
+                image = merged[0]
+                del previous, merged
+                level += 1
+            temp_path = os.path.join(temp_dir, f"level-{level}.npy")
+            np.save(temp_path, image, allow_pickle=False)
+            del image
+            pending[level] = temp_path
+
+        if readable_count < 2:
+            print("Fewer than two readable images; no still merge was produced")
+            return None, 0, readable_count
+        if CUTOFF_THRESHOLD not in (None, 0, False) and readable_count < int(CUTOFF_THRESHOLD) and USE_THRESHOLD_FOR_IMAGES:
+            print(f"still cutoff threshold enabled: {readable_count} readable images < {CUTOFF_THRESHOLD}; skipping this folder")
+            return None, 0, readable_count
+
+        # The old rounds discard an unpaired image at every level. The highest
+        # completed level is therefore the same power-of-two prefix.
+        final_path = pending[max(pending)]
+        return np.load(final_path, allow_pickle=False), successes, readable_count
+
 def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
     global None_counter
     print("merging images, this many images_to_build", len(images_to_build))
     if len(images_to_build) % 2 != 0:
         print("odd number of images, skipping last image")
-    if CUTOFF_THRESHOLD not in (None, 0, False) and len(images_to_build) < int(CUTOFF_THRESHOLD) and USE_THRESHOLD_FOR_IMAGES:
-        print(f"still cutoff threshold enabled: len(img_array)={len(images_to_build)} < CUTOFF_THRESHOLD={CUTOFF_THRESHOLD}; skipping this folder")
-        return
-    
     cluster_no = handpose_no = background_hsv_no = object_hsv_no = topic_no = None
     successes = 0
     if len(images_to_build) > 1:
@@ -698,22 +751,10 @@ def merge_images(images_to_build, FOLDER_PATH, output_dims=None):
                 "topic_no", topic_no,
             )
                 
-        count = len(images_to_build)
-        print("about to iterate_image_list with ", len(images_to_build), "images")
-        if len(images_to_build) == 0: 
-            print("no images to build")
-            return None, 0, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no
-        merged_pairs, successes = iterate_image_list(FOLDER_PATH,images_to_build,successes, output_dims)
-        if merged_pairs is not None and len(merged_pairs) > 0: 
-            print("len merged pairs are", len(merged_pairs))
-            # Continue merging until there is only one merged image left
-            while len(merged_pairs) >= 2:
-                merged_pairs, successes = iterate_image_list(FOLDER_PATH,merged_pairs,successes, output_dims)
-
-            final_merged = merged_pairs[0]
-        else:
-            print("no merged pairs found")
-            final_merged = None
+        if len(images_to_build) > STILL_MERGE_MAX_IMAGES:
+            print(f"Limiting still merge to the first {STILL_MERGE_MAX_IMAGES} images")
+        final_merged, successes, readable_count = merge_still_streaming(images_to_build, FOLDER_PATH, output_dims)
+        print(f"Processed {readable_count} readable images in {successes} pairwise merges")
         return final_merged, successes, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no
     else:
         return None, 0, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no
@@ -736,7 +777,8 @@ def save_merge(merged_image, count, cluster_no, handpose_no, background_hsv_no, 
     else:
         savename = 'merged_image'+str(count)+'.jpg'
     output_path = os.path.join(FOLDER_PATH, savename)
-    cv2.imwrite(output_path, merged_image)
+    if not cv2.imwrite(output_path, merged_image):
+        raise OSError(f"Could not save merged image: {output_path}")
 
     print('Merged image/video saved successfully here', output_path)
 
@@ -2316,6 +2358,21 @@ def write_video(img_array, subfolder_path=None):
     return video_path
 
 
+def safe_imread(image_path):
+    """Read an image, falling back to imdecode for edge-case paths/codecs."""
+    img = cv2.imread(image_path)
+    if img is not None:
+        return img
+    try:
+        data = np.fromfile(image_path, dtype=np.uint8)
+    except OSError as exc:
+        print(f"Could not read image {image_path}: {exc}")
+        return None
+    if data.size == 0:
+        return None
+    return cv2.imdecode(data, cv2.IMREAD_COLOR)
+
+
 def load_images(image_list, subfolder_path=None):
     """
     Load and merge a list of images using cv2.addWeighted
@@ -2329,19 +2386,6 @@ def load_images(image_list, subfolder_path=None):
     """
     if len(image_list) == 0:
         raise ValueError("Empty image list provided")
-
-    def safe_imread(image_path):
-        """Read image with cv2, then fall back to imdecode for edge-case paths/codecs."""
-        img = cv2.imread(image_path)
-        if img is not None:
-            return img
-        try:
-            data = np.fromfile(image_path, dtype=np.uint8)
-            if data.size == 0:
-                return None
-            return cv2.imdecode(data, cv2.IMREAD_COLOR)
-        except Exception:
-            return None
 
     def construct_image_path(subfolder_path, image_list, index):
         # Load the image at the specified index
@@ -2637,13 +2681,15 @@ def _still_merge_worker(subfolder_path: str) -> dict:
     """Pool worker: merge images into a single still from one subfolder."""
     try:
         all_img_path_list = get_cluster_input_paths(subfolder_path, FORCE_LS)
+        if len(all_img_path_list) > STILL_MERGE_MAX_IMAGES:
+            print(f"Limiting still merge to the first {STILL_MERGE_MAX_IMAGES} images")
+            all_img_path_list = all_img_path_list[:STILL_MERGE_MAX_IMAGES]
         output_dims = get_median_image_dimensions(all_img_path_list, subfolder_path)
         if output_dims is None:
             print(f"no output_dims found, skipping {subfolder_path}")
             return {"subfolder": subfolder_path, "success": False, "error": "no output_dims"}
-        images_to_build = load_images(all_img_path_list, subfolder_path)
         merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no = merge_images(
-            images_to_build, subfolder_path, output_dims
+            all_img_path_list, subfolder_path, output_dims
         )
         if count == 0:
             print(f"no images in {subfolder_path}")
@@ -2715,9 +2761,10 @@ def main():
             write_video(all_img_path_list, FOLDER_PATH)
         else:
             print("going to merge images to make still")
-            images_to_build = load_images(all_img_path_list, FOLDER_PATH)
-            print("len images_to_build", len(images_to_build))
-            merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no = merge_images(images_to_build, FOLDER_PATH)
+            merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no = merge_images(all_img_path_list, FOLDER_PATH)
+            if merged_image is None:
+                print("No still merge was produced")
+                return
             save_merge(merged_image, count, cluster_no, handpose_no, background_hsv_no, object_hsv_no, topic_no, FOLDER_PATH)
 
 
@@ -2726,10 +2773,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-
 
 
 

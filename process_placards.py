@@ -460,6 +460,29 @@ def assign_hsv_detect_results(detect_results, image):
     return detect_results
 
 
+def filter_invalid_detection_bboxes(detections, image, image_id):
+    valid_detections = []
+    rejected_count = 0
+    for detection in detections:
+        # Class 0 is intentionally discarded by merge_yolo_detections.
+        if detection['class_id'] == 0:
+            valid_detections.append(detection)
+            continue
+        bbox = _normalize_bbox_for_image(detection['bbox'], image)
+        if bbox is None:
+            rejected_count += 1
+            print(
+                f"Image {image_id} - Warning: skipping invalid or empty detection bbox "
+                f"for class_id {detection['class_id']}, obj_no {detection['obj_no']}: "
+                f"{detection['bbox']}"
+            )
+            continue
+        normalized_detection = detection.copy()
+        normalized_detection['bbox'] = json.dumps(bbox)
+        valid_detections.append(normalized_detection)
+    return valid_detections, rejected_count
+
+
 def _build_final_detection_keys(detections_list):
     """Mirror save_obj_bbox key assignment: obj_no is re-numbered per class starting at 1."""
     detections_by_class = {}
@@ -548,12 +571,16 @@ def do_yolo_detections(result, image, image_path, existing_detections, custom=Fa
     if VERBOSE: print(f"Image {image_id} - Unrefined YOLO detections: {unrefined_detect_results}")
     if custom:
         unrefined_detect_results = yolo.map_custom_ids_to_global(unrefined_detect_results, custom_ids_to_global_dict)
-    detect_results = yolo.merge_yolo_detections(unrefined_detect_results, iou_threshold=IOU_THRESHOLD, adjacency_threshold_px=ADJACENCY_THRESHOLD_PX)
+    valid_detections, rejected_count = filter_invalid_detection_bboxes(unrefined_detect_results, image, image_id)
+    detect_results = yolo.merge_yolo_detections(valid_detections, iou_threshold=IOU_THRESHOLD, adjacency_threshold_px=ADJACENCY_THRESHOLD_PX)
     detect_results = assign_hsv_detect_results(detect_results, image)
     if VERBOSE: print(f"Image {image_id} - YOLO detections: {detect_results}")
     class_ids = [det.get('class_id') for det in detect_results if det.get('class_id') is not None]
     if bool(class_ids):
         print(f" ☑️ Image {image_id} class_ids: {class_ids}")
+    if not detect_results and rejected_count:
+        print(f"Image {image_id} - No valid detections remain after rejecting {rejected_count} invalid bbox(es); not recording no-detections.")
+        return detect_results
     # save_debug_image_yolo_bbox(image_id, imagename, image, detect_results)
     if DEBUGGING:
         yolo.save_debug_image_yolo_bbox(image_id, imagename, image, detect_results, image_path, 
@@ -1052,7 +1079,7 @@ def _normalize_bbox_for_image(raw_bbox, image):
         top = max(0, min(h, int(round(float(bbox["top"])))) )
         right = max(0, min(w, int(round(float(bbox["right"])))) )
         bottom = max(0, min(h, int(round(float(bbox["bottom"])))) )
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
     if right <= left or bottom <= top:

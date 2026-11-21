@@ -2,10 +2,10 @@ import os
 import shutil
 
 # folder to ls to get the UIDs for files to move
-GOOD_IMAGES = "/Users/michaelmandiberg/Documents/yolo/remove_these"
+GOOD_IMAGES = "/Volumes/RAID18/_finished_work/_FINISHED_WORK_THEOFFICE_LOOPING/T37_final_looping_video_source_files"
 # folder to move files in - should point to specific images or labels folder
-FOLDER = "/Users/michaelmandiberg/Documents/yolo/Final_Batch/images"
-FOLDER = "/Users/michaelmandiberg/Documents/yolo/Final_Batch/labels"
+FOLDER = "/Users/michaelmandiberg/Documents/yolo/Final_Batch/imagesNULL"
+FOLDER = "/Users/michaelmandiberg/Documents/yolo/Final_Batch/labelsNULL"
 NESTED_FOLDERS = False  
 ACCEPT_TEXT = True
 UNIFY_FOLDERS = True
