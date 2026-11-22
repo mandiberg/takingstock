@@ -125,10 +125,10 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_ARMS_Thoma_1x1"
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_Thoma"
 ### >>> go check FULL_BODY_SWITCH, 1x1, /data manifest,  multiplier, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 # if full body, INCLUDE_LEG_POSE_FEATURES is overriden below and turned off
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_None" # canonical full_body goes here, so I don't reuse for ARMS
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_Thoma" # canonical full_body goes here, so I don't reuse for ARMS
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -137,6 +137,13 @@ ENABLE_MODE0_TIMING = True
 ENABLE_MODE1_TIMING = True
 MODE0_WRITE_TYPED_INTERMEDIATE = True
 MODE0_WRITE_CSV_FALLBACK = True
+
+# MODE0 adaptive stop: compare each run against its own early-sequence median.
+MODE0_RELATIVE_DISTANCE_CUTOFF_ENABLED = True
+MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS = 3
+MODE0_RELATIVE_DISTANCE_RATIO = 2.1 # threshold for stopping early if there more than MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS greater than this cluster specific standardized deviation
+MODE0_RELATIVE_DISTANCE_BASELINE_FRACTION = 0.25 # this is the pct of the data that forms the baseline for the median distance calculation. 0.25 means the first 25% of the sequence is used to calculate the median distance, which is then multiplied by MODE0_RELATIVE_DISTANCE_RATIO to determine the cutoff for early stopping.
+MODE0_RELATIVE_DISTANCE_MIN_FRACTION = 0.70 # doesn't consider anything before this point as a potential cut off
 MODE1_USE_TYPED_INTERMEDIATE = True
 MODE1_TYPED_STRICT = False
 # Hard cap for MODE 1 assembly rows per CSV.
@@ -233,7 +240,7 @@ LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
 MODE1_MAX_ROWS_PER_CLUSTER = None # if None, no cap; otherwise process at most this many rows per cluster
 MODE1_MIN_CLUSTER_ROWS = 50 # skip any cluster if there are less than this number of rows
 CROP_MULTIPLIER = 5
-CANONICAL_MULT_1x1_GRID_MODE = "1x1_vertical"  # when not None, every image uses CANONICAL_MULT_FALLBACKS[this value] as its multiplier; None disables
+CANONICAL_MULT_1x1_GRID_MODE = None  # when not None, every image uses CANONICAL_MULT_FALLBACKS[this value] as its multiplier; None disables
 CANONICAL_MULT_FALLBACKS = {
     "1x1_horizontal": resolve_multiplier("9x16_regular_miami"),
     "1x1_square":     resolve_multiplier("sq_medium"),
@@ -362,7 +369,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    FULL_BODY = False # FULL_BODY_SWITCH
+    FULL_BODY = True # FULL_BODY_SWITCH
     if FULL_BODY: 
         matrix_family = "BodyPoses3D" 
         MULTIPLIER_PADDING = MULTIPLIER_PADDING+.5 # if body, add to the padding
@@ -1900,6 +1907,57 @@ def expand_vector_column(df, vector_col="face_encodings68", prefix="enc", expect
         )
     return vector_df
 
+def apply_mode0_relative_distance_cutoff(df_sorted, df_enc, output_cols):
+    """Trim a MODE0 sequence once distance remains above its run-relative baseline."""
+    if not MODE0_RELATIVE_DISTANCE_CUTOFF_ENABLED or df_sorted.empty:
+        return df_sorted, False, None
+    if output_cols is None or output_cols not in df_sorted.columns:
+        return df_sorted, False, None
+
+    total_count = len(df_sorted.index) + len(df_enc.index)
+    if total_count < 10:
+        return df_sorted, False, None
+
+    baseline_count = max(
+        10,
+        min(100, int(math.ceil(total_count * MODE0_RELATIVE_DISTANCE_BASELINE_FRACTION))),
+    )
+    if len(df_sorted.index) < baseline_count + MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS:
+        return df_sorted, False, None
+
+    distances = pd.to_numeric(df_sorted[output_cols], errors="coerce")
+    baseline = distances.iloc[:baseline_count].dropna()
+    if len(baseline.index) < max(5, baseline_count // 2):
+        return df_sorted, False, None
+
+    baseline_median = float(baseline.median())
+    if not math.isfinite(baseline_median) or baseline_median <= 0:
+        return df_sorted, False, None
+
+    search_start = max(
+        baseline_count,
+        int(math.ceil(total_count * MODE0_RELATIVE_DISTANCE_MIN_FRACTION)),
+    )
+    cutoff_index = None
+    for start in range(search_start, len(df_sorted.index) - MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS + 1):
+        sustained = distances.iloc[start:start + MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS]
+        if sustained.notna().all() and bool((sustained / baseline_median >= MODE0_RELATIVE_DISTANCE_RATIO).all()):
+            cutoff_index = start
+            break
+
+    if cutoff_index is None:
+        return df_sorted, False, baseline_median
+
+    print(
+        "[MODE0 RELATIVE CUTOFF] "
+        f"trimmed at row {cutoff_index}/{total_count}; "
+        f"baseline_median={baseline_median:.4f}; "
+        f"ratio={MODE0_RELATIVE_DISTANCE_RATIO:.2f}; "
+        f"sustained_rows={MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS}"
+    )
+    return df_sorted.iloc[:cutoff_index].reset_index(drop=True), True, baseline_median
+
+
 def get_closest_knn_or_break(df_enc, df_sorted):
     # send in both dfs, and return same dfs with 1+ rows sorted
     print(" -- BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
@@ -1911,6 +1969,14 @@ def get_closest_knn_or_break(df_enc, df_sorted):
     print(" -- AFTER sort_by_face_dist_NN _ for loop df_sorted is", len(df_sorted))
     print(" AFTER, df_enc cols are", df_enc.columns.tolist())
     print(" AFTER, df_sorted cols are", df_sorted.columns.tolist())
+
+    df_sorted, relative_cutoff_reached, baseline_median = apply_mode0_relative_distance_cutoff(
+        df_sorted,
+        df_enc,
+        output_cols,
+    )
+    if relative_cutoff_reached:
+        return df_enc, df_sorted, True, output_cols
 
     # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
     # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]

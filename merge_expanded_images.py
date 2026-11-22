@@ -35,7 +35,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "2026_November_print_production/sports"
-FOLDER_NAME = "output_folder/_ARMS_Thoma_1x1_vt"
+FOLDER_NAME = "output_folder/_ARMS_Thoma_cutoffdebug2.2_4"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -2092,7 +2092,9 @@ def write_video(img_array, subfolder_path=None):
     if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}_fr{len(images_to_build)}"
     else: merge_info = ""
     scale_info = f"_scale_{VID_DIMS_TEST[0]}" if USE_CANONICAL_RATIOS else ""
-    video_path = os.path.join(FOLDER_PATH, FOLDER_NAME.replace("/","_")+cluster_no+merge_info+scale_info+".mp4")
+    cluster_info = os.path.basename(FOLDER_NAME).replace("_","")
+    cluster_info = re.sub(r"_\d+\.\d+$", "", cluster_info)
+    video_path = os.path.join(FOLDER_PATH, cluster_info+cluster_no+merge_info+scale_info+".mp4")
     print("video_path", video_path)
 
     if GIF_SO_SKIP_VIDEO:
