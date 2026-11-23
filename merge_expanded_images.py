@@ -35,7 +35,7 @@ ROOT_FOLDER_PATH = '/Volumes/LaCie/'
 # if not, this should be the individual folder holding the images
 # will not accept clusterNone -- change to cluster00
 # FOLDER_NAME = "2026_November_print_production/sports"
-FOLDER_NAME = "output_folder/_ARMS_Thoma_cutoffdebug2.2_4"
+FOLDER_NAME = "output_folder/_BODY_Thoma"
 
 # FOLDER_NAME = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/_TheOffice_BaselInstall_archival/"
 if io.IS_TENCH:
@@ -2003,6 +2003,10 @@ def build_cycle_lengths(image_count, target_period):
 
     return lengths
 
+def _video_cluster_token(cluster_no):
+    return re.sub(r"_\d+\.\d+$", "", str(cluster_no).replace("clustercc", "c"))
+
+
 def write_video(img_array, subfolder_path=None):
     global last_image_written
     global first_image_written
@@ -2092,9 +2096,10 @@ def write_video(img_array, subfolder_path=None):
     if IS_VIDEO_MERGE: merge_info = f"_p{period}_st{START_MERGE}_ct{MERGE_COUNT}_fr{len(images_to_build)}"
     else: merge_info = ""
     scale_info = f"_scale_{VID_DIMS_TEST[0]}" if USE_CANONICAL_RATIOS else ""
-    cluster_info = os.path.basename(FOLDER_NAME).replace("_","")
-    cluster_info = re.sub(r"_\d+\.\d+$", "", cluster_info)
-    video_path = os.path.join(FOLDER_PATH, cluster_info+cluster_no+merge_info+scale_info+".mp4")
+    cluster_info = os.path.basename(FOLDER_NAME).removeprefix("_")
+    cluster_no = _video_cluster_token(cluster_no)
+    print(f"cluster_info: {cluster_no}")
+    video_path = os.path.join(FOLDER_PATH, cluster_info+"_"+cluster_no+merge_info+scale_info+".mp4")
     print("video_path", video_path)
 
     if GIF_SO_SKIP_VIDEO:
@@ -2593,11 +2598,20 @@ def save_installation_metas(subfolders, output_path, csv_file):
     # (e.g. _scale_1080, _scale_1712, _scale_2160) when multiple runs have been done.
     video_dims = {}
     mp4_files = [f for f in os.listdir(output_path) if f.endswith(".mp4")]
+    cluster_info = os.path.basename(FOLDER_NAME).removeprefix("_")
     print(f"\n[save_installation_metas] mp4 files found in output_path: {mp4_files}")
     for subfolder_path in subfolders:
-        subfolder_basename = subfolder_path.split("/")[-1]
-        all_matched = [f for f in mp4_files if subfolder_basename in f]
-        print(f"  subfolder_basename={subfolder_basename!r} → matched mp4s={all_matched!r}")
+        subfolder_basename = os.path.basename(os.path.normpath(subfolder_path))
+        video_prefix = f"{cluster_info}_{_video_cluster_token(subfolder_basename)}"
+        all_matched = [
+            f
+            for f in mp4_files
+            if (stem := os.path.splitext(f)[0]) == video_prefix or stem.startswith(f"{video_prefix}_")
+        ]
+        print(
+            f"  subfolder_basename={subfolder_basename!r}, video_prefix={video_prefix!r} "
+            f"→ matched mp4s={all_matched!r}"
+        )
         entries = []
         for matched in all_matched:
             cap = cv2.VideoCapture(os.path.join(output_path, matched))
@@ -2623,6 +2637,12 @@ def save_installation_metas(subfolders, output_path, csv_file):
     dropped = before_count - len(installation_metas)
     if dropped:
         print(f"[save_installation_metas] dropped {dropped} row(s) with no matching video")
+    if installation_metas.empty:
+        print(
+            "[save_installation_metas] no metadata rows have matching videos; "
+            "leaving the existing installation CSV unchanged"
+        )
+        return
 
     object_signature_registry = io.load_object_signature_registry(OBJECT_SIGNATURE_EXPORT_PATH)
 

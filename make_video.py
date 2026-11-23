@@ -141,7 +141,7 @@ MODE0_WRITE_CSV_FALLBACK = True
 # MODE0 adaptive stop: compare each run against its own early-sequence median.
 MODE0_RELATIVE_DISTANCE_CUTOFF_ENABLED = True
 MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS = 3
-MODE0_RELATIVE_DISTANCE_RATIO = 2.1 # threshold for stopping early if there more than MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS greater than this cluster specific standardized deviation
+MODE0_RELATIVE_DISTANCE_RATIO = 4.3 # threshold for stopping early if there more than MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS greater than this cluster specific standardized deviation
 MODE0_RELATIVE_DISTANCE_BASELINE_FRACTION = 0.25 # this is the pct of the data that forms the baseline for the median distance calculation. 0.25 means the first 25% of the sequence is used to calculate the median distance, which is then multiplied by MODE0_RELATIVE_DISTANCE_RATIO to determine the cutoff for early stopping.
 MODE0_RELATIVE_DISTANCE_MIN_FRACTION = 0.70 # doesn't consider anything before this point as a potential cut off
 MODE1_USE_TYPED_INTERMEDIATE = True
@@ -1907,14 +1907,19 @@ def expand_vector_column(df, vector_col="face_encodings68", prefix="enc", expect
         )
     return vector_df
 
-def apply_mode0_relative_distance_cutoff(df_sorted, df_enc, output_cols):
+def apply_mode0_relative_distance_cutoff(
+    df_sorted,
+    df_enc,
+    output_cols,
+    initial_candidate_count,
+):
     """Trim a MODE0 sequence once distance remains above its run-relative baseline."""
     if not MODE0_RELATIVE_DISTANCE_CUTOFF_ENABLED or df_sorted.empty:
         return df_sorted, False, None
     if output_cols is None or output_cols not in df_sorted.columns:
         return df_sorted, False, None
 
-    total_count = len(df_sorted.index) + len(df_enc.index)
+    total_count = int(initial_candidate_count)
     if total_count < 10:
         return df_sorted, False, None
 
@@ -1958,11 +1963,12 @@ def apply_mode0_relative_distance_cutoff(df_sorted, df_enc, output_cols):
     return df_sorted.iloc[:cutoff_index].reset_index(drop=True), True, baseline_median
 
 
-def get_closest_knn_or_break(df_enc, df_sorted):
+def get_closest_knn_or_break(df_enc, df_sorted, initial_candidate_count):
     # send in both dfs, and return same dfs with 1+ rows sorted
     print(" -- BEFORE sort_by_face_dist_NN _ for loop df_enc is", df_enc)
     print(" BEFORE, df cols are", df_enc.columns.tolist())
     is_break = False
+    termination_reason = None
     df_enc, df_sorted, output_cols = sort.get_closest_df_NN(df_enc, df_sorted)
 
     print(" -- AFTER sort_by_face_dist_NN _ for loop df_enc is", len(df_enc))
@@ -1970,13 +1976,9 @@ def get_closest_knn_or_break(df_enc, df_sorted):
     print(" AFTER, df_enc cols are", df_enc.columns.tolist())
     print(" AFTER, df_sorted cols are", df_sorted.columns.tolist())
 
-    df_sorted, relative_cutoff_reached, baseline_median = apply_mode0_relative_distance_cutoff(
-        df_sorted,
-        df_enc,
-        output_cols,
-    )
-    if relative_cutoff_reached:
-        return df_enc, df_sorted, True, output_cols
+    # Relative cutoff is intentionally not evaluated during iterative sorting.
+    # It is applied once the complete sequence has been produced so threshold
+    # analysis cannot interact with the active KNN candidate set.
 
     # # test to see if body_landmarks for row with image_id = 5251199 still is the same as test_lms
     # retest_row = df_enc.loc[df_enc['image_id'] == 10498233]
@@ -1993,10 +1995,16 @@ def get_closest_knn_or_break(df_enc, df_sorted):
         df_sorted = df_sorted.head(sort.CUTOFF)
         print("one shot, breaking out", df_sorted)
         is_break = True
+        termination_reason = "one_shot_cutoff"
     # commenting out SHOT_CLOCK for now, Sept 28
     # elif dist > sort.MAXD and sort.SHOT_CLOCK != 0:
     elif df_enc.empty:
-        is_break = True            
+        is_break = True
+        termination_reason = (
+            "completed"
+            if len(df_sorted.index) >= initial_candidate_count
+            else "candidates_exhausted_before_completion"
+        )
     else:
         print("df_sorted.iloc[-1], " , df_sorted.iloc[-1])
         dist = df_sorted.iloc[-1][output_cols]
@@ -2004,11 +2012,13 @@ def get_closest_knn_or_break(df_enc, df_sorted):
         if dist > sort.MAXD or df_enc.empty:
             print("should breakout, dist is", dist)
             is_break = True
-    return df_enc, df_sorted, is_break, output_cols
+            termination_reason = "absolute_max_distance"
+    return df_enc, df_sorted, is_break, output_cols, termination_reason
 
 
 def sort_by_face_dist_NN(df_enc):
     sort_stage_start = time.perf_counter()
+    initial_candidate_count = int(len(df_enc.index))
     
     # start here
     # create emtpy df_sorted with the same columns as df_enc
@@ -2031,14 +2041,14 @@ def sort_by_face_dist_NN(df_enc):
     if CHOP_FIRST or CHOP_ITTER_TSP_SORT:
         sort.ONE_SHOT = True # force it to chop
         chop_start = time.perf_counter()
-        df_enc = sort_and_chop(df_enc)
+        df_enc = sort_and_chop(df_enc, initial_candidate_count)
         record_mode0_timing("chop_first", time.perf_counter() - chop_start)
     
     if CHOP_ITTER_TSP_SORT or not TSP_SORT:
         sort.ONE_SHOT = False # force it to do full itters
         print("CHOP_ITTER_TSP_SORT is true or not TSP_SORT, so doing itter_sort")
         itter_start = time.perf_counter()
-        df_enc = itter_sort(df_enc, itters)
+        df_enc = itter_sort(df_enc, itters, initial_candidate_count)
         record_mode0_timing("itter_sort", time.perf_counter() - itter_start)
     
     if CHOP_ITTER_TSP_SORT or TSP_SORT:
@@ -2075,33 +2085,66 @@ def sort_by_face_dist_NN(df_enc):
         last_file = this_start
         print("last_file is this_start",last_file)
     sort.counter_dict["start_img_name"] = last_file
+    termination_reason = df_enc.attrs.get("mode0_termination_reason", "completed")
+    df_enc, relative_cutoff_reached, baseline_median = apply_mode0_relative_distance_cutoff(
+        df_enc,
+        pd.DataFrame(),
+        "dist" if "dist" in df_enc.columns else None,
+        initial_candidate_count,
+    )
+    if relative_cutoff_reached:
+        termination_reason = "relative_distance_cutoff"
+    retained_fraction = len(df_enc.index) / initial_candidate_count if initial_candidate_count else 0.0
+    df_enc.attrs["mode0_initial_candidate_count"] = initial_candidate_count
+    df_enc.attrs["mode0_retained_count"] = int(len(df_enc.index))
+    df_enc.attrs["mode0_retained_fraction"] = retained_fraction
+    df_enc.attrs["mode0_termination_reason"] = termination_reason
+    print(
+        "[MODE0 SEQUENCE RESULT] "
+        f"reason={termination_reason}; initial={initial_candidate_count}; "
+        f"retained={len(df_enc.index)}; retained_fraction={retained_fraction:.1%}; "
+        f"baseline_median={baseline_median}"
+    )
 
     return df_enc
 
-def itter_sort(df_enc, itters):
+def itter_sort(df_enc, itters, initial_candidate_count):
     df_sorted = pd.DataFrame(columns = df_enc.columns)
+    output_cols = None
+    termination_reason = "iteration_cap"
     for i in range(itters):
         print("sort_by_face_dist_NN _ for loop itters i is", i)
                 ## Find closest
         try:
-            df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
-            if len(df_sorted) >= itters: is_break = True
+            df_enc, df_sorted, is_break, output_cols, stop_reason = get_closest_knn_or_break(
+                df_enc,
+                df_sorted,
+                initial_candidate_count,
+            )
+            if stop_reason:
+                termination_reason = stop_reason
+            if len(df_sorted) >= itters:
+                is_break = True
+                termination_reason = "iteration_cap"
             print(f"break for itters {i} is {is_break} because len(df_sorted) is {len(df_sorted)} and itters is {itters}")
             if is_break: break
         except Exception as e:
             print("exception on going to get closest")
             print(str(e))
             traceback.print_exc()
+            termination_reason = "sort_exception"
             # rename the distance column to dist -- there is no dist for TSP
     # Drop any pre-existing 'dist' column so that the rename below never creates duplicates.
     # This can happen when df_enc was produced by a prior sort pass (e.g. one_shot_sort_dataframe
     # on an oversized partition subset), which already carries a 'dist' column.
-    if 'dist' in df_sorted.columns and output_cols != 'dist':
+    if 'dist' in df_sorted.columns and output_cols and output_cols != 'dist':
         df_sorted = df_sorted.drop(columns=['dist'])
-    df_sorted.rename(columns={output_cols: 'dist'}, inplace=True)
+    if output_cols:
+        df_sorted.rename(columns={output_cols: 'dist'}, inplace=True)
+    df_sorted.attrs["mode0_termination_reason"] = termination_reason
     return df_sorted
 
-def sort_and_chop(df_enc):
+def sort_and_chop(df_enc, initial_candidate_count):
     sort_and_chop_cutoff = sort.CUTOFF
     df_sorted = pd.DataFrame(columns = df_enc.columns)
     # print(f"CHOP_FIRST is true with sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
@@ -2109,8 +2152,13 @@ def sort_and_chop(df_enc):
         sort.counter_dict["start_img_name"] = start_img_name
     print(f"CHOP_FIRST is true at {sort_and_chop_cutoff} to yield {sort.CUTOFF} - sort.counter_dict['start_img_name'], {sort.counter_dict['start_img_name']}")
 
-    df_enc, df_sorted, is_break, output_cols = get_closest_knn_or_break(df_enc, df_sorted)
+    df_enc, df_sorted, is_break, output_cols, stop_reason = get_closest_knn_or_break(
+        df_enc,
+        df_sorted,
+        initial_candidate_count,
+    )
     df_sorted = df_sorted.head(sort_and_chop_cutoff)
+    df_sorted.attrs["mode0_termination_reason"] = stop_reason or "one_shot_cutoff"
     print("AFTER CHOP_FIRST df_enc is", len(df_enc))
     print("AFTER CHOP_FIRST df_sorted is", len(df_sorted))
     return df_sorted
@@ -3973,6 +4021,16 @@ def write_sorted_artifacts(df_sorted, csv_folder, file_prefix, segment_count):
             "file_prefix": file_prefix,
             "segment_count": int(segment_count),
             "row_count": int(len(df_sorted)),
+            "mode0_initial_candidate_count": int(df_sorted.attrs.get("mode0_initial_candidate_count", segment_count)),
+            "mode0_retained_fraction": float(df_sorted.attrs.get("mode0_retained_fraction", len(df_sorted) / segment_count if segment_count else 0.0)),
+            "mode0_termination_reason": df_sorted.attrs.get("mode0_termination_reason", "unknown"),
+            "mode0_relative_cutoff_settings": {
+                "enabled": MODE0_RELATIVE_DISTANCE_CUTOFF_ENABLED,
+                "ratio": MODE0_RELATIVE_DISTANCE_RATIO,
+                "baseline_fraction": MODE0_RELATIVE_DISTANCE_BASELINE_FRACTION,
+                "minimum_fraction": MODE0_RELATIVE_DISTANCE_MIN_FRACTION,
+                "sustained_rows": MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS,
+            },
             "mode": MODE,
             "sort_type": getattr(sort, "SORT_TYPE", None),
             "paths": {

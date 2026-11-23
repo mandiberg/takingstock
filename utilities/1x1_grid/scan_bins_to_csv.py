@@ -35,6 +35,9 @@ PREFIX_TO_COL = {
     "horizontal": "horizontal_key",
     "square":     "square_key",
     "vertical":   "vertical_key",
+    "hz": "horizontal_key",
+    "sq":     "square_key",
+    "vt":   "vertical_key",
 }
 CSV_COLUMNS = ["arms_cluster_id", "object_signature_cluster_id", "horizontal_key", "square_key", "vertical_key"]
 IMG_RE      = re.compile(r"merged_cluster(-?\d+)_p(\d+)")
