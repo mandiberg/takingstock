@@ -86,7 +86,7 @@ MAKE_CACHE_MODE = False # only make cache folders, skips dedupe and is_face test
 MODE1_ENABLE_DB_DEDUPE = True # False skips dedupe during crunch time drafts  
 SKIP_PAIRCHECK = True # True for draft mode, False does paircheck, and caches them << I don't understand, but if USE_PAINTED = True, it fails pair_check unless this is True
 START_CLUSTER = 0
-PARALLEL_WORKERS = 20  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
+PARALLEL_WORKERS = 10  # set > 1 to parallelize per-CSV work in MODE 0 and MODE 1
 VERBOSE = True
 
 start = time.time()
@@ -128,7 +128,7 @@ CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_pro
 CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_Thoma"
 ### >>> go check FULL_BODY_SWITCH, 1x1, /data manifest,  multiplier, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 # if full body, INCLUDE_LEG_POSE_FEATURES is overriden below and turned off
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_Thoma" # canonical full_body goes here, so I don't reuse for ARMS
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/None" # canonical full_body goes here, so I don't reuse for ARMS (for 1x1 set to None)
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -141,7 +141,7 @@ MODE0_WRITE_CSV_FALLBACK = True
 # MODE0 adaptive stop: compare each run against its own early-sequence median.
 MODE0_RELATIVE_DISTANCE_CUTOFF_ENABLED = True
 MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS = 3
-MODE0_RELATIVE_DISTANCE_RATIO = 4.3 # threshold for stopping early if there more than MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS greater than this cluster specific standardized deviation
+MODE0_RELATIVE_DISTANCE_RATIO = 2.3 # threshold for stopping early if there more than MODE0_RELATIVE_DISTANCE_SUSTAINED_ROWS greater than this cluster specific standardized deviation
 MODE0_RELATIVE_DISTANCE_BASELINE_FRACTION = 0.25 # this is the pct of the data that forms the baseline for the median distance calculation. 0.25 means the first 25% of the sequence is used to calculate the median distance, which is then multiplied by MODE0_RELATIVE_DISTANCE_RATIO to determine the cutoff for early stopping.
 MODE0_RELATIVE_DISTANCE_MIN_FRACTION = 0.70 # doesn't consider anything before this point as a potential cut off
 MODE1_USE_TYPED_INTERMEDIATE = True
@@ -240,12 +240,12 @@ LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
 MODE1_MAX_ROWS_PER_CLUSTER = None # if None, no cap; otherwise process at most this many rows per cluster
 MODE1_MIN_CLUSTER_ROWS = 50 # skip any cluster if there are less than this number of rows
 CROP_MULTIPLIER = 5
-CANONICAL_MULT_1x1_GRID_MODE = None  # when not None, every image uses CANONICAL_MULT_FALLBACKS[this value] as its multiplier; None disables
+CANONICAL_MULT_1x1_GRID_MODE = "1x1_vertical"  # when not None, every image uses CANONICAL_MULT_FALLBACKS[this value] as its multiplier; None disables
 CANONICAL_MULT_FALLBACKS = {
     "1x1_horizontal": resolve_multiplier("9x16_regular_miami"),
-    "1x1_square":     resolve_multiplier("sq_medium"),
-    "1x1_vertical":   resolve_multiplier("16x9_portrait_torso"), # use this for arms
-    # "1x1_vertical":   resolve_multiplier("16x9_fullbody"), # use this for full_body
+    # "1x1_square":     resolve_multiplier("sq_medium"), #destructing this
+    # "1x1_vertical":   resolve_multiplier("16x9_portrait_torso"), # use this for arms
+    "1x1_vertical":   resolve_multiplier("16x9_fullbody"), # use this for full_body
 }
 canonical_1x1_fallback_pairs = set()  # populated by _mode1_set_multiplier; written to CSV at end of run
 GRID_MODE_DIMS = {
