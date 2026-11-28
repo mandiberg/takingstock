@@ -25,17 +25,20 @@ elif sys.platform == "win32": sys.path.insert(1, 'C:/Users/jhash/Documents/GitHu
 
 if os.path.exists('/Users/tenchc/Documents/GitHub/takingstock/'):
     sys.path.insert(1, '/Users/tenchc/Documents/GitHub/takingstock/')
+
 from mp_db_io import DataIO
 
 
 ######Michael's folders##########
 io = DataIO()
 INPUT = io.ROOTSSD # folder that holds SOUND_FOLDER and audiopduction folders
+# INPUT = io.ROOTSSD # folder that holds SOUND_FOLDER and audiopduction folders
 #################################
 
 ######Tench's folders###########
 # INPUT = "/Volumes/LaCie/tts_sport"
 INPUT = "/Volumes/OWC5/tts_office"
+# INPUT = "/Volumes/OWC5/tts_office"
 #################################
 
 TOPIC = 0  # non-batch only: which metas_{TOPIC}.csv to mix
@@ -46,8 +49,8 @@ KEY_TOPICS = [0, 3, 15, 45]
 BATCH_MODE = True          # set True to process cluster folders under BATCH_FOLDER_NAME
 # Parent folder (under INPUT, or absolute) whose subfolders each contain metas.csv.
 # Example layout:
-BATCH_FOLDER_NAME = "/Volumes/OWC5/tts_office/office_thoma_metas_sept28/_Arms_thoma_sept28_v3_test"
 # BATCH_FOLDER_NAME = "/Volumes/LaCie/tts_sport/test"
+BATCH_FOLDER_NAME = "/Users/tabi/Desktop/mandiberg/stub_data/audio_stub_set/output_folders"
 
 # Optional subset: folder names under BATCH_FOLDER_NAME, or absolute cluster paths.
 # Empty list = every subfolder that contains metas.csv.
@@ -57,7 +60,9 @@ BATCH_CLUSTERS = [
 ]
 
 SOUND_FOLDER = "."
+# SOUND_FOLDER = "."
 # SOUND_FOLDER = "37_metas_hold_for_now"
+SOUND_FOLDER = "tts_office"
 
 # Sampling rate for the mixdown
 sample_rate = None
@@ -726,11 +731,11 @@ class SurroundMixer:
                 if not self.existing_files:
                     print(f"Skipping image_id {image_id}: no existing files to fall back to")
                     continue
-                input_file = np.random.choice(list(self.existing_files.values()))
-                if row['topic_fit'] < .6:
-                    print("unprocessed meta file")
                 elif row['topic_fit'] > .75:
                     print("unprocessed openai file")
+                input_file = np.random.choice(list(self.existing_files.values())) 
+                # turning down random fallbacks
+                row['topic_fit'] = .2
             elif pd.isna(description) and image_id:
                 if not self.existing_files:
                     print(f"Skipping image_id {image_id} (NaN description): no existing files to fall back to")
@@ -1144,6 +1149,9 @@ def calculate_fades(key_index,desc_count, audio_data, sample_rate):
         # vol = scale_volume_linear(volume_fit, .3,1)
         fadein =   start/wps
         fadeout = (desc_count-end-1)/wps 
+        print(f'[calculate fades] Key index: {key_index}, Fade-in: {fadein}, Fade-out {fadeout}, wps: {wps}')
+    else:
+        print("[caculate fades] No key index")
     return fadein,fadeout
 
 def to_mono(audio):
