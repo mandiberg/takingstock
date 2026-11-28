@@ -4519,8 +4519,12 @@ class ToolsClustering:
         min_gap_ratio=0.35,
         cluster_label=None,
         presence_min_pct=None,
+        presence_min_count=None,
     ):
         """
+        presence_min_count overrides min_bucket_size for the presence stage only (defaults to min_bucket_size),
+        so the valley test can keep a smaller min_bucket_size.
+
         If presence_min_pct is set, a first-stage test runs before the valley test: when both the legless
         rows (visible_leg_count == 0) and the leg-visible rows are each >= presence_min_pct of the cluster
         and >= min_bucket_size rows, the cluster is separable with split_mode='presence'
@@ -4570,10 +4574,11 @@ class ToolsClustering:
         result["visible_leg_pct"] = round(visible_pct, 2)
 
         if presence_min_pct is not None:
+            presence_min = min_bucket_size if presence_min_count is None else presence_min_count
             legless_rows = total_rows - visible_rows
             legless_pct = 100.0 - visible_pct
             if (
-                visible_rows >= min_bucket_size and legless_rows >= min_bucket_size
+                visible_rows >= presence_min and legless_rows >= presence_min
                 and visible_pct >= presence_min_pct and legless_pct >= presence_min_pct
             ):
                 result["is_separable"] = True
@@ -4712,8 +4717,12 @@ class ToolsClustering:
         bucket values using ceiling so that 0.2/0.7/0.8 all map to 1, while
         4.0/4.5/4.7 map to 5 and 5.5 maps to 6.
         """
-        if leg_pose_label is None or str(leg_pose_label).lower() in ("none", "nan", "not_visible"):
+        if leg_pose_label is None or str(leg_pose_label).lower() in ("none", "nan"):
             return None
+
+        # legless rows get their own registry key (lp0) so they don't inherit the legs crop
+        if str(leg_pose_label).lower() == "not_visible":
+            return 0
 
         if leg_extension_values is None:
             return None

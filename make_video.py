@@ -125,10 +125,10 @@ CSV_FOLDER = os.path.join(io.ROOTSSD, "make_video_CSVs") # default, overridden b
 # CSV_FOLDER = "/Users/michael.mandiberg/Documents/projects-active/facemap_production/make_video_CSVs/obj_bbox_fusion128_test220K"
 CSV_MAIN_FOLDER = "/Users/michaelmandiberg/Documents/projects-active/facemap_production/make_video_CSVs/"
 # CSV_MAIN_FOLDER = "/Volumes/LaCie"
-CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_BODY_Thoma"
+CSV_RUN_FOLDER = "SegmentHelper_TheOffice/_ARMS_Thoma_cropflip"
 ### >>> go check FULL_BODY_SWITCH, 1x1, /data manifest,  multiplier, FUSION_PAIR_DICT_DETECTIONS //  this is the folder that will be made inside CSV_MAIN_FOLDER, and is also the name of the SegmentHelper that will be used for the SQL query. It is also added to the manifest file for reference.
 # if full body, INCLUDE_LEG_POSE_FEATURES is overriden below and turned off
-FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/None" # canonical full_body goes here, so I don't reuse for ARMS (for 1x1 set to None)
+FULL_BODY_CSV_RUN_FOLDER = "SegmentHelper_TheGym/_BODY_Thoma" # canonical full_body goes here, so I don't reuse for ARMS (for 1x1 set to None)
 CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, CSV_RUN_FOLDER)
 FULL_BODY_CSV_FOLDER = os.path.join(CSV_MAIN_FOLDER, FULL_BODY_CSV_RUN_FOLDER)
 MAX_ROWS_PER_OUTPUT_CSV = 400 # for default policy this defines how the large clusters are split (using standard cl.knn clustering)
@@ -222,8 +222,8 @@ INCLUDE_LEG_POSE_FEATURES = True  # join LocationHandsFeet for leg-shape cluster
 LEG_POSE_FLOOR_PCT = 5.0             # minimum visible-leg percentage required before split test
 LEG_POSE_MIN_BUCKET_SIZE = 20        # minimum rows required on each side of the candidate valley
 LEG_POSE_MIN_GAP_RATIO = 0.35        # valley-to-peak ratio for a real split; not a literal empty-gap width
-LEG_POSE_PRESENCE_MIN_PCT = 5.0     # first-stage legless vs leg-visible split needs each side >= this % of the cluster
-LEG_POSE_PRESENCE_MIN_COUNT = 100   # first-stage legless vs leg-visible split min count for each side to split
+LEG_POSE_PRESENCE_MIN_PCT = 2.0     # first-stage legless vs leg-visible split needs each side >= this % of the cluster
+LEG_POSE_PRESENCE_MIN_COUNT = 40    # first-stage legless vs leg-visible split min count for each side to split
 LEG_POSE_ASYMMETRY_THRESHOLD = 0.15  # leg_asymmetry threshold for single- vs both-leg extended
 print("THISISTHENEWTHING")
 # overriding DB for testing
@@ -240,7 +240,7 @@ LIMIT = 1000000 # this is the limit for the SQL query, needs to be above 150
 MODE1_MAX_ROWS_PER_CLUSTER = None # if None, no cap; otherwise process at most this many rows per cluster
 MODE1_MIN_CLUSTER_ROWS = 50 # skip any cluster if there are less than this number of rows
 CROP_MULTIPLIER = 5
-CANONICAL_MULT_1x1_GRID_MODE = "1x1_vertical"  # when not None, every image uses CANONICAL_MULT_FALLBACKS[this value] as its multiplier; None disables
+CANONICAL_MULT_1x1_GRID_MODE = None #"1x1_vertical"  # when not None, every image uses CANONICAL_MULT_FALLBACKS[this value] as its multiplier; None disables
 CANONICAL_MULT_FALLBACKS = {
     "1x1_horizontal": resolve_multiplier("9x16_regular_miami"),
     # "1x1_square":     resolve_multiplier("sq_medium"), #destructing this
@@ -369,7 +369,7 @@ elif CURRENT_MODE == 'heft_torso_keywords':
     DO_SMALL_CLUSTER_FUSION_BUCKET = False # if MULTIPOLICY is True, this controls whether clusters below the CLUSTER_MIN_HSV_OBJ threshold get put into a small cluster fusion bucket, or just skipped for fusion entirely. If False, they get skipped for fusion and go to the end of the sort. If True, they get put into a small cluster fusion bucket that gets sorted after the main fusion buckets, but before the non-fusion clusters.
     ONLY_USE_GOOD_IMAGES = False # only use images where Exclude.is_good = True. These are images that have been through manual sorting, but the cluster is huuuge.
     HSV_SOURCE_MODE = "background" # "background" or "object" or "both"
-    FULL_BODY = True # FULL_BODY_SWITCH
+    FULL_BODY = False # FULL_BODY_SWITCH
     if FULL_BODY: 
         matrix_family = "BodyPoses3D" 
         MULTIPLIER_PADDING = MULTIPLIER_PADDING+.5 # if body, add to the padding
@@ -6199,6 +6199,13 @@ def main():
         )
         return partition_groups
 
+    def leg_variant_for_subset(subset_df):
+        """Leg multiplier variant for a subset that wasn't split by leg pose: 0 if mostly legless, else ceil(median leg length)."""
+        visible = pd.to_numeric(subset_df["visible_leg_count"], errors="coerce").fillna(0) > 0
+        if visible.mean() < 0.5:
+            return 0
+        return cl.derive_leg_pose_multiplier_variant("legs_visible", subset_df.loc[visible, "leg_extension_max"])
+
     def partition_segment_by_leg_pose(df_segment, leg_pose_check):
         """Split df_segment into (label, subset_df) groups using label_by_leg_pose.
 
@@ -6492,10 +6499,11 @@ def main():
                     leg_pose_check = cl.assess_leg_pose_separability(
                         df_segment,
                         floor_pct=LEG_POSE_FLOOR_PCT,
-                        min_bucket_size=LEG_POSE_PRESENCE_MIN_COUNT, # switching this from the leg pose min size to a larger is_legs one
+                        min_bucket_size=LEG_POSE_MIN_BUCKET_SIZE,
                         min_gap_ratio=LEG_POSE_MIN_GAP_RATIO,
                         cluster_label=base_file_prefix,
                         presence_min_pct=LEG_POSE_PRESENCE_MIN_PCT,
+                        presence_min_count=LEG_POSE_PRESENCE_MIN_COUNT,
                     )
                     record_leg_pose_result(leg_pose_check)
                     if leg_pose_check["is_separable"]:
@@ -6543,6 +6551,19 @@ def main():
                     )
                     add_mode0_timing("partition", time.perf_counter() - partition_start)
                     partition_units = [(None, group_df) for group_df in partition_groups]
+
+                # clusters with meaningful leg presence that weren't split by leg pose still need a per-output leg
+                # variant, otherwise MODE 1 gives legless and leg-visible outputs the same legacy crop multiplier
+                tag_leg_variants = (
+                    leg_pose_check is not None
+                    and leg_pose_partition_groups is None
+                    and (leg_pose_check["visible_leg_pct"] >= LEG_POSE_FLOOR_PCT or leg_pose_check["visible_leg_rows"] >= LEG_POSE_PRESENCE_MIN_COUNT)
+                )
+                if tag_leg_variants and partition_units is not None:
+                    for _, unit_df in partition_units:
+                        unit_df["_leg_pose_multiplier_variant"] = leg_variant_for_subset(unit_df)
+                elif tag_leg_variants:
+                    base_file_prefix = f"{base_file_prefix}_lp{leg_variant_for_subset(df_segment)}"
 
                 if partition_units is not None:
                     for subset_idx, (subset_label, subset_df) in enumerate(partition_units, start=1):
